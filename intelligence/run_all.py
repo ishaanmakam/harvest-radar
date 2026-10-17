@@ -1,4 +1,4 @@
-"""Run the whole intelligence layer: status -> demand -> routing.
+"""Run the whole intelligence layer: status -> demand -> routing (+ evaluation when truth.json exists).
 
     python intelligence/run_all.py --data data/mock   # works right now on mock data
     python intelligence/run_all.py --data data/out    # once the pipeline has produced real data
@@ -10,6 +10,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import demand  # noqa: E402
+import evaluate  # noqa: E402
 import harvest_model  # noqa: E402
 import routing  # noqa: E402
 
@@ -23,3 +24,6 @@ if __name__ == "__main__":
     demand.run(data_dir)
     print("[3/3] machine routing")
     routing.run(data_dir)
+    if (data_dir / "truth.json").exists():
+        print("[eval] scoring the model against truth.json (mock only)")
+        evaluate.run(data_dir)
