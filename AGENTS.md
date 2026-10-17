@@ -38,6 +38,9 @@ Mock data for every file already exists in `data/mock/` (run `python scripts/mak
 6. Small commits on your branch (`a/pipeline`, `b/intel`, `c/vision`, later `web`), merge to `main` often via PR. Run the validator before pushing.
 7. Large rasters/caches go in `data/cache/` (gitignored). Commit only `data/out/` JSON + JPEG frames (keep each < ~1 MB).
 8. Be honest in UI copy: label simulated CHCs and assumptions from `config/region.json`.
+9. **Announce milestones in Slack.** After you merge something others depend on, or when you're blocked, run
+   `python scripts/notify.py "<who>: <what changed / what you need>"` (e.g. "A: real fields.geojson + timeseries.json on main").
+   Before starting new work, `git pull origin main` so you build on what teammates announced.
 
 ## Perceptron API (verified from docs.perceptron.inc)
 - `pip install "perceptron>=0.4.0"`, key in `PERCEPTRON_API_KEY`, model `perceptron-mk1.5` (or pin `perceptron-mk1`)
