@@ -53,4 +53,5 @@ python intelligence/run_all.py --data data/mock
 python scripts/validate_contracts.py data/mock
 python vision/validate_perceptron.py            # first-hour Perceptron test
 ```
+Background, rationale, sources and pitch: `docs/PROJECT.md`.
 Task briefs: `docs/tasks/A-pipeline.md`, `B-intelligence.md`, `C-vision.md`, `D-web.md`.
