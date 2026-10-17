@@ -1,0 +1,5 @@
+---
+description: Harvest Radar project context, rules and data contracts
+alwaysApply: true
+---
+Read AGENTS.md at the repo root before doing anything: it has the problem, architecture, folder ownership rules, data contracts and Perceptron API details. Your task brief is in docs/tasks/. Stay in your own folder (pipeline/, intelligence/ or web/) and validate outputs with `python scripts/validate_contracts.py <data dir>`.

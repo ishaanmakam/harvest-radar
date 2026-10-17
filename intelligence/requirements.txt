@@ -1,0 +1,5 @@
+jsonschema
+shapely
+numpy
+pillow
+scipy

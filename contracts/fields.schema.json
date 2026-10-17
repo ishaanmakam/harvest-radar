@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "fields.schema.json",
+  "title": "fields.geojson — one polygon per farm field",
+  "type": "object",
+  "required": ["type", "features"],
+  "properties": {
+    "type": {"const": "FeatureCollection"},
+    "features": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["type", "geometry", "properties"],
+        "properties": {
+          "type": {"const": "Feature"},
+          "geometry": {
+            "type": "object",
+            "required": ["type", "coordinates"],
+            "properties": {"type": {"enum": ["Polygon", "MultiPolygon"]}}
+          },
+          "properties": {
+            "type": "object",
+            "required": ["field_id", "zone_id", "area_ha", "crop", "source"],
+            "properties": {
+              "field_id": {"type": "string", "pattern": "^F[0-9]{4,}$"},
+              "zone_id": {"type": "string", "pattern": "^Z[0-9]{2}$"},
+              "area_ha": {"type": "number", "exclusiveMinimum": 0},
+              "crop": {"enum": ["rice", "wheat", "other", "unknown"]},
+              "source": {"enum": ["perceptron", "segmentation", "mock"]}
+            }
+          }
+        }
+      }
+    }
+  }
+}

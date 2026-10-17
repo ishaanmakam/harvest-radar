@@ -1,0 +1,53 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "routing.schema.json",
+  "title": "routing.json — machine allocation plan vs. a first-come-first-served baseline",
+  "type": "object",
+  "required": ["as_of", "chcs", "plan", "summary"],
+  "properties": {
+    "as_of": {"type": "string"},
+    "chcs": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["chc_id", "name", "lon", "lat", "machines"],
+        "properties": {
+          "chc_id": {"type": "string"}, "name": {"type": "string"},
+          "lon": {"type": "number"}, "lat": {"type": "number"},
+          "machines": {"type": "integer"}
+        }
+      }
+    },
+    "plan": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["date", "chc_id", "zone_id", "machines", "ha"],
+        "properties": {
+          "date": {"type": "string"}, "chc_id": {"type": "string"}, "zone_id": {"type": "string"},
+          "machines": {"type": "integer"}, "ha": {"type": "number"}
+        }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "required": ["ha_demand", "optimized", "baseline"],
+      "properties": {
+        "ha_demand": {"type": "number"},
+        "optimized": {"$ref": "#/$defs/outcome"},
+        "baseline": {"$ref": "#/$defs/outcome"}
+      }
+    }
+  },
+  "$defs": {
+    "outcome": {
+      "type": "object",
+      "required": ["ha_served_in_window", "ha_missed_window", "pct_served"],
+      "properties": {
+        "ha_served_in_window": {"type": "number"},
+        "ha_missed_window": {"type": "number", "description": "Area whose sowing deadline passed before a machine arrived = burn risk"},
+        "pct_served": {"type": "number"}
+      }
+    }
+  }
+}

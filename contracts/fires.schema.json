@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "fires.schema.json",
+  "title": "fires.json — NASA FIRMS active-fire detections inside the AOI",
+  "type": "object",
+  "required": ["source", "detections"],
+  "properties": {
+    "source": {"type": "string"},
+    "detections": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["lon", "lat", "date", "satellite", "confidence", "field_id"],
+        "properties": {
+          "lon": {"type": "number"},
+          "lat": {"type": "number"},
+          "date": {"type": "string"},
+          "time_utc": {"type": "string"},
+          "satellite": {"type": "string"},
+          "confidence": {"type": "string"},
+          "frp_mw": {"type": ["number", "null"]},
+          "field_id": {"type": ["string", "null"]}
+        }
+      }
+    }
+  }
+}

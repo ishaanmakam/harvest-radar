@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "status.schema.json",
+  "title": "status.json — per-field harvest stage, dates and burn evidence",
+  "type": "object",
+  "required": ["as_of", "peak_to_harvest_days", "fields"],
+  "properties": {
+    "as_of": {"type": "string"},
+    "peak_to_harvest_days": {"type": "number", "description": "Regional lag learned from fields already harvested"},
+    "fields": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["field_id", "zone_id", "stage", "confidence"],
+        "properties": {
+          "field_id": {"type": "string"},
+          "zone_id": {"type": "string"},
+          "stage": {"enum": ["growing", "maturing", "ready", "harvested", "burned", "sown", "unknown"]},
+          "peak_date": {"type": ["string", "null"]},
+          "peak_ndvi": {"type": ["number", "null"]},
+          "harvest_date": {"type": ["string", "null"]},
+          "predicted_harvest_start": {"type": ["string", "null"]},
+          "predicted_harvest_end": {"type": ["string", "null"]},
+          "sowing_deadline": {"type": ["string", "null"]},
+          "burn_date": {"type": ["string", "null"]},
+          "burn_evidence": {"enum": ["none", "scar", "hotspot", "scar+hotspot"]},
+          "confidence": {"type": "number", "minimum": 0, "maximum": 1},
+          "notes": {"type": "string"}
+        }
+      }
+    }
+  }
+}

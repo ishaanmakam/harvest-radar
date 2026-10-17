@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "timeseries.schema.json",
+  "title": "timeseries.json — per-field vegetation and burn indices on each satellite pass",
+  "type": "object",
+  "required": ["source", "dates", "fields"],
+  "properties": {
+    "source": {"type": "string", "description": "e.g. 'sentinel-2-l2a (earth-search)', 'hls', 'mock'"},
+    "dates": {"type": "array", "items": {"type": "string", "format": "date"}},
+    "fields": {
+      "type": "object",
+      "description": "Keyed by field_id. Each array is aligned to `dates`; null = cloudy / not enough clear pixels.",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["ndvi", "nbr", "clear_frac"],
+        "properties": {
+          "ndvi": {"type": "array", "items": {"type": ["number", "null"]}},
+          "nbr": {"type": "array", "items": {"type": ["number", "null"]}},
+          "clear_frac": {"type": "array", "items": {"type": "number", "minimum": 0, "maximum": 1}}
+        }
+      }
+    }
+  }
+}

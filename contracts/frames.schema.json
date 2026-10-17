@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "frames.schema.json",
+  "title": "frames/frames.json — rendered satellite images for the map time slider and for Perceptron",
+  "type": "object",
+  "required": ["bounds", "width", "height", "frames"],
+  "properties": {
+    "bounds": {"type": "array", "items": {"type": "number"}, "minItems": 4, "maxItems": 4, "description": "[west, south, east, north] in EPSG:4326. Images are north-up and aligned to this box."},
+    "width": {"type": "integer"},
+    "height": {"type": "integer"},
+    "timelapse": {"type": ["string", "null"], "description": "path relative to the data dir, e.g. frames/timelapse.mp4"},
+    "frames": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["date", "rgb", "clear_frac"],
+        "properties": {
+          "date": {"type": "string"},
+          "rgb": {"type": "string", "description": "path relative to the data dir, e.g. frames/2026-10-12_rgb.jpg"},
+          "ndvi": {"type": ["string", "null"]},
+          "clear_frac": {"type": "number"}
+        }
+      }
+    }
+  }
+}

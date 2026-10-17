@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "demand.schema.json",
+  "title": "demand.json — forecast residue-machine demand per zone per day",
+  "type": "object",
+  "required": ["as_of", "horizon_days", "machine_rate_ha_per_day", "zones"],
+  "properties": {
+    "as_of": {"type": "string"},
+    "horizon_days": {"type": "integer"},
+    "machine_rate_ha_per_day": {"type": "number"},
+    "zones": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["zone_id", "name", "backlog_ha", "daily", "ha_next_7d", "machine_days_next_7d"],
+        "properties": {
+          "zone_id": {"type": "string"},
+          "name": {"type": "string"},
+          "backlog_ha": {"type": "number", "description": "Harvested, not burned, not sown: needs a machine now"},
+          "daily": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "required": ["date", "ha_ready"],
+              "properties": {"date": {"type": "string"}, "ha_ready": {"type": "number"}}
+            }
+          },
+          "ha_next_7d": {"type": "number"},
+          "machine_days_next_7d": {"type": "number"}
+        }
+      }
+    }
+  }
+}

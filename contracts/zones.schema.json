@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "zones.schema.json",
+  "title": "zones.geojson — village-scale demand zones",
+  "type": "object",
+  "required": ["type", "features"],
+  "properties": {
+    "type": {"const": "FeatureCollection"},
+    "features": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["type", "geometry", "properties"],
+        "properties": {
+          "type": {"const": "Feature"},
+          "properties": {
+            "type": "object",
+            "required": ["zone_id", "name", "centroid"],
+            "properties": {
+              "zone_id": {"type": "string", "pattern": "^Z[0-9]{2}$"},
+              "name": {"type": "string"},
+              "centroid": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2}
+            }
+          }
+        }
+      }
+    }
+  }
+}

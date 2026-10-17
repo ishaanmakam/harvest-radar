@@ -1,0 +1,9 @@
+.env
+data/cache/
+data/out/perceptron/crops/
+__pycache__/
+*.pyc
+.venv/
+node_modules/
+web/dist/
+.DS_Store

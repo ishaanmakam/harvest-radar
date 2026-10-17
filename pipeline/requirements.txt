@@ -1,0 +1,11 @@
+pystac-client
+odc-stac
+rasterio
+shapely
+pyproj
+scikit-image
+numpy
+pillow
+imageio
+imageio-ffmpeg
+requests

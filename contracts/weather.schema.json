@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "weather.schema.json",
+  "title": "weather.json — observed (NASA POWER / GPM) and forecast (Open-Meteo) weather at the AOI centre",
+  "type": "object",
+  "required": ["observed", "forecast"],
+  "properties": {
+    "observed": {
+      "type": "object",
+      "required": ["source", "dates", "precip_mm", "tmax_c", "tmin_c"],
+      "properties": {
+        "source": {"type": "string"},
+        "dates": {"type": "array", "items": {"type": "string"}},
+        "precip_mm": {"type": "array", "items": {"type": ["number", "null"]}},
+        "tmax_c": {"type": "array", "items": {"type": ["number", "null"]}},
+        "tmin_c": {"type": "array", "items": {"type": ["number", "null"]}}
+      }
+    },
+    "forecast": {
+      "type": "object",
+      "required": ["source", "dates", "precip_mm", "precip_prob"],
+      "properties": {
+        "source": {"type": "string"},
+        "dates": {"type": "array", "items": {"type": "string"}},
+        "precip_mm": {"type": "array", "items": {"type": ["number", "null"]}},
+        "precip_prob": {"type": "array", "items": {"type": ["number", "null"]}}
+      }
+    }
+  }
+}
