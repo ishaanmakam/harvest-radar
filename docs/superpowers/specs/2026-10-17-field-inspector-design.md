@@ -8,13 +8,28 @@ The product is for small family farms in general. Sangrur, Punjab is the default
 
 ## What people receive
 
-Every farm gets a plan every morning, including quiet days. The plan says what to do today and what the risks are. Each farm also has a flag:
+Every farm gets a plan every morning, including quiet days. The plan states today's work, the risks, and the result of every check below, including the checks that came back clear. A quiet farm still hears that harvest, rain, fire, flood, and stress were looked at and are fine.
 
-- `fine` — nothing beyond the ordinary daily plan
-- `watch` — keep an eye on it
-- `act_now` — harvest before rain, or go look because part of the farm changed
+Each farm has a flag, set from the worst check:
 
-Reasons are `harvest_before_rain`, `visible_change`, or `none`.
+- `fine` — every check is clear
+- `watch` — something needs an eye, and nothing needs action today
+- `act_now` — a check needs a harvest or a visit today
+
+Checks on every farm. Each one is always present in the plan, with status `clear`, `watch`, or `act_now`.
+
+| Check | What it uses | Status |
+|---|---|---|
+| Harvest readiness | NDVI collapse after peak greenness | `watch` when the crop looks ready. `clear` otherwise |
+| Harvest versus rain | That readiness, rainfall so far, and the forecast | `act_now` when the crop looks ready and any forecast day in the next 3 days is at least 15 mm. `clear` otherwise |
+| Establishment | Peak NDVI | `watch` when peak NDVI never reached crop level. `clear` when it did |
+| Burn scar | NBR drop after harvest | `act_now` when the scar date is the latest clear pass. `watch` when an older scar is present. `clear` when there is no scar |
+| Fire | A FIRMS hotspot inside the field | `act_now` when a hotspot falls in the last 5 days. `clear` otherwise |
+| Flood | Perceptron on the time-lapse, otherwise standing-water cues in the indices | `act_now` when water is on the field in the latest clear pass. `clear` otherwise |
+| Stress or browning | Perceptron, otherwise an NDVI drop that is not a harvest | `watch` when part of the field is declining and is not yet harvested. `clear` otherwise |
+| Visible change | Perceptron timestamp and place, otherwise the index window | `watch` when a change is dated since the previous clear pass. `clear` otherwise. This row stays even when another check is already `act_now` |
+
+A field that never greened has establishment `watch` and harvest readiness `clear`. A field that looks ready has harvest readiness `watch` and establishment `clear`. A farm can carry several non-clear checks. All eight rows appear in the plan. The flag is the worst status. Route order is every `act_now` farm first: fire, flood, harvest-versus-rain, then a new burn scar. `watch` farms follow: stress, visible change, harvest readiness, establishment, then an older burn scar. `fine` farms are not stops. They still get their own morning plan.
 
 The farmer gets a Grok voice call every morning and a Photon SMS with the same plan. The farmer can call in and ask about their own farm. The officer gets a Grok voice call and a Photon SMS with the day’s route: which farms to visit or call, and why. The officer can ask more questions by voice or by Photon iMessage. Voice and text read the same plan files.
 
@@ -27,7 +42,7 @@ Sentinel-2 season + rainfall + forecast
         ↓
 Perceptron Mk1.5 (polygons, change, counts)
         ↓
-Decision layer → one plan per farm + one officer route
+Decision layer → one plan per farm (every check) + one officer route
         ↓
 files the map reads
         ↓
@@ -35,6 +50,11 @@ morning queue → Grok Voice call + Photon SMS, every roster number
 officer route → Grok Voice call + Photon SMS
 officer questions → Photon iMessage, same plans
 farmer questions → Grok Voice, that farm's plan only
+
+Team planning, separate from the morning send:
+spec + build order + latest route summary
+        ↓
+Grok Bot → project planning and team collaboration
 ```
 
 The map reads finished files. Panning it does not call Perceptron or Grok. The morning queue and the inbound handlers are the live part. They read those same files and place real calls and texts.
@@ -47,13 +67,14 @@ Generated plans are a stand-in so the call and text loop can be proven while ima
 
 1. **Season pipeline.** Pulls the Sentinel-2 season, builds true-color frames and vegetation indices, and attaches rainfall plus the forecast.
 2. **Perceptron reader.** Mk1.5 watches the season as a time-lapse. It draws field polygons, marks when and where a field changed, and counts fields that look harvest-ready, flooded, or stressed. If the polygons are weak, vegetation-index math locates the change and Perceptron still describes it and puts a time on it.
-3. **Decision layer.** Writes one plan per farm and the officer route. The route lists `act_now` farms first, then `watch` farms. Quiet `fine` farms stay on the map and still get their own morning plan; they are not stops on the route. Inside `act_now`, `harvest_before_rain` comes before `visible_change`.
+3. **Decision layer.** Writes one plan per farm, with a line for every check, and the officer route. Stop order is the route order in "What people receive." `fine` farms stay on the map, get their own morning plan, and are not stops.
 4. **Roster.** Farm, name, phone, language, and role. Stored outside git, same as API keys. The roster has one officer row and one farmer row for every farm in the demo landscape. The team supplies the phone numbers.
-5. **Map.** Vite and MapLibre. Time-lapse, field boundaries, the flag on every farm, delivery state, and the plan on click.
+5. **Map.** Vite and MapLibre. Time-lapse, field boundaries, the flag on every farm, delivery state, and the full plan on click.
 6. **Morning queue.** Grok voice plus Photon SMS for every farmer row. Grok voice plus Photon SMS of the route for the officer. Records each attempt.
 7. **Inbound handlers.** Farmer voice reads only that farm. Officer voice and officer iMessage read the route and any farm. All three call the same tools.
+8. **Grok Bot.** The team's planner. The three workstreams (season pipeline, decision and voice, map) use it to split work, name blockers, and agree the demo script. It is given this spec, the build order, and the latest route summary. It does not place calls or texts. When it talks about farms, it reads `plans.json` and `route.json` and does not invent measurements.
 
-Sponsor split: Sentinel-2 and the forecast are the space data. Grok Voice API is every live call. Perceptron Mk1.5 is the vision model. Photon 2.0 SMS and iMessage are the text channels. The project is built in Cursor. Grok Imagine is unused. Grok Bot is off the critical path. Photon voice (SIP to Retell, ElevenLabs, LiveKit, or Twilio) is unused because voice stays on Grok.
+Sponsor split: Sentinel-2, rainfall, and the forecast are the space data. Grok Voice API is every live call. Grok Bot is project planning and team collaboration. Perceptron Mk1.5 is the vision model. Photon 2.0 SMS and iMessage are the text channels. The project is built in Cursor. Grok Imagine is unused. Photon voice (SIP to Retell, ElevenLabs, LiveKit, or Twilio) is unused because voice stays on Grok.
 
 ## Data
 
@@ -65,13 +86,11 @@ Season outputs stay the existing contract files: frames, field polygons, per-fie
 
 - `farm_id`
 - `as_of` — date of the clear pass this plan uses
-- `flag` — `fine`, `watch`, or `act_now`
-- `reason` — `harvest_before_rain`, `visible_change`, or `none`
-- `source` — `perceptron` or `vegetation_index`
+- `flag` — `fine`, `watch`, or `act_now`, from the worst check
+- `source` — `perceptron` or `vegetation_index` for the visual checks
 - `today` — what to do today
-- `risks` — list, empty when there are none
-- `where` — place on the farm, empty when it does not apply
-- `change_window` — start and end dates, empty when nothing changed
+- `checks` — one entry for every check, in the table order above. Each entry has `kind`, `status` (`clear`, `watch`, or `act_now`), `detail`, `where` (empty when it does not apply), and `window` (start and end dates, empty when it does not apply). Kinds are `harvest_ready`, `harvest_before_rain`, `establishment`, `burn_scar`, `fire`, `flood`, `stress`, and `visible_change`
+- `risks` — the `detail` of every check whose status is not `clear`
 
 `route.json` — one morning route:
 
@@ -117,11 +136,12 @@ A failed piece leaves the last good plans in place.
 The send loop is proven on generated plans first. Real frames attach after that loop is green, without changing the queue or the tools.
 
 - **Contracts.** `plans.json`, `route.json`, and `deliveries.json` validate against schemas. A decision run that fails validation does not replace the previous files.
-- **Decision.** A fixed season fixture yields a known flag, reason, and route order. Cases cover harvest-before-rain, visible change, and a quiet farm that still gets a plan.
+- **Decision.** A fixed season fixture yields a known flag, a full `checks` list, and a known route order. Cases cover fire, flood, harvest-before-rain, burn scar, stress, a new visible change, and a quiet farm whose eight checks are all `clear`. A farm with two failures keeps both in `checks` and takes the worse flag.
 - **Roster boundary.** A listed number can be sent. A missing number is `failed` and skipped. An unknown caller receives no farm data. A farmer tool cannot read another farm.
 - **Queue.** A dry run writes delivery rows and places no calls or texts. A real run records voice and SMS separately. Restarting does not send the same channel twice on the same morning.
 - **Perceptron.** The first-hour probe remains the gate: polygons, counts, and a change question on one real frame. The result chooses `perceptron` or `vegetation_index`. Plans generate on either path.
-- **Live channels.** One officer number and one farmer number receive a real Grok call and a real Photon SMS from a generated plan. The officer sends one iMessage question and gets an answer from that plan. The same check then runs for the full supplied roster.
+- **Live channels.** One officer number and one farmer number receive a real Grok call and a real Photon SMS from a generated plan. The words include every check, clear ones included. The officer sends one iMessage question and gets an answer from that plan. The same check then runs for the full supplied roster.
+- **Grok Bot.** The team asks it which workstream owns the current build step (season pipeline, decision and voice, or map) and what the current route's first stops are. The workstream matches the build order. The stop list matches `route.json`.
 - **Map.** After a season run, the time-lapse, the flags, and a farm click match `plans.json`. Delivery status matches `deliveries.json`.
 
 ## Build order
@@ -133,4 +153,4 @@ The send loop is proven on generated plans first. Real frames attach after that 
 
 ## Out of scope
 
-Grok Imagine, Grok Bot, Photon voice calling, machine-dispatch routing as the hero output, and charging farmers. Cooperatives, buyers, insurers, and microlenders are the later commercial story, not part of this build.
+Grok Imagine, Photon voice calling, machine-dispatch routing as the hero output, and charging farmers. Cooperatives, buyers, insurers, and microlenders are the later commercial story, not part of this build.
