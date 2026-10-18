@@ -3065,6 +3065,8 @@ body.has-page {
   .world-nav-foot {
     left: 0;
     right: 0;
+  }
+}
     bottom: calc(34% + 8px);
   }
 
