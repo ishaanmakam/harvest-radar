@@ -14,6 +14,7 @@ from pathlib import Path
 
 from common import load_env
 from analytics import farm_outlook
+import neighbors
 
 KINDS = ["harvest_ready", "harvest_before_rain", "establishment", "burn_scar", "fire", "flood", "stress", "visible_change"]
 ROSTER_COLUMNS = ["roster_id", "farm_id", "name", "phone", "language", "role"]
@@ -119,9 +120,10 @@ def _norm_farm(fid):
 class Tools:
     """get_plan / get_route / get_change over data_dir, scoped by `caller` (a roster row, or None = unknown)."""
 
-    def __init__(self, data_dir, caller):
+    def __init__(self, data_dir, caller, roster=None):
         self.data_dir = Path(data_dir)
         self.caller = caller
+        self.roster = roster
         self._plans = None
         self._route = None
         self._analytics = None
@@ -185,9 +187,15 @@ class Tools:
         empty lines with a note when the analytics have not run for this season."""
         fid = self._farm(farm_id)
         doc = self.analytics()
+        lines = farm_outlook(doc, fid) if doc else []
+        note = neighbors.sentence(fid, self.data_dir, self.roster)
+        if note:
+            lines = list(lines) + [note]
         if not doc:
-            return {"farm_id": fid, "as_of": None, "lines": [], "note": "no analytics for this season yet"}
-        lines = farm_outlook(doc, fid)
+            out = {"farm_id": fid, "as_of": None, "lines": lines}
+            if not lines:
+                out["note"] = "no analytics for this season yet"
+            return out
         out = {"farm_id": fid, "as_of": doc.get("as_of"), "lines": lines, "detail": doc.get("fields", {}).get(fid, {})}
         if not lines:
             out["note"] = "nothing beyond today's plan for this farm"

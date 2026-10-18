@@ -14,13 +14,14 @@ from pathlib import Path
 
 import analytics
 from analytics import read_optional
+import neighbors
 import queue_morning as q
 import accounts
 from common import read_json, s, write_json
 from tools import load_roster
 
 
-def preview_messages(plans, route, roster, only=None, translate=None, outlook_doc=None):
+def preview_messages(plans, route, roster, only=None, translate=None, outlook_doc=None, data_dir=None):
     """[{roster_id, farm_id, role, language, text}] for every row that can be sent (has a phone and a plan)."""
     out = []
     for row in roster:
@@ -31,8 +32,11 @@ def preview_messages(plans, route, roster, only=None, translate=None, outlook_do
         if row["role"] == "officer":
             text = q.render_route(route, row["language"], translate)
         elif row["farm_id"] in plans:
-            text = q.render_plan(plans[row["farm_id"]], row["language"], translate,
-                                 analytics.farm_outlook(outlook_doc, row["farm_id"]) if outlook_doc else None)
+            outlook = analytics.farm_outlook(outlook_doc, row["farm_id"]) if outlook_doc else []
+            note = neighbors.sentence(row["farm_id"], data_dir, roster) if data_dir else None
+            if note:
+                outlook = list(outlook or []) + [note]
+            text = q.render_plan(plans[row["farm_id"]], row["language"], translate, outlook or None)
         else:
             continue
         out.append({"roster_id": row["roster_id"], "farm_id": row["farm_id"], "role": row["role"],
@@ -51,7 +55,7 @@ def run(data_dir, roster_path=None, today=None, dry_run=True, preview=False, pro
 
     messages = []
     if preview:
-        messages = preview_messages(plans, route, roster, only, translate, outlook_doc)
+        messages = preview_messages(plans, route, roster, only, translate, outlook_doc, data_dir)
         write_json(data_dir, "messages.json", {"date": s(today), "messages": messages})
 
     doc = q.run(data_dir, roster_path=roster_path, dry_run=dry_run, today=today, providers=providers, only=only,

@@ -2,3 +2,4 @@ perceptron>=0.4.0
 pillow
 imageio
 imageio-ffmpeg
+shapely

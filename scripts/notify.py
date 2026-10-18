@@ -14,6 +14,8 @@ import urllib.request
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "intelligence"))
+from redact import redact  # noqa: E402
 env = ROOT / ".env"
 if env.exists():
     for line in env.read_text().splitlines():
@@ -30,7 +32,7 @@ try:
     branch = subprocess.run(["git", "branch", "--show-current"], cwd=ROOT, capture_output=True, text=True).stdout.strip()
 except Exception:
     branch = "?"
-body = json.dumps({"text": f"[{branch}] {msg}"}).encode()
+body = json.dumps({"text": redact(f"[{branch}] {msg}")}).encode()
 req = urllib.request.Request(url, data=body, headers={"Content-Type": "application/json"})
 try:
     urllib.request.urlopen(req, timeout=10)

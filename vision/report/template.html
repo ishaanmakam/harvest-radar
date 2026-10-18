@@ -1,0 +1,247 @@
+<title>Perceptron Field Test</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;700;800&family=IBM+Plex+Sans:ital,wght@0,400;0,500;0,600;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+/* Layout: one reading column (~68ch) with wide figure bands; each test = claim, evidence images, reviewer check. */
+:root{
+  --bg:#f3f5f2; --surface:#ffffff; --ink:#18221d; --muted:#5b6b62; --line:#d6ddd8;
+  --accent:#0f8fa3; --accent-soft:#e1f1f3;
+  --good:#2f8a4e; --good-bg:#e3f2e7; --warn:#b77712; --warn-bg:#f8eedb; --bad:#c23b33; --bad-bg:#f8e3e1;
+  --display:"Archivo", "Helvetica Neue", Arial, sans-serif;
+  --body:"IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --mono:"IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#0f1512; --surface:#16201b; --ink:#e4ebe6; --muted:#97a89e; --line:#2a3631;
+  --accent:#4cc3d4; --accent-soft:#163238;
+  --good:#6fcf8c; --good-bg:#17301f; --warn:#e3b153; --warn-bg:#33280f; --bad:#f07a71; --bad-bg:#3a1a18; color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#0f1512; --surface:#16201b; --ink:#e4ebe6; --muted:#97a89e; --line:#2a3631;
+  --accent:#4cc3d4; --accent-soft:#163238;
+  --good:#6fcf8c; --good-bg:#17301f; --warn:#e3b153; --warn-bg:#33280f; --bad:#f07a71; --bad-bg:#3a1a18; color-scheme:dark}
+body{background:var(--bg);color:var(--ink);font:16px/1.6 var(--body);}
+.wrap{max-width:1080px;margin:0 auto;padding-block:40px 80px;padding-left:max(16px, env(safe-area-inset-left, 0px));padding-right:max(16px, env(safe-area-inset-right, 0px));display:grid;gap:56px}
+h1,h2,h3{font-family:var(--display);text-wrap:balance;margin:0;line-height:1.15}
+h1{font-size:clamp(34px,6vw,56px);font-weight:800;letter-spacing:-0.02em}
+h2{font-size:clamp(24px,3.4vw,32px);font-weight:700;letter-spacing:-0.01em}
+h3{font-size:18px;font-weight:700}
+p{margin:0;max-width:68ch}
+.eyebrow{font:500 12px/1.4 var(--mono);letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+.meta{display:flex;flex-wrap:wrap;gap:8px 18px;font:13px/1.5 var(--mono);color:var(--muted)}
+header{display:grid;gap:16px}
+.lede{font-size:19px;max-width:62ch}
+section{display:grid;gap:20px}
+.sec-head{display:grid;gap:8px;border-top:1px solid var(--line);padding-top:24px}
+.num{font:500 13px var(--mono);color:var(--accent)}
+.pill{display:inline-flex;align-items:center;gap:6px;font:600 12px/1 var(--body);padding:5px 9px;border-radius:999px;white-space:nowrap}
+.pill.good{background:var(--good-bg);color:var(--good)} .pill.warn{background:var(--warn-bg);color:var(--warn)} .pill.bad{background:var(--bad-bg);color:var(--bad)} .pill.info{background:var(--accent-soft);color:var(--accent)}
+.tablewrap{overflow-x:auto;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+table{border-collapse:collapse;width:100%;min-width:640px;font-size:14px}
+th,td{text-align:left;padding:11px 14px;border-bottom:1px solid var(--line);vertical-align:top}
+th{font:500 12px var(--mono);text-transform:uppercase;letter-spacing:.06em;color:var(--muted);background:var(--bg)}
+tr:last-child td{border-bottom:0}
+td.n{font-family:var(--mono);font-variant-numeric:tabular-nums;white-space:nowrap}
+figure{margin:0;display:grid;gap:8px;min-width:0}
+figure img{display:block;width:100%;height:auto;border-radius:6px;background:var(--line)}
+figcaption{font-size:13px;color:var(--muted)}
+.two{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,420px),1fr));gap:20px}
+.four{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,220px),1fr));gap:12px}
+.quote{border-left:3px solid var(--accent);padding:4px 0 4px 16px;font-style:italic;max-width:72ch}
+.quote cite{display:block;font:normal 12px var(--mono);color:var(--muted);margin-top:6px}
+.check{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:16px 18px;display:grid;gap:8px}
+.check strong{font-family:var(--display)}
+.zones{display:grid;gap:14px}
+.zone{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:14px;display:grid;grid-template-columns:minmax(0,1.25fr) minmax(0,1fr);gap:16px}
+.zone .strip{display:grid;grid-template-columns:repeat(3,1fr);gap:6px}
+.zone .strip figure{gap:4px} .zone .strip figcaption{font:11px var(--mono);text-align:center}
+.zone .txt{display:grid;gap:10px;align-content:start;min-width:0}
+.zone .top{display:flex;justify-content:space-between;align-items:center;gap:8px;flex-wrap:wrap}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{font:12px var(--mono);padding:3px 7px;border-radius:5px;border:1px solid var(--line);color:var(--muted)}
+.chip.on{border-color:var(--accent);color:var(--accent)}
+.said{font-size:15px}
+.note{font-size:13.5px;color:var(--muted)}
+.boxes{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:12px}
+.box{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px;display:grid;gap:8px}
+.box .top{display:flex;justify-content:space-between;align-items:center}
+.box b{font:600 13px var(--mono)}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,150px),1fr));gap:12px}
+.stat{background:var(--surface);border:1px solid var(--line);border-radius:10px;padding:12px 14px;display:grid;gap:2px}
+.stat .v{font:700 26px/1.1 var(--display);font-variant-numeric:tabular-nums}
+.stat .k{font-size:12.5px;color:var(--muted)}
+ul{margin:0;padding-left:20px;display:grid;gap:6px;max-width:70ch}
+code{font:13.5px var(--mono);background:var(--accent-soft);padding:1px 5px;border-radius:4px}
+@media (max-width:720px){.zone{grid-template-columns:1fr}}
+</style>
+
+<div class="wrap">
+<header>
+  <span class="eyebrow">Overfield · Vision workstream · Test report</span>
+  <h1>Perceptron Field Test</h1>
+  <p class="lede">What Perceptron Mk1.5 saw when it read real Sentinel-2 imagery of Story County, Iowa, what it got right, what it got wrong, and what we ship because of it.</p>
+  <div class="meta"><span>Model perceptron-mk1.5</span><span>Imagery Sentinel-2 L2A, 10 m, 1000×900 px</span><span>Latest clear pass 2026-10-17</span><span>Total spend $0.050 of $40</span></div>
+</header>
+
+<section>
+  <div class="sec-head"><span class="num">Scoreboard</span><h2>Every test at a glance</h2></div>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Test</th><th>What we asked</th><th>Result</th><th>Verdict</th></tr></thead>
+    <tbody>
+      <tr><td>Zone summaries</td><td>Describe where and when each ~3 km zone changed across 6 clear passes</td><td>9 of 9 grounded; 4 right, 3 mostly right, 2 partly right; no false flood or damage</td><td><span class="pill good">Ships</span></td></tr>
+      <tr><td>Field outlines, full frame</td><td>Draw a polygon for each field</td><td>71 shapes in a row-by-row grid that ignores field edges; cut off at the token limit</td><td><span class="pill bad">Not usable</span></td></tr>
+      <tr><td>Field outlines, zoomed tile</td><td>Same, on one enlarged zone</td><td>401 shapes, 206 duplicates stacked on the left edge</td><td><span class="pill bad">Not usable</span></td></tr>
+      <tr><td>Standing vs harvested</td><td>Box and count standing and harvested fields</td><td>"196 standing, 0 harvested" on a visibly part-harvested frame</td><td><span class="pill bad">Not usable</span></td></tr>
+      <tr><td>Change across dates</td><td>Describe change across the last 4 passes</td><td>No burning, dry-down, harvest growing lower-left, centre-west, centre-east</td><td><span class="pill good">Accurate</span></td></tr>
+      <tr><td>Per-farm change boxes</td><td>Box fields that changed between Oct 10 and Oct 17</td><td>10 boxes: 5 clear harvests, 2 partly right, 3 unchanged fields</td><td><span class="pill warn">Off by default</span></td></tr>
+      <tr><td>Images vs video mode</td><td>Same zones as a 1-frame-per-second video</td><td>Nice dated chapters, but dated a harvest to Aug 28 when fields were green</td><td><span class="pill warn">Images wins</span></td></tr>
+    </tbody>
+  </table></div>
+  <div class="check"><strong>Decision</strong><p>Field outlines come from the pipeline's segmentation, and farm plans use <code>source: vegetation_index</code>. Perceptron's job is to describe and date what changed in each zone, in plain words. That output is in <code>data/out/insights.json</code>.</p></div>
+</section>
+
+<section>
+  <div class="sec-head"><span class="num">Test 1 · ships</span><h2>Zone summaries</h2>
+  <p>For each of the 9 zones we cut the same ~3 km square out of the 6 clearest passes (cloud-free share at least 85%: Aug 28, Sep 2, Oct 2, Oct 5, Oct 10, Oct 17), enlarged each to 768 px, and asked Perceptron which parts changed and when. Below, three of those six passes per zone, Perceptron's own words, its flood / stress / change answers, and our check by eye against the frames.</p></div>
+  <div class="zones">
+    <article class="zone"><div class="strip"><figure><img src="img/Z01_2026-08-28.jpg" alt="Zone Z01 on Aug 28"><figcaption>Aug 28</figcaption></figure><figure><img src="img/Z01_2026-10-02.jpg" alt="Zone Z01 on Oct 2"><figcaption>Oct 2</figcaption></figure><figure><img src="img/Z01_2026-10-17.jpg" alt="Zone Z01 on Oct 17"><figcaption>Oct 17</figcaption></figure></div>
+      <div class="txt"><div class="top"><h3>Z01 · north-west</h3><span class="pill warn">Mostly right</span></div><p class="said">“Most fields in the centre and south dried from green to tan/brown between late August and early October, with several central and southern fields harvested by mid-October. No flooding or patchy damage is visible.”</p><div class="chips"><span class="chip">flood no</span><span class="chip">stress no</span><span class="chip on">change yes</span></div><p class="note">Check: centre and south harvests are real. It misses the large harvested fields along the north edge.</p></div></article>
+    <article class="zone"><div class="strip"><figure><img src="img/Z02_2026-08-28.jpg" alt="Zone Z02 on Aug 28"><figcaption>Aug 28</figcaption></figure><figure><img src="img/Z02_2026-10-02.jpg" alt="Zone Z02 on Oct 2"><figcaption>Oct 2</figcaption></figure><figure><img src="img/Z02_2026-10-17.jpg" alt="Zone Z02 on Oct 17"><figcaption>Oct 17</figcaption></figure></div>
+      <div class="txt"><div class="top"><h3>Z02 · north</h3><span class="pill good">Right</span></div><p class="said">“Most fields dried from green to yellow/brown between late September and early October, with several central and eastern fields turning light tan by mid-October as they were harvested. No flooding or patchy damage is visible.”</p><div class="chips"><span class="chip">flood no</span><span class="chip">stress no</span><span class="chip on">change yes</span></div><p class="note">Check: matches the frames. Light-tan harvested fields appear in the centre and east by Oct 17.</p></div></article>
+    <article class="zone"><div class="strip"><figure><img src="img/Z03_2026-08-28.jpg" alt="Zone Z03 on Aug 28"><figcaption>Aug 28</figcaption></figure><figure><img src="img/Z03_2026-10-02.jpg" alt="Zone Z03 on Oct 2"><figcaption>Oct 2</figcaption></figure><figure><img src="img/Z03_2026-10-17.jpg" alt="Zone Z03 on Oct 17"><figcaption>Oct 17</figcaption></figure></div>
+      <div class="txt"><div class="top"><h3>Z03 · north-east</h3><span class="pill warn">Mostly right</span></div><p class="said">“Most fields across the patch dried from green to yellow/brown between late August and early October, with several central and eastern fields turning light tan by mid-October as they were harvested. No flooding or patchy damage is visible.”</p><div class="chips"><span class="chip">flood no</span><span class="chip">stress no</span><span class="chip on">change yes</span></div><p class="note">Check: dry-down and central/eastern harvest are right. It leaves out the north-west fields that were already tan on Oct 2.</p></div></article>
+    <article class="zone"><div class="strip"><figure><img src="img/Z04_2026-08-28.jpg" alt="Zone Z04 on Aug 28"><figcaption>Aug 28</figcaption></figure><figure><img src="img/Z04_2026-10-02.jpg" alt="Zone Z04 on Oct 2"><figcaption>Oct 2</figcaption></figure><figure><img src="img/Z04_2026-10-17.jpg" alt="Zone Z04 on Oct 17"><figcaption>Oct 17</figcaption></figure></div>
+      <div class="txt"><div class="top"><h3>Z04 · west</h3><span class="pill warn">Mostly right</span></div><p class="said">“The central and eastern fields dried from green to tan/brown between 2026-08-28 and 2026-10-02, with the southern fields harvested by 2026-10-17. No flooding or patchy damage is visible.”</p><div class="chips"><span class="chip">flood no</span><span class="chip">stress no</span><span class="chip on">change yes</span></div><p class="note">Check: the southern harvest strip is real. It misses the harvested fields in the north-east corner.</p></div></article>
+    <article class="zone"><div class="strip"><figure><img src="img/Z05_2026-08-28.jpg" alt="Zone Z05 on Aug 28"><figcaption>Aug 28</figcaption></figure><figure><img src="img/Z05_2026-10-02.jpg" alt="Zone Z05 on Oct 2"><figcaption>Oct 2</figcaption></figure><figure><img src="img/Z05_2026-10-17.jpg" alt="Zone Z05 on Oct 17"><figcaption>Oct 17</figcaption></figure></div>
+      <div class="txt"><div class="top"><h3>Z05 · centre (town)</h3><span class="pill bad">Partly right</span></div><p class="said">“Most fields in the north, south and centre dried from green to tan/brown between late August and early October, with some central fields harvested by mid-October.”</p><div class="chips"><span class="chip">flood no</span><span class="chip">stress no</span><span class="chip on">change yes</span></div><p class="note">Check: the centre of this zone is the town of Nevada, not fields. The real harvest is in the north.</p></div></article>
+    <article class="zone"><div class="strip"><figure><img src="img/Z06_2026-08-28.jpg" alt="Zone Z06 on Aug 28"><figcaption>Aug 28</figcaption></figure><figure><img src="img/Z06_2026-10-02.jpg" alt="Zone Z06 on Oct 2"><figcaption>Oct 2</figcaption></figure><figure><img src="img/Z06_2026-10-17.jpg" alt="Zone Z06 on Oct 17"><figcaption>Oct 17</figcaption></figure></div>
+      <div class="txt"><div class="top"><h3>Z06 · east</h3><span class="pill good">Right</span></div><p class="said">“The eastern fields dried from green to tan/brown between 2026-09-02 and 2026-10-02, with the southern field turning dark brown by 2026-10-17. No flooding or patchy damage is visible.”</p><div class="chips"><span class="chip">flood no</span><span class="chip">stress no</span><span class="chip on">change yes</span></div><p class="note">Check: matches. Little harvest here yet, and it does not claim any.</p></div></article>
+    <article class="zone"><div class="strip"><figure><img src="img/Z07_2026-08-28.jpg" alt="Zone Z07 on Aug 28"><figcaption>Aug 28</figcaption></figure><figure><img src="img/Z07_2026-10-02.jpg" alt="Zone Z07 on Oct 2"><figcaption>Oct 2</figcaption></figure><figure><img src="img/Z07_2026-10-17.jpg" alt="Zone Z07 on Oct 17"><figcaption>Oct 17</figcaption></figure></div>
+      <div class="txt"><div class="top"><h3>Z07 · south-west</h3><span class="pill good">Right</span></div><p class="said">“The fields in the north and centre of the patch dried down from green to tan/brown between 2026-08-28 and 2026-10-02, with further drying and some harvesting visible by 2026-10-17. No flooding or patchy damage is apparent.”</p><div class="chips"><span class="chip">flood no</span><span class="chip">stress no</span><span class="chip on">change yes</span></div><p class="note">Check: matches, including the harvested triangle that appears on the east side by Oct 17.</p></div></article>
+    <article class="zone"><div class="strip"><figure><img src="img/Z08_2026-08-28.jpg" alt="Zone Z08 on Aug 28"><figcaption>Aug 28</figcaption></figure><figure><img src="img/Z08_2026-10-02.jpg" alt="Zone Z08 on Oct 2"><figcaption>Oct 2</figcaption></figure><figure><img src="img/Z08_2026-10-17.jpg" alt="Zone Z08 on Oct 17"><figcaption>Oct 17</figcaption></figure></div>
+      <div class="txt"><div class="top"><h3>Z08 · south</h3><span class="pill good">Right</span></div><p class="said">“The central and western fields dried from green to brown between late August and early October, with the northern field harvested by mid-October. No flooding or patchy damage is visible.”</p><div class="chips"><span class="chip">flood no</span><span class="chip">stress no</span><span class="chip on">change yes</span></div><p class="note">Check: matches. The northern field turns tan by Oct 17.</p></div></article>
+    <article class="zone"><div class="strip"><figure><img src="img/Z09_2026-08-28.jpg" alt="Zone Z09 on Aug 28"><figcaption>Aug 28</figcaption></figure><figure><img src="img/Z09_2026-10-02.jpg" alt="Zone Z09 on Oct 2"><figcaption>Oct 2</figcaption></figure><figure><img src="img/Z09_2026-10-17.jpg" alt="Zone Z09 on Oct 17"><figcaption>Oct 17</figcaption></figure></div>
+      <div class="txt"><div class="top"><h3>Z09 · south-east</h3><span class="pill bad">Partly right</span></div><p class="said">“The eastern fields dried from green to dark brown between 2026-08-28 and 2026-10-02, then were harvested by 2026-10-17. The western fields remained standing through the sequence.”</p><div class="chips"><span class="chip">flood no</span><span class="chip">stress no</span><span class="chip on">change yes</span></div><p class="note">Check: dry-down is right, but most eastern fields are still dark on Oct 17. The harvest claim is overstated, and the west is mostly town and trees.</p></div></article>
+  </div>
+  <div class="check"><strong>What this tells us</strong><p>The narration is grounded: dates and directions mostly match, and it never invented flooding or crop damage. Its usual mistake is leaving out one harvested area, and twice it described the wrong part of the zone. Good enough to show as a plain-language note beside each zone. The per-zone counts it also returns (for example "standing=10 harvested=25") are rough guesses and are not shown as facts.</p></div>
+</section>
+
+<section>
+  <div class="sec-head"><span class="num">Test 2 · not usable</span><h2>Field outlines</h2>
+  <p>The spec's first-hour gate: can Perceptron draw field boundaries well enough to replace segmentation? Left, Perceptron's polygons on the Oct 17 frame. Right, the pipeline's segmentation outlines on the same frame, for comparison (orange corn, green soybean).</p></div>
+  <div class="two">
+    <figure><img src="img/overlay_full.jpg" alt="Perceptron polygons drawn on the Oct 17 frame: evenly sized rectangles in rows across the top"><figcaption>Perceptron: 71 polygons. Rows of near-identical rectangles across the top third, a second band through the town it was told to skip, nothing in the south.</figcaption></figure>
+    <figure><img src="img/fields_overlay.jpg" alt="Segmentation field outlines following roads and field edges across the whole frame"><figcaption>Segmentation (Niranjan's pipeline): 266 fields that follow roads and field edges across the whole frame.</figcaption></figure>
+  </div>
+  <div class="stats">
+    <div class="stat"><span class="v">71</span><span class="k">full-frame polygons</span></div>
+    <div class="stat"><span class="v">8,192</span><span class="k">output tokens used (hit the limit)</span></div>
+    <div class="stat"><span class="v">401</span><span class="k">tile polygons</span></div>
+    <div class="stat"><span class="v">206</span><span class="k">tile duplicates</span></div>
+    <div class="stat"><span class="v">99.5%</span><span class="k">tile shapes starting on the left or top edge</span></div>
+  </div>
+  <div class="two">
+    <figure><img src="img/overlay_tile.jpg" alt="Zoomed zone Z07 with a few loose polygons and a stack of lines on the left edge"><figcaption>Zoomed tile (zone Z07, enlarged to 768 px): two or three shapes roughly follow a field; the rest pile up on the left edge.</figcaption></figure>
+    <div class="check"><strong>Why it fails</strong><p>Perceptron lists shapes the way it reads text: left to right, top to bottom, until it runs out of output room. The shapes are evenly spaced guesses, not traced edges. Enlarging the image did not help. This is the same pattern we saw on the synthetic test frame earlier in the night.</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head"><span class="num">Test 3 · not usable</span><h2>Standing vs harvested boxes</h2>
+  <p>Asked to box every field as "standing" or "harvested" on the Oct 17 frame, then count each.</p></div>
+  <div class="two">
+    <figure><img src="img/overlay_boxes.jpg" alt="Boxes labelled standing tiled across the frame"><figcaption>166 boxes, all labelled "standing", tiled in rows from the top-left.</figcaption></figure>
+    <div class="check"><strong>Answer</strong><p><code>standing=196 harvested=0</code></p><p>Wrong. The Oct 17 frame has many light-tan harvested fields, visible in the north, centre-west and south-west. The box layout is the same row-by-row scan as the outlines.</p></div>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head"><span class="num">Test 4 · accurate</span><h2>Change across dates</h2>
+  <p>Four whole-frame passes in date order, with one plain question: how do the fields change, and where?</p></div>
+  <div class="four">
+    <figure><img src="img/frame_2026-10-05.jpg" alt="Whole frame Oct 5"><figcaption>Oct 5</figcaption></figure>
+    <figure><img src="img/frame_2026-10-07.jpg" alt="Whole frame Oct 7, partly cloudy"><figcaption>Oct 7 (74% clear)</figcaption></figure>
+    <figure><img src="img/frame_2026-10-10.jpg" alt="Whole frame Oct 10"><figcaption>Oct 10</figcaption></figure>
+    <figure><img src="img/frame_2026-10-17.jpg" alt="Whole frame Oct 17"><figcaption>Oct 17</figcaption></figure>
+  </div>
+  <p class="quote">“There is no evidence of field burning. The main change is progressive drying and harvest… Notable harvested/tan areas include a small patch in the upper-central part of the scene by image 2, a larger tan area in the lower-left quadrant by image 3, and additional tan/bare patches in the central-west and central-east areas by image 3.”<cite>Perceptron, multi-date change probe (shortened)</cite></p>
+  <div class="check"><strong>Check</strong><p>Correct on every point we can verify: no burn scars, a general dry-down, and new harvested ground in the lower-left, centre-west and centre-east by Oct 17. This is the result that made narration Perceptron's job.</p></div>
+</section>
+
+<section>
+  <div class="sec-head"><span class="num">Test 5 · off by default</span><h2>Per-farm change boxes</h2>
+  <p>With Niranjan's real field outlines in hand, we gave the per-farm alerts one more try on zone Z01: box what changed between Oct 10 and Oct 17, then match each box to a farm. Our safeguards first asked a yes/no question (flood no, stress no, change yes), so only change boxes were requested. In zone Z07 the same run produced a scan pattern, which the safeguards threw out.</p></div>
+  <div class="two">
+    <figure><img src="img/cue_z01_1010.jpg" alt="Zone Z01 on Oct 10"><figcaption>Oct 10</figcaption></figure>
+    <figure><img src="img/cue_z01_1017_boxes.jpg" alt="Zone Z01 on Oct 17 with 10 numbered boxes"><figcaption>Oct 17 with Perceptron's 10 numbered boxes</figcaption></figure>
+  </div>
+  <div class="boxes">
+    <div class="box"><div class="top"><b>Box 1</b><span class="pill good">New harvest</span></div><img src="img/cue_1.jpg" alt="Box 1 before and after"><span class="note">Dark on Oct 10, tan stubble on Oct 17.</span></div>
+    <div class="box"><div class="top"><b>Box 2</b><span class="pill good">New harvest</span></div><img src="img/cue_2.jpg" alt="Box 2 before and after"><span class="note">The dark strip is cut by Oct 17.</span></div>
+    <div class="box"><div class="top"><b>Box 3</b><span class="pill good">New harvest</span></div><img src="img/cue_3.jpg" alt="Box 3 before and after"><span class="note">Whole field turns tan.</span></div>
+    <div class="box"><div class="top"><b>Box 4</b><span class="pill bad">No change</span></div><img src="img/cue_4.jpg" alt="Box 4 before and after"><span class="note">Already light on Oct 10.</span></div>
+    <div class="box"><div class="top"><b>Box 5</b><span class="pill bad">No change</span></div><img src="img/cue_5.jpg" alt="Box 5 before and after"><span class="note">Already harvested on Oct 10.</span></div>
+    <div class="box"><div class="top"><b>Box 6</b><span class="pill good">New harvest</span></div><img src="img/cue_6.jpg" alt="Box 6 before and after"><span class="note">Combine passes appear as tan stripes.</span></div>
+    <div class="box"><div class="top"><b>Box 7</b><span class="pill warn">Partly</span></div><img src="img/cue_7.jpg" alt="Box 7 before and after"><span class="note">Part of the field was already light; the rest lightened.</span></div>
+    <div class="box"><div class="top"><b>Box 8</b><span class="pill good">New harvest</span></div><img src="img/cue_8.jpg" alt="Box 8 before and after"><span class="note">The field below the stream turns tan.</span></div>
+    <div class="box"><div class="top"><b>Box 9</b><span class="pill warn">Partly</span></div><img src="img/cue_9.jpg" alt="Box 9 before and after"><span class="note">Only the right half changed.</span></div>
+    <div class="box"><div class="top"><b>Box 10</b><span class="pill bad">No change</span></div><img src="img/cue_10.jpg" alt="Box 10 before and after"><span class="note">Tan on both dates.</span></div>
+  </div>
+  <div class="check"><strong>Verdict</strong><p>5 clear new harvests, 2 partly right, 3 on fields that had not changed. Far better than on the synthetic frame, where every box was junk, but a 3-in-10 false alarm rate is too high for a message to a farmer. The index math already catches a harvest as a sharp drop in greenness, so these boxes add risk without adding coverage. They stay available behind <code>--cues</code>.</p></div>
+</section>
+
+<section>
+  <div class="sec-head"><span class="num">Test 6 · images wins</span><h2>Images vs video</h2>
+  <p>The same zones (Z05, Z07) sent as a short video, one pass per second, asking for timestamped clips.</p></div>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Zone</th><th>Video mode said</th><th>Images mode said</th><th>Check</th></tr></thead>
+    <tbody>
+      <tr><td class="n">Z07</td><td>“Harvest begins in the upper-right quadrant” between Aug 28 and Sep 2, then “almost entirely tan/brown” by Oct 17</td><td>North and centre dried Aug 28 to Oct 2, some harvesting by Oct 17</td><td><span class="pill bad">Video wrong</span> Aug 28 is fully green, and Oct 17 is still mostly dark</td></tr>
+      <tr><td class="n">Z05</td><td>Harvest begins upper-left Oct 2 to 5, expands by Oct 10 to 17</td><td>Dried late Aug to early Oct, some central fields harvested</td><td><span class="pill warn">Both partial</span> Video's dated chapters read well; images misplaces the harvest in the town</td></tr>
+    </tbody>
+  </table></div>
+  <div class="check"><strong>Verdict</strong><p>Video gives dated chapters, which is appealing for a demo, but it overstates progress and gets dates wrong. Images mode is steadier, so it writes <code>insights.json</code>.</p></div>
+</section>
+
+<section>
+  <div class="sec-head"><span class="num">Earlier · synthetic frame</span><h2>What the first tests taught us</h2>
+  <p>Before real imagery arrived we tested on the team's synthetic stand-in frame. The same failure patterns showed up there first, which is why the safeguards existed before the real test.</p></div>
+  <div class="two">
+    <figure><img src="img/mock_frame.jpg" alt="Synthetic stand-in frame made of coloured rectangles"><figcaption>Synthetic stand-in frame (blocks of colour, not real imagery).</figcaption></figure>
+    <ul>
+      <li><b>Outlines:</b> 112 polygons, all in a thin strip along the top edge, cut off at the output limit.</li>
+      <li><b>State boxes:</b> 145 tiny boxes in the same strip, all labelled "burned", with no counts.</li>
+      <li><b>Per-farm boxes, first version:</b> the same box repeated as "flood" while the narration said "no clear flooding", and a column scanned down the left edge as "change". 14 alerts, all false.</li>
+      <li><b>Fixes:</b> ask a yes/no question first and request boxes only for a "yes", throw out duplicate and edge-scan patterns, enlarge crops. On the synthetic frame this cut false alerts to zero.</li>
+      <li><b>Narration:</b> sensible from the first run, which held up on real imagery.</li>
+    </ul>
+  </div>
+</section>
+
+<section>
+  <div class="sec-head"><span class="num">Cost</span><h2>What the tests cost</h2></div>
+  <div class="tablewrap"><table>
+    <thead><tr><th>Phase</th><th>Calls</th><th>Spend</th></tr></thead>
+    <tbody>
+      <tr><td>Synthetic frame: first-hour probe</td><td class="n">3</td><td class="n">$0.0069</td></tr>
+      <tr><td>Synthetic frame: per-farm boxes, before and after safeguards</td><td class="n">7</td><td class="n">$0.0040</td></tr>
+      <tr><td>Real frame: outlines, tile, state boxes, change across dates</td><td class="n">4</td><td class="n">$0.0294</td></tr>
+      <tr><td>Real frames: 9 zone summaries, video test, per-farm box test</td><td class="n">15</td><td class="n">$0.0094</td></tr>
+      <tr><td><b>Total</b></td><td class="n"><b>29</b></td><td class="n"><b>$0.0497</b></td></tr>
+    </tbody>
+  </table></div>
+  <p class="note">Budget cap $40 of the $50 Perceptron credit. A full re-run of the 9 zone summaries on a new pass costs about $0.006.</p>
+</section>
+
+<section>
+  <div class="sec-head"><span class="num">Method</span><h2>How we checked</h2></div>
+  <ul>
+    <li>Every verdict above was made by looking at the images, not from the model's own numbers. Overlay pictures were drawn from the model's raw coordinates.</li>
+    <li>Zone checks compare Perceptron's sentence with the Aug 28, Oct 2 and Oct 17 crops shown beside it.</li>
+    <li>Per-farm boxes were judged one by one on Oct 10 vs Oct 17 close-ups.</li>
+    <li>Prompts describe the real landscape (Iowa corn and soybeans, where October browning is normal) from the team's region config.</li>
+    <li>Raw responses are kept in <code>insights.json</code> (<code>raw</code>) and <code>data/out/perceptron/validation/results.json</code>.</li>
+  </ul>
+</section>
+</div>

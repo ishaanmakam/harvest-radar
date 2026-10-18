@@ -21,6 +21,8 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT / "intelligence"))
+from redact import redact  # noqa: E402
 DEADLINE = datetime(2026, 10, 18, 17, 30, tzinfo=timezone.utc)  # Sun Oct 18, 10:30 AM PT
 ROLES = [  # matched against branch names, first hit wins
     (("main",), "main (merged work)"),
@@ -71,7 +73,7 @@ def gather(hours):
         log = sh("git", "log", rng, f"--since={since}", "--no-merges", "--pretty=%an: %s")
         if log:
             short = b.split("/", 1)[1] if "/" in b else b
-            activity[short] = {"role": role_of(short), "commits": log.splitlines()[:15]}
+            activity[short] = {"role": role_of(short), "commits": [redact(line) for line in log.splitlines()[:15]]}
 
     prs = {"open": [], "merged_recently": []}
     repo, token = os.environ.get("GITHUB_REPOSITORY"), os.environ.get("GITHUB_TOKEN")
@@ -174,7 +176,7 @@ def main():
     if not facts["activity"] and not facts["pull_requests"]["merged_recently"] and not force:
         print("No activity in window; not posting.")
         return
-    text = ask_grok(facts) or plain(facts)
+    text = redact(ask_grok(facts) or plain(facts))
     text = ":satellite: *Harvest Radar digest*\n" + text
     print(text)
     url = os.environ.get("SLACK_WEBHOOK_URL")

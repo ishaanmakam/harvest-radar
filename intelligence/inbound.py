@@ -12,6 +12,7 @@ import re
 
 from queue_morning import render_plan, render_route
 from common import product_name
+import neighbors
 from tools import UNKNOWN_CALLER_MESSAGE, Tools, resolve_caller
 
 FARM_RE = re.compile(r"\bF\d{4,}\b", re.IGNORECASE)
@@ -31,7 +32,7 @@ def answer(handle, text, data_dir, roster):
     caller = resolve_caller(_strip_scheme(handle), roster)
     if caller is None:
         return UNKNOWN_CALLER_MESSAGE
-    t = Tools(data_dir, caller)
+    t = Tools(data_dir, caller, roster)
     q = (text or "").lower()
     ids = [m.upper() for m in FARM_RE.findall(text or "")]
     wants_change = any(w in q for w in CHANGE_WORDS)
@@ -40,9 +41,11 @@ def answer(handle, text, data_dir, roster):
         if any(i != caller["farm_id"] for i in ids):
             return "I can only tell you about your own farm."
         try:
-            return describe_change(t.get_change()) if wants_change else render_plan(t.get_plan(), caller["language"])
+            reply = describe_change(t.get_change()) if wants_change else render_plan(t.get_plan(), caller["language"])
         except KeyError:
             return f"There is no plan for your farm ({caller['farm_id']}) this morning yet."
+        note = neighbors.sentence(caller["farm_id"], data_dir, roster)
+        return f"{reply} {note}" if note and not wants_change else reply
 
     # officer: a named farm, otherwise the route
     if ids:
@@ -51,14 +54,16 @@ def answer(handle, text, data_dir, roster):
             plan = t.get_plan(fid)
         except KeyError:
             return f"No plan for farm {fid} this morning."
-        return describe_change(t.get_change(fid)) if wants_change else render_plan(plan, caller["language"])
+        reply = describe_change(t.get_change(fid)) if wants_change else render_plan(plan, caller["language"])
+        note = neighbors.sentence(fid, data_dir, roster)
+        return f"{reply} {note}" if note and not wants_change else reply
     return render_route(t.get_route(), caller["language"])
 
 
 def call_tool(name, args, handle, data_dir, roster):
     """Dispatcher for the shared tools (get_plan, get_route, get_change, get_outlook). Returns the tool's JSON, or {"error": message}."""
     caller = resolve_caller(_strip_scheme(handle), roster)
-    t = Tools(data_dir, caller)
+    t = Tools(data_dir, caller, roster)
     args = args or {}
     try:
         if name == "get_plan":

@@ -23,6 +23,8 @@ from pathlib import Path
 import analytics
 from analytics import read_optional
 from common import read_json, s, product_name
+import neighbors
+from redact import redact
 from tools import load_roster
 from voice_guard import enforce
 
@@ -150,6 +152,11 @@ def save_deliveries(data_dir, doc):
     """Checkpoint write: quiet (it happens before and after every attempt) and atomic (temp file + replace), so a
     crash mid-write leaves the previous complete checkpoint, never a truncated one that would break the restart."""
     import json
+    for rec in doc.get("deliveries") or []:
+        if rec.get("detail"):
+            rec["detail"] = redact(rec["detail"])
+        rec.pop("transcript", None)
+        rec.pop("phone", None)
     p = Path(data_dir) / "deliveries.json"
     p.parent.mkdir(parents=True, exist_ok=True)
     tmp = p.with_name(p.name + ".tmp")
@@ -162,12 +169,12 @@ def _attempt(provider, phone, text, language):
     for i in range(1, RETRIES + 2):
         try:
             result = provider.send(phone, text, language)
-            return "sent", f"{result or 'ok'} (attempt {i})"
+            return "sent", redact(f"{result or 'ok'} (attempt {i})")
         except NotImplementedError:
             raise
         except Exception as e:  # provider error: retry
-            last = str(e)
-    return "failed", f"failed after {RETRIES + 1} attempts: {last}"
+            last = redact(str(e))
+    return "failed", redact(f"failed after {RETRIES + 1} attempts: {last}")
 
 
 # ---------------- the run ----------------
@@ -203,9 +210,14 @@ def run(data_dir, roster_path=None, dry_run=True, today=None, providers=None, on
         elif row["role"] == "farmer" and row["farm_id"] not in plans:
             err = f"no plan for farm {row['farm_id']}"
         else:
-            text = render_route(route, row["language"], translate) if row["role"] == "officer" \
-                else render_plan(plans[row["farm_id"]], row["language"], translate,
-                                 analytics.farm_outlook(outlook_doc, row["farm_id"]) if outlook_doc else None)
+            if row["role"] == "officer":
+                text = render_route(route, row["language"], translate)
+            else:
+                outlook = analytics.farm_outlook(outlook_doc, row["farm_id"]) if outlook_doc else []
+                note = neighbors.sentence(row["farm_id"], data_dir, roster)
+                if note:
+                    outlook = list(outlook or []) + [note]
+                text = render_plan(plans[row["farm_id"]], row["language"], translate, outlook or None)
         for ch in (channels or SPEC_CHANNELS):
             key = (dstr, row["roster_id"], ch)
             rec = index.get(key)

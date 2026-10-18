@@ -37,6 +37,7 @@ def _load_env():
 _load_env()
 MODEL = os.environ.get("PERCEPTRON_MODEL", "perceptron-mk1.5")
 BUDGET = float(os.environ.get("PERCEPTRON_BUDGET_USD", "40"))
+LAST_FINISH_REASON = None
 
 
 def spent_usd():
@@ -59,6 +60,7 @@ def _record(usage, label):
 
 def ask(media, prompt, annotation_format=None, label="call", max_tokens=2048, reasoning_effort=None):
     """media: list of local paths (images .jpg/.png or videos .mp4). Returns (text, cost_usd)."""
+    global LAST_FINISH_REASON
     if spent_usd() >= BUDGET:
         raise RuntimeError(f"Perceptron budget cap reached (${BUDGET}). Raise PERCEPTRON_BUDGET_USD deliberately.")
     from perceptron import Client, image, video  # imported lazily so the rest of the repo runs without the SDK
@@ -77,6 +79,7 @@ def ask(media, prompt, annotation_format=None, label="call", max_tokens=2048, re
     cost = _record(resp.usage, label)
     choice = resp.choices[0]
     text = choice.message.content or ""
+    LAST_FINISH_REASON = choice.finish_reason
     if choice.finish_reason != "stop":
         print(f"  WARN finish_reason={choice.finish_reason} (answer may be cut off)")
     print(f"  [{label}] ${cost:.4f}  (total ${spent_usd():.3f} of ${BUDGET})")
@@ -90,17 +93,37 @@ _CLIP = re.compile(r"<clip([^>]*)/>")
 _ATTR = re.compile(r'(\w+)="([^"]*)"')
 
 
+def _open_collection_mention(text, pos):
+    """Mention of the collection still open at pos. An unclosed collection runs to the end of the text."""
+    mention = None
+    for m in re.finditer(r"<(/?)collection([^>]*)>", text):
+        if m.start() > pos:
+            break
+        if m.group(1) == "/":
+            mention = None
+        else:
+            mention = dict(_ATTR.findall(m.group(2))).get("mention")
+    return mention
+
+
 def parse_annotations(text):
-    """Return list of dicts: {kind, mention, asset_idx, coords:[(x,y)...]} or clips {kind:'clip', mention, t:[s] or [s,e]}."""
+    """Return list of dicts: {kind, mention, asset_idx, coords:[(x,y)...]} or clips {kind:'clip', mention, t:[s] or [s,e]}.
+
+    A tag with no mention inherits the mention of the surrounding <collection>, which is how
+    the live API groups polygons and boxes.
+    """
     out = []
-    for kind, attrs, body in _TAG.findall(text):
+    for m in _TAG.finditer(text):
+        kind, attrs, body = m.group(1), m.group(2), m.group(3)
         a = dict(_ATTR.findall(attrs))
-        out.append({"kind": kind, "mention": a.get("mention"), "asset_idx": int(a.get("asset_idx", 0) or 0),
+        mention = a.get("mention") or _open_collection_mention(text, m.start())
+        out.append({"kind": kind, "mention": mention, "asset_idx": int(a.get("asset_idx", 0) or 0),
                     "coords": [(float(x), float(y)) for x, y in _PAIR.findall(body)]})
-    for attrs in _CLIP.findall(text):
-        a = dict(_ATTR.findall(attrs))
+    for m in _CLIP.finditer(text):
+        a = dict(_ATTR.findall(m.group(1)))
+        mention = a.get("mention") or _open_collection_mention(text, m.start())
         secs = [float(x) for x in re.findall(r"(-?\d+(?:\.\d+)?)\s*seconds", a.get("t", ""))]
-        out.append({"kind": "clip", "mention": a.get("mention"), "asset_idx": int(a.get("asset_idx", 0) or 0), "t": secs})
+        out.append({"kind": "clip", "mention": mention, "asset_idx": int(a.get("asset_idx", 0) or 0), "t": secs})
     return out
 
 

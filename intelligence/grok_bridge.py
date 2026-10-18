@@ -44,12 +44,12 @@ async def _pump_grok(grok, twilio, stream_sid, caller, data_dir, roster, voice, 
         call = va.function_call_from(ev)
         if call:
             call_id, name, args = call
-            log(f"tool {name}({args}) for {caller}")
+            log(f"tool {name} for a caller")
             result = va.run_tool(name, args, caller, data_dir, roster)
             for e in va.tool_result_events(call_id, result):
                 await grok.send(json.dumps(e))
         if t == "conversation.item.input_audio_transcription.completed":
-            log(f"caller said: {ev.get('transcript', '')}")
+            log("caller said: [redacted]")
 
 
 async def handle_twilio(twilio, data_dir, roster, api_key, api_url, voice, log=print):
@@ -66,7 +66,7 @@ async def handle_twilio(twilio, data_dir, roster, api_key, api_url, voice, log=p
                 stream_sid = frame["start"]["streamSid"]
                 params = frame["start"].get("customParameters") or {}
                 caller = params.get("from") or (query.get("from") or [""])[0]
-                log(f"stream {stream_sid} for {caller or '<unknown>'}")
+                log(f"stream {stream_sid} for a caller")
                 grok = await websockets.connect(api_url, additional_headers={"Authorization": f"Bearer {api_key}"})
                 pump = asyncio.create_task(_pump_grok(grok, twilio, stream_sid, caller, data_dir, roster, voice, log))
             elif ev == "media" and grok is not None:

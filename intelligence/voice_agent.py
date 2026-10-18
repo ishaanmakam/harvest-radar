@@ -45,7 +45,8 @@ TOOL_SCHEMAS = {
                    "parameters": {"type": "object", "properties": {"farm_id": {"type": "string"}}, "required": []}},
     "get_outlook": {"type": "function", "name": "get_outlook",
                     "description": "The outlook for a farm beyond today's plan: yield band from the greenness curve, harvest now "
-                                   "or wait and why, the chance to finish before the rain, soil water, anything unusual versus the neighbours.",
+                                   "or wait and why, the chance to finish before the rain, soil water, and whether this field is "
+                                   "browning faster than a named next-door neighbour (surname only, never a phone number).",
                     "parameters": {"type": "object", "properties": {"farm_id": {"type": "string"}}, "required": []}},
 }
 RULES = ("Rules: speak in {language}; keep answers short, they are spoken aloud. Never invent a measurement, a date or "
@@ -55,7 +56,7 @@ RULES = ("Rules: speak in {language}; keep answers short, they are spoken aloud.
 
 def _instructions(row, data_dir, roster):
     language = LANGUAGE_NAMES.get((row["language"] or "en")[:2], row["language"])
-    t = Tools(data_dir, row)
+    t = Tools(data_dir, row, roster)
     if row["role"] == "officer":
         words = q.render_route(t.get_route(), "en")
         scope = "the morning route and the farms in today's plans"

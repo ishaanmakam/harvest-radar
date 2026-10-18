@@ -11,3 +11,6 @@ web/dist/
 bots/team_log.jsonl
 data/accounts.sqlite
 data/accounts.sqlite-*
+data/out/deliveries.json
+data/out/**/*transcript*
+data/out/**/*call_log*
