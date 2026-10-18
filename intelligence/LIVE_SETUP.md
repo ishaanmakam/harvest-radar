@@ -23,7 +23,7 @@ Then run the preflight; it sends nothing and tells you exactly what is still mis
 python intelligence/check_providers.py
 ```
 
-Optional: `PRODUCT_NAME=Overfield` (or any name) renames the product in every call and text; the map must use the same name.
+The product name in every call and text is Overfield (matching the map); `PRODUCT_NAME=...` in `.env` overrides it.
 
 ## 2. Services to run (two terminals, plus ngrok)
 

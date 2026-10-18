@@ -9,9 +9,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def product_name():
-    """The name farmers hear and read. PRODUCT_NAME in the environment (or .env) overrides the default, so the whole
-    team can rename the product for the demo in one place."""
-    return os.environ.get("PRODUCT_NAME", "").strip() or "Harvest Radar"
+    """The name farmers hear and read: Overfield (the team's demo name; the repo and the pitch background still say
+    Harvest Radar). PRODUCT_NAME in the environment (or .env) overrides it, so a rename is one line."""
+    return os.environ.get("PRODUCT_NAME", "").strip() or "Overfield"
 
 
 def load_env(path=None):

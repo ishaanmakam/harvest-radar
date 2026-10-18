@@ -124,15 +124,18 @@ class TestWords:
 
 
 class TestProductName:
-    def test_default_and_override(self, monkeypatch):
+    def test_default_is_overfield_and_the_switch_overrides(self, monkeypatch):
         monkeypatch.delenv("PRODUCT_NAME", raising=False)
-        assert product_name() == "Harvest Radar"
-        assert q.render_plan(plan("F0001"), "en").startswith("Harvest Radar morning plan for farm F0001")
-        monkeypatch.setenv("PRODUCT_NAME", "Overfield")
+        assert product_name() == "Overfield"
         assert q.render_plan(plan("F0001"), "en").startswith("Overfield morning plan for farm F0001")
         assert q.render_route({"as_of": "2026-10-16", "stops": []}, "en").startswith("Overfield officer route")
+        monkeypatch.setenv("PRODUCT_NAME", "Harvest Radar")
+        assert q.render_plan(plan("F0001"), "en").startswith("Harvest Radar morning plan for farm F0001")
 
     def test_voice_uses_the_switch(self, data, monkeypatch):
-        monkeypatch.setenv("PRODUCT_NAME", "Overfield")
+        monkeypatch.delenv("PRODUCT_NAME", raising=False)
         cfg = voice_agent.session_config("+919876500002", data, roster(data))
         assert "You are Overfield's voice assistant" in cfg["session"]["instructions"]
+        monkeypatch.setenv("PRODUCT_NAME", "Harvest Radar")
+        cfg = voice_agent.session_config("+919876500002", data, roster(data))
+        assert "You are Harvest Radar's voice assistant" in cfg["session"]["instructions"]
