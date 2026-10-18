@@ -44,9 +44,17 @@ export function createMap({ container, data, onSelect, onHover }) {
   let realOutlines = Boolean(data.realFields);
   let ftwOutlines = false;
   let fillMode = "flag";
+  let frameOpacity = 1;
+  // Outside the Time-lapse view the 10 m frame hands over to the sub-metre basemap between zoom
+  // 14.5 and 15.5, so a close look shows real detail under the field outlines instead of 10 m blocks.
+  let frameFade = true;
 
   function fieldOpacity() {
     return dimmed ? ["case", IS_MATCH, 0.22, 0.03] : ["case", IS_MATCH, 0.48, 0.06];
+  }
+
+  function framePaintOpacity() {
+    return frameFade ? ["interpolate", ["linear"], ["zoom"], 14.5, frameOpacity, 15.5, 0] : frameOpacity;
   }
 
   function addLayers() {
@@ -62,12 +70,13 @@ export function createMap({ container, data, onSelect, onHover }) {
           [west, south],
         ],
       });
+      // Nearest resampling keeps the Sentinel-2 pixels square and honest at every zoom.
       map.addLayer({
         id: "frame",
         type: "raster",
         source: "frame",
         layout: { visibility: "none" },
-        paint: { "raster-opacity": 1, "raster-fade-duration": 0, "raster-resampling": "nearest" },
+        paint: { "raster-opacity": framePaintOpacity(), "raster-fade-duration": 0, "raster-resampling": "nearest" },
       });
     }
 
@@ -211,7 +220,16 @@ export function createMap({ container, data, onSelect, onHover }) {
     if (!frames || !map.getSource("frame")) return;
     const clamped = Math.max(0, Math.min(frames.length - 1, index));
     map.getSource("frame").updateImage({ url: frameUrl(clamped) });
-    if (opacity != null) map.setPaintProperty("frame", "raster-opacity", opacity);
+    if (opacity != null) {
+      frameOpacity = opacity;
+      map.setPaintProperty("frame", "raster-opacity", framePaintOpacity());
+    }
+  }
+
+  /** On: the frame fades out past zoom 15 (Fields, Route, Yield). Off: the Time-lapse keeps it at every zoom. */
+  function setFrameFade(on) {
+    frameFade = Boolean(on);
+    if (map.getLayer("frame")) map.setPaintProperty("frame", "raster-opacity", framePaintOpacity());
   }
 
   function setRouteMarkers(stops) {
@@ -288,6 +306,7 @@ export function createMap({ container, data, onSelect, onHover }) {
     setVisible,
     setDimmed,
     setFrame,
+    setFrameFade,
     setRouteMarkers,
     setChrome,
     setRealOutlines,

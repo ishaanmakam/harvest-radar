@@ -11,6 +11,7 @@ import { renderRoute } from "./views/route.js";
 import { renderDeliveries } from "./views/deliveries.js";
 import { renderSeason } from "./views/season.js";
 import { renderYield } from "./views/yield.js";
+import { initPages } from "./pages.js";
 import { createGlobe } from "./globe/globe.js";
 import { h, skeleton } from "./dom.js";
 import { CROP_LABEL, FLAG_LABEL, chip, fmtDate, fmtHa, isPhone, titleCase } from "./format.js";
@@ -132,9 +133,13 @@ async function start() {
     event.currentTarget.setAttribute("aria-expanded", String(expanded));
   });
 
+  const dataPromise = loadData();
+  // Account, developers, admin and data pages open over the map from the header and from #hash routes.
+  initPages({ dataPromise });
+
   let data;
   try {
-    data = await loadData();
+    data = await dataPromise;
   } catch (err) {
     showError(err.message);
     intro.classList.add("is-hidden");

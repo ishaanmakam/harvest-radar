@@ -66,6 +66,7 @@ export function createTimelapse({ data, store, mapApi, els }) {
       active = true;
       els.box.hidden = false;
       mapApi.setDimmed(true);
+      mapApi.setFrameFade(false);
       apply();
       syncTimer();
     },
@@ -77,6 +78,7 @@ export function createTimelapse({ data, store, mapApi, els }) {
       els.box.hidden = true;
       if (store.get().frame.playing) store.setFrame({ playing: false });
       mapApi.setDimmed(false);
+      mapApi.setFrameFade(true);
       mapApi.setFrame(frames.length - 1, 1);
     },
     update(keys) {

@@ -60,4 +60,20 @@ The "Get your farm's morning plan" button links to the inbound server's sign-up 
 
 ## Intro
 
-The opening scene is a three.js Earth: a Sentinel-2 satellite orbits, featured farm regions are marked, and Enter the season flies into the live Story County landscape. Clicking another region opens that place on the imagery and says the live demo is still Iowa. Earth textures are bundled locally from the three.js examples (r169), so the intro does not fetch them at runtime. With reduced motion on, the Earth holds still and the fly-in is instant.
+The opening scene is a three.js Earth with real satellites over it. Featured farm regions are marked, and Enter the season flies into the live Story County landscape. Clicking another region opens that place on the imagery and says the live demo is still Iowa. Earth textures are bundled locally from the three.js examples (r169), so the intro does not fetch them at runtime. With reduced motion on, the Earth holds still, the satellite clock runs at real time and the fly-in is instant.
+
+Rendering (`src/globe/`): a procedural star field (points, no texture, with a Milky Way band), a fresnel atmosphere in two shells (soft blue limb, warmer and stronger along the terminator), the sun placed from the UTC time of the satellite clock so day, night and city lights are where they really are, specular oceans, and a slow spin that pauses on any drag, wheel or touch and eases back in six seconds later. No post-processing passes, so an integrated GPU keeps 60 fps.
+
+Satellites (`src/globe/satellites.js`): positions come from SGP4 (`satellite.js`) on a clock that starts at wall-clock time and runs at 1×, 60× (the default) or 600×. Sentinel-2A, 2B and 2C are the green points, the satellites that visit every farm; Landsat 8 and 9, Terra and Aqua are the white ones; each carries a label and its ground track for the next 90 minutes, and an arc reaches down to the farms when a Sentinel-2 comes within 25°. Starlink is the faint shell of points, drawn for connectivity context only; it is not a data source. The legend gives a next-pass estimate: the first time in the next five days that a Sentinel-2 sub-satellite point comes within 150 km of Ames, Iowa.
+
+The orbital elements are a CelesTrak GP snapshot in `public/sats/imaging.json` and `public/sats/starlink.json` (Starlink thinned by even sampling to 800 objects). Refresh them with:
+
+```bash
+python scripts/fetch_tles.py
+```
+
+The script is standard library only, writes `fetched_at` into both files, and the legend shows that date. SGP4 drifts by kilometres a day, so a snapshot older than a few weeks puts the points in the wrong place; refresh before a demo.
+
+## Zoom past 15
+
+The Sentinel-2 frame is drawn with nearest resampling, so its pixels stay square and read as the 10 m they are. In the Fields, Route and Yield views the frame fades out between zoom 14.5 and 15.5 and the Esri World Imagery basemap shows under the field outlines; the Time-lapse view keeps the frame at every zoom and says so under the scrubber.

@@ -54,5 +54,14 @@ export default defineConfig({
   base: "./",
   publicDir: "../data",
   server: { port: 5173 },
+  resolve: {
+    alias: {
+      // satellite.js's optional WebAssembly builds: not used, kept out of the bundle (see src/globe/no-wasm.js).
+      "#wasm-single-thread": path.join(here, "src/globe/no-wasm.js"),
+      "#wasm-multi-thread": path.join(here, "src/globe/no-wasm.js"),
+    },
+  },
+  // satellite.js is plain ESM; pre-bundling it would follow those WebAssembly imports past the alias.
+  optimizeDeps: { exclude: ["satellite.js"] },
   plugins: [appPublicFiles()],
 });

@@ -10,7 +10,9 @@
     "vite": "5.4.10"
   },
   "dependencies": {
+    "@supabase/supabase-js": "2.118.0",
     "maplibre-gl": "4.7.1",
+    "satellite.js": "7.1.0",
     "three": "0.169.0"
   }
 }

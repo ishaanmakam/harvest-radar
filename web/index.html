@@ -45,7 +45,12 @@
         <div class="topbar-right">
           <span id="run-badge" class="badge" hidden></span>
           <span id="badge" class="badge"></span>
-          <button id="orbit" type="button" class="btn btn-ghost">Orbit</button>
+          <button id="orbit" type="button" class="btn btn-ghost">Globe</button>
+          <nav class="page-links" aria-label="Pages">
+            <a href="#data">Data</a>
+            <a href="#developers">Developers</a>
+          </nav>
+          <div id="auth" class="auth-slot"></div>
           <a id="signup" class="signup" href="http://localhost:8788/signup" target="_blank" rel="noopener">Get your farm's morning plan</a>
         </div>
       </header>
@@ -79,10 +84,29 @@
             <span>Opacity</span>
             <input id="frame-opacity" type="range" min="0" max="1" step="0.05" value="1" aria-label="Imagery opacity" />
           </label>
+          <p class="tl-help">Sentinel-2 sees 10 m per pixel; zoom in on the Fields view for the latest aerial basemap.</p>
         </div>
         <div id="tooltip" class="map-tooltip" role="tooltip" hidden></div>
       </main>
     </div>
+    <section id="page" class="page" hidden aria-labelledby="page-title">
+      <div class="page-bar">
+        <button id="page-back" type="button" class="btn btn-ghost page-back">Back to the map</button>
+        <nav class="page-nav" aria-label="Pages">
+          <a href="#data">Data</a>
+          <a href="#developers">Developers</a>
+          <a href="#account">Account</a>
+          <a id="page-admin-link" href="#admin" hidden>Admin</a>
+        </nav>
+        <div id="page-auth" class="auth-slot"></div>
+      </div>
+      <div class="page-scroll">
+        <div class="page-inner">
+          <h1 id="page-title" class="page-title" tabindex="-1"></h1>
+          <div id="page-content" class="page-content"></div>
+        </div>
+      </div>
+    </section>
     <div id="place-card" hidden>
       <h2 id="place-title"></h2>
       <p id="place-body"></p>
