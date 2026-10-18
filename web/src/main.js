@@ -470,9 +470,10 @@ async function start() {
     } else {
       showFarmChrome(false);
       map.jumpTo({ center: [detail.lng, detail.lat], zoom: 3 });
+      setRegionOverlay(detail.overlay || null);
       map.flyTo({
         center: [detail.lng, detail.lat],
-        zoom: 11,
+        zoom: detail.zoom || 11,
         duration: reducedMotion ? 0 : 2200,
         essential: true,
       });
@@ -480,7 +481,7 @@ async function start() {
       const reveal = () => {
         window.clearTimeout(revealTimer);
         $("place-title").textContent = title;
-        $("place-body").textContent = cardBody;
+        $("place-body").textContent = detail.body || cardBody;
         card.hidden = false;
       };
       if (reducedMotion) reveal();
@@ -495,8 +496,19 @@ async function start() {
     }, 500);
   }
 
+  /** A region field-pattern layer over its 5.5 km box (data/global/overlays), or none. */
+  function setRegionOverlay(overlay) {
+    if (map.getLayer("region-overlay")) map.removeLayer("region-overlay");
+    if (map.getSource("region-overlay")) map.removeSource("region-overlay");
+    if (!overlay) return;
+    const [w, s, e, n] = overlay.bbox;
+    map.addSource("region-overlay", { type: "image", url: `global/overlays/${overlay.id}.png`, coordinates: [[w, n], [e, n], [e, s], [w, s]] });
+    map.addLayer({ id: "region-overlay", type: "raster", source: "region-overlay", paint: { "raster-opacity": 0.92, "raster-fade-duration": 0, "raster-resampling": "nearest" } });
+  }
+
   function backToOrbit() {
     if (!globe) return;
+    setRegionOverlay(null);
     card.hidden = true;
     moveToken += 1;
     window.clearTimeout(revealTimer);
@@ -516,7 +528,11 @@ async function start() {
       onBack: hideRegion,
       onMap: () => {
         hideRegion();
-        handoff({ live: false, lat: region.lat, lng: region.lon, name: `${region.name}, ${region.country}` });
+        handoff({
+          live: false, lat: region.lat, lng: region.lon, name: `${region.name}, ${region.country}`, zoom: 13.2,
+          body: region.headline || "",
+          overlay: Array.isArray(region.bbox) && region.bbox.length === 4 ? { id: region.id, bbox: region.bbox } : null,
+        });
       },
     }));
     $("earth-copy").hidden = true;

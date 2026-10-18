@@ -1,0 +1,223 @@
+{
+  "note": "Drawn field-pattern previews coloured from each region's canopy value and stage; not satellite reads.",
+  "size_px": 512,
+  "box_km": 5.5,
+  "overlays": {
+    "us-ia-story": {
+      "file": "overlays/us-ia-story.png",
+      "bbox": [
+        -93.50366,
+        42.005,
+        -93.43634,
+        42.055
+      ]
+    },
+    "us-il-champaign": {
+      "file": "overlays/us-il-champaign.png",
+      "bbox": [
+        -88.38273,
+        40.175,
+        -88.31727,
+        40.225
+      ]
+    },
+    "us-ks-sumner": {
+      "file": "overlays/us-ks-sumner.png",
+      "bbox": [
+        -97.53141,
+        37.225,
+        -97.46859,
+        37.275
+      ]
+    },
+    "us-ne-york": {
+      "file": "overlays/us-ne-york.png",
+      "bbox": [
+        -97.63305,
+        40.825,
+        -97.56695,
+        40.875
+      ]
+    },
+    "ca-sk-rosetown": {
+      "file": "overlays/ca-sk-rosetown.png",
+      "bbox": [
+        -107.9902,
+        51.525,
+        -107.9098,
+        51.575
+      ]
+    },
+    "mx-sinaloa": {
+      "file": "overlays/mx-sinaloa.png",
+      "bbox": [
+        -107.62758,
+        24.975,
+        -107.57242,
+        25.025
+      ]
+    },
+    "br-mt-sorriso": {
+      "file": "overlays/br-mt-sorriso.png",
+      "bbox": [
+        -55.87561,
+        -12.575,
+        -55.82439,
+        -12.525
+      ]
+    },
+    "br-pr-cascavel": {
+      "file": "overlays/br-pr-cascavel.png",
+      "bbox": [
+        -53.62757,
+        -24.975,
+        -53.57243,
+        -24.925
+      ]
+    },
+    "ar-pergamino": {
+      "file": "overlays/ar-pergamino.png",
+      "bbox": [
+        -60.6801,
+        -33.875,
+        -60.6199,
+        -33.825
+      ]
+    },
+    "fr-beauce": {
+      "file": "overlays/fr-beauce.png",
+      "bbox": [
+        1.61246,
+        48.225,
+        1.68754,
+        48.275
+      ]
+    },
+    "ua-poltava": {
+      "file": "overlays/ua-poltava.png",
+      "bbox": [
+        34.16147,
+        49.525,
+        34.23853,
+        49.575
+      ]
+    },
+    "ru-krasnodar": {
+      "file": "overlays/ru-krasnodar.png",
+      "bbox": [
+        39.56427,
+        45.575,
+        39.63573,
+        45.625
+      ]
+    },
+    "kz-akmola": {
+      "file": "overlays/kz-akmola.png",
+      "bbox": [
+        70.45975,
+        51.575,
+        70.54025,
+        51.625
+      ]
+    },
+    "eg-nile-delta": {
+      "file": "overlays/eg-nile-delta.png",
+      "bbox": [
+        30.92079,
+        31.125,
+        30.97921,
+        31.175
+      ]
+    },
+    "ke-trans-nzoia": {
+      "file": "overlays/ke-trans-nzoia.png",
+      "bbox": [
+        34.925,
+        1.025,
+        34.975,
+        1.075
+      ]
+    },
+    "ng-kano": {
+      "file": "overlays/ng-kano.png",
+      "bbox": [
+        8.27446,
+        11.725,
+        8.32554,
+        11.775
+      ]
+    },
+    "za-free-state": {
+      "file": "overlays/za-free-state.png",
+      "bbox": [
+        26.62185,
+        -27.375,
+        26.67815,
+        -27.325
+      ]
+    },
+    "in-punjab": {
+      "file": "overlays/in-punjab.png",
+      "bbox": [
+        75.82103,
+        30.325,
+        75.87897,
+        30.375
+      ]
+    },
+    "pk-punjab": {
+      "file": "overlays/pk-punjab.png",
+      "bbox": [
+        73.17096,
+        30.575,
+        73.22904,
+        30.625
+      ]
+    },
+    "cn-shandong": {
+      "file": "overlays/cn-shandong.png",
+      "bbox": [
+        116.41857,
+        37.275,
+        116.48143,
+        37.325
+      ]
+    },
+    "cn-heilongjiang": {
+      "file": "overlays/cn-heilongjiang.png",
+      "bbox": [
+        126.86361,
+        46.575,
+        126.93639,
+        46.625
+      ]
+    },
+    "vn-mekong": {
+      "file": "overlays/vn-mekong.png",
+      "bbox": [
+        105.27458,
+        10.425,
+        105.32542,
+        10.475
+      ]
+    },
+    "id-west-java": {
+      "file": "overlays/id-west-java.png",
+      "bbox": [
+        107.32485,
+        -6.275,
+        107.37515,
+        -6.225
+      ]
+    },
+    "au-wa-merredin": {
+      "file": "overlays/au-wa-merredin.png",
+      "bbox": [
+        118.37069,
+        -31.475,
+        118.42931,
+        -31.425
+      ]
+    }
+  }
+}
