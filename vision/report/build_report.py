@@ -11,6 +11,7 @@ from PIL import Image, ImageDraw
 from shapely.geometry import shape
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+from classify_fields import histogram_match  # noqa: E402
 from eval.common import DEV_ZONES, ROOT, area_ha, frame_path, load_json  # noqa: E402
 from eval.metrics import polygon_match  # noqa: E402
 from marks import crop_bounds, draw_marks, group_fields, lonlat_to_px, upscale  # noqa: E402
@@ -89,6 +90,22 @@ def pill(passed):
     return '<span class="pill info">Comparison</span>'
 
 
+def pill_for(row):
+    if row.get("retired"):
+        return '<span class="pill info">Retired</span>'
+    return pill(row.get("pass"))
+
+
+def kind_of(test):
+    if str(test).startswith("outline"):
+        return "outline"
+    if test in ("standing_vs_harvested", "ndvi_state", "nbr_state"):
+        return "accuracy"
+    if test == "zone_summaries":
+        return "zones"
+    return "change"
+
+
 def main():
     IMG.mkdir(parents=True, exist_ok=True)
     board = load_json(EVAL / "scoreboard.json")
@@ -100,6 +117,7 @@ def main():
     insights = load_json(ROOT / "data" / "out" / "insights.json")
     spend = load_json(ROOT / "data" / "out" / "perceptron" / "spend.json")
     start = load_json(EVAL / "spend_start.json")["usd"]
+    round2_start = load_json(EVAL / "spend_round2_start.json")["usd"] if (EVAL / "spend_round2_start.json").exists() else start
     latest = frame_path(frames, "2026-10-17", ROOT / "data" / "out")
     prev = frame_path(frames, "2026-10-10", ROOT / "data" / "out")
     base = Image.open(latest).convert("RGB")
@@ -155,6 +173,7 @@ def main():
     def marked_groups(doc, task, dates):
         limit = doc["max_per_group"]
         preds = doc["predictions"]
+        excluded = set(doc.get("excluded_from_scoring") or [])
         cards = []
         for zid in DEV:
             groups = group_fields(by_zone.get(zid, []), limit)
@@ -162,7 +181,9 @@ def main():
                 colours = {}
                 for feat in feats:
                     fid = feat["properties"]["field_id"]
-                    if task == "state":
+                    if fid in excluded or fid not in truth:
+                        colours[fid] = "#4cc3d4"
+                    elif task == "state":
                         colours[fid] = colour_for(fid, preds.get(fid), truth.get(fid, {}).get("state_oct17"))
                     else:
                         colours[fid] = colour_for(fid, preds.get(fid), RENAME.get((truth.get(fid) or {}).get("changed")))
@@ -170,16 +191,29 @@ def main():
                 for date, frame in dates:
                     crop, window = crop_bounds(frame, bounds, bbox)
                     crop, _s = upscale(crop, 768)
+                    if task == "change" and date == "2026-10-10":
+                        ref, _ref_window = crop_bounds(latest, bounds, bbox)
+                        ref, _s = upscale(ref, 768)
+                        if crop.size != ref.size:
+                            crop = crop.resize(ref.size, Image.LANCZOS)
+                        crop = histogram_match(crop, ref)
                     marked, _ids = draw_marks(crop, window, feats, colours=colours)
-                    paths.append(save(marked, f"{task}_{zid}_{index}_{date}.jpg", quality=70))
+                    paths.append(save(marked, f"r2_{task}_{zid}_{index}_{date}.jpg", quality=70))
                 cards.append((zid, index, paths))
         return cards
 
-    state_cards = marked_groups(state, "state", [("2026-10-17", latest)])
+    oct2 = frame_path(frames, "2026-10-02", ROOT / "data" / "out")
+    state_dates = [("2026-10-17", latest)]
+    if chosen.get("state") == "F":
+        state_dates = [("2026-10-02", oct2), ("2026-10-17", latest)]
+    state_cards = marked_groups(state, "state", state_dates)
     change_cards = marked_groups(change, "change", [("2026-10-10", prev), ("2026-10-17", latest)])
+    change_excluded = set(change.get("excluded_from_scoring") or [])
 
     wrong = []
     for fid, row in truth.items():
+        if fid in change_excluded:
+            continue
         actual = RENAME[row["changed"]]
         if actual == "unsure":
             continue
@@ -220,24 +254,17 @@ def main():
         zone_figs.append((item, thumbs))
 
     rows = []
-    old = {
-        "outlines_full": "71 grid shapes, cut off at the token limit",
-        "outlines_tile_z07": "206 duplicates stacked on the left edge",
-        "standing_vs_harvested": "196 standing, 0 harvested",
-        "change": "5 clear, 2 partial, 3 wrong boxes",
-        "zone_summaries": "9 of 9 grounded; no false flood or damage",
-        "ndvi_state": "Oct 17 NDVI ≤ 0.25 counted as harvested",
-        "ndvi_change": "NDVI drop ≥ 0.15 counted as changed",
-    }
     for row in board:
-        kind = "outline" if row["test"].startswith("outline") else ("accuracy" if "standing" in row["test"] or row["test"] == "ndvi_state" else "change")
-        if row["test"] == "zone_summaries":
+        kind = kind_of(row["test"])
+        if kind == "zones":
             dev, held = "2 zones", "7 zones"
         else:
             dev = metric_cell(row.get("metrics_dev"), kind)
-            held = metric_cell(row.get("metrics_heldout"), kind)
-        rows.append(f"<tr><td>{esc(row['test'])}</td><td>{esc(old.get(row['test'], ''))}</td><td>{esc(row['method'])} {esc(row['variant'])}</td>"
-                    f"<td>{esc(dev)}</td><td>{esc(held)}</td><td>{pill(row['pass'])}<div class=\"note\">{esc(row['bar'])}</div></td></tr>")
+            held = metric_cell(row.get("metrics_heldout"), kind) if row.get("metrics_heldout") else "—"
+        rows.append(
+            f"<tr><td>{esc(row['test'])}</td><td class=\"n\">{row.get('round', 1)}</td><td>{esc(row['variant'])}</td>"
+            f"<td>{esc(dev)}</td><td>{esc(held)}</td><td>{pill_for(row)}<div class=\"note\">{esc(row.get('note') or row.get('bar') or '')}</div></td></tr>"
+        )
 
     def cards_html(cards, pair):
         bits = []
@@ -274,14 +301,16 @@ def main():
     count_rows = []
     for zid in sorted(by_zone):
         ids = [f["properties"]["field_id"] for f in by_zone[zid]]
-        def tally(mapping, key):
-            return sum(1 for fid in ids if mapping.get(fid) == key)
+        labelled = [fid for fid in ids if fid in truth]
+        def tally(mapping, key, pool):
+            return sum(1 for fid in pool if mapping.get(fid) == key)
         count_rows.append(
-            f"<tr><td class=\"n\">{zid}</td><td class=\"n\">{tally(state['predictions'], 'standing')}</td>"
-            f"<td class=\"n\">{tally(truth, 'state') if False else sum(1 for fid in ids if truth[fid]['state_oct17']=='standing')}</td>"
-            f"<td class=\"n\">{tally(state['predictions'], 'harvested')}</td>"
-            f"<td class=\"n\">{sum(1 for fid in ids if truth[fid]['state_oct17']=='harvested')}</td>"
-            f"<td class=\"n\">{sum(1 for fid in ids if truth[fid]['state_oct17']=='unsure')}</td></tr>"
+            f"<tr><td class=\"n\">{zid}</td><td class=\"n\">{tally(state['predictions'], 'standing', ids)}</td>"
+            f"<td class=\"n\">{sum(1 for fid in labelled if truth[fid]['state_oct17']=='standing')}</td>"
+            f"<td class=\"n\">{tally(state['predictions'], 'harvested', ids)}</td>"
+            f"<td class=\"n\">{sum(1 for fid in labelled if truth[fid]['state_oct17']=='harvested')}</td>"
+            f"<td class=\"n\">{sum(1 for fid in labelled if truth[fid]['state_oct17']=='unsure')}</td>"
+            f"<td class=\"n\">{len(ids) - len(labelled)}</td></tr>"
         )
 
     def counted(score, label, kind):
@@ -293,9 +322,24 @@ def main():
         predicted = sum(row.get(label, 0) for row in conf.values())
         return f"{score['per_label'][label]['precision']:.2f} ({tp} of {predicted})"
 
+    round1 = chosen.get("round1") or {"state": "C", "change": "A", "outline": "A"}
+    differ = {
+        ("state", "A"): "round 1, 12 per group, tillage clause",
+        ("state", "B"): "round 1, 12 per group, look-inside sentence",
+        ("state", "C"): "round 1, 8 per group, tillage clause",
+        ("state", "D"): "round 2, 8 per group, colour only",
+        ("state", "E"): "round 2, D plus standing and harvested examples; those fields excluded",
+        ("state", "F"): "round 2, E plus the same outlines on Oct 2",
+        ("change", "A"): "round 1, 12 per group",
+        ("change", "B"): "round 1, 12 per group, look-inside sentence",
+        ("change", "C"): "round 1, 8 per group",
+        ("change", "D"): "round 2, 8 per group, colour-matched, narrow definition",
+        ("change", "E"): "round 2, D plus a yes/no close-up when stage 1 says changed",
+        ("change", "F"): "round 2, E plus changed and unchanged examples; those fields excluded",
+    }
     variant_rows = []
     for task in ("state", "change"):
-        for name in "ABC":
+        for name in "ABCDEF":
             path = EVAL / f"classify_{task}_{name}.json"
             if not path.exists():
                 continue
@@ -307,8 +351,13 @@ def main():
                 text = f"accuracy {score.get('accuracy', 0):.2f} ({correct} of {score.get('n', 0)})"
             else:
                 text = f"precision {counted(score, 'changed', 'precision')}; recall {counted(score, 'changed', 'recall')}"
-            mark = " ← chosen" if chosen[task] == name else ""
-            variant_rows.append(f"<tr><td>{task} {name}{mark}</td><td class=\"n\">{esc(text)}</td><td>{'8 per group' if name=='C' else '12 per group'}{'; look-inside sentence' if name=='B' else ''}</td></tr>")
+            if name in "ABC" and round1.get(task) == name:
+                mark = " ← round 1"
+            elif name in "DEF" and chosen.get(task) == name:
+                mark = " ← round 2"
+            else:
+                mark = ""
+            variant_rows.append(f"<tr><td>{task} {name}{mark}</td><td class=\"n\">{esc(text)}</td><td>{esc(differ.get((task, name), ''))}</td></tr>")
     dev_refs = [f for f in fields if f["properties"]["zone_id"] in DEV_ZONES]
     for name in "ABC":
         path = EVAL / f"outlines_{name}.geojson"
@@ -321,72 +370,104 @@ def main():
         hits = len(matched["matched_pairs"])
         text = (f"recall {matched['recall']:.2f} ({hits} of {matched['n_ref']}); "
                 f"precision {matched['precision']:.2f} ({hits} of {matched['n_pred']})")
-        mark = " ← chosen" if chosen["outline"] == name else ""
+        mark = " ← round 1" if round1.get("outline") == name else ""
         variant_rows.append(f"<tr><td>outline {name}{mark}</td><td class=\"n\">{esc(text)}</td><td>{'160 px window' if name=='B' else '200 px window'}{'; colour sentence' if name=='C' else ''}</td></tr>")
 
-    phases = {"State labels": 0.0, "Change labels": 0.0, "Seeds": 0.0, "Traces": 0.0}
+    phases = {
+        "Round 1 state and change": 0.0,
+        "Round 1 seeds and traces": 0.0,
+        "Round 2 state": 0.0,
+        "Round 2 change": 0.0,
+    }
     counts = {key: 0 for key in phases}
     for call in spend["calls"]:
         label = call.get("label") or ""
         usd = call.get("usd") or 0
-        if label.startswith("state_"):
-            phases["State labels"] += usd
-            counts["State labels"] += 1
-        elif label.startswith("change_"):
-            phases["Change labels"] += usd
-            counts["Change labels"] += 1
-        elif label.startswith("seed_"):
-            phases["Seeds"] += usd
-            counts["Seeds"] += 1
-        elif label[:2] in ("A_", "B_", "C_"):
-            phases["Traces"] += usd
-            counts["Traces"] += 1
+        if label.startswith("r2_state"):
+            phases["Round 2 state"] += usd
+            counts["Round 2 state"] += 1
+        elif label.startswith("r2_change"):
+            phases["Round 2 change"] += usd
+            counts["Round 2 change"] += 1
+        elif label.startswith("state_") or label.startswith("change_"):
+            phases["Round 1 state and change"] += usd
+            counts["Round 1 state and change"] += 1
+        elif label.startswith("seed_") or label[:2] in ("A_", "B_", "C_"):
+            phases["Round 1 seeds and traces"] += usd
+            counts["Round 1 seeds and traces"] += 1
     phase_rows = "".join(
         f"<tr><td>{name}</td><td class=\"n\">{counts[name]}</td><td class=\"n\">${phases[name]:.4f}</td></tr>" for name in phases
     )
-    this_run = spend["usd"] - start
-    state_row = next(r for r in board if r["test"] == "standing_vs_harvested")
-    change_row = next(r for r in board if r["test"] == "change")
+    this_run = spend["usd"] - round2_start
+    round1_spend = round2_start - start
+
+    def find_row(test, round_n):
+        return next(r for r in board if r["test"] == test and r.get("round", 1) == round_n)
+
+    state_row = find_row("standing_vs_harvested", 2)
+    change_row = find_row("change", 2)
     confusion = state_row["metrics_all"]["confusion"]
     conf_rows = "".join(
         f"<tr><td>{label}</td>" + "".join(f"<td class=\"n\">{confusion[label].get(col, 0)}</td>" for col in ("standing", "harvested", "unsure")) + "</tr>"
         for label in ("standing", "harvested")
     )
     trace_html = "".join(f'<figure><img src="{src}" alt="Trace example"><figcaption>{esc(cap)}</figcaption></figure>' for src, cap in examples)
-    reason = ""
-    if state_row["pass"] is False:
-        reason += "<p>Standing vs harvested fails the 0.90 bar. On the dev zones the model called nearly every dark field harvested. The fixed prompt treats freshly tilled dark soil as harvested, and October standing corn and soybeans are also dark, so the two classes overlap.</p>"
-    if change_row["pass"] is False:
-        reason += "<p>Change recall can look high while precision stays well under 0.85: the model marks many unchanged fields as changed. " + esc(change_row.get("note") or "") + "</p>"
-    outline_row = next(r for r in board if r["test"] == "outlines_full")
-    if outline_row["pass"] is False:
-        held = outline_row.get("metrics_heldout") or {}
-        reason += (f"<p>Outlines miss the bar. Held-out recall {esc(held.get('recall_text', '—'))}, "
-                   f"precision {esc(held.get('precision_text', '—'))}, "
-                   f"duplicates {esc(held.get('duplicates_gt', '—'))}. "
-                   f"Every trace call has to finish with stop; this run did not.</p>")
+    stage_html = []
+    stage_answers = []
+    for variant in "EF":
+        path = EVAL / f"classify_change_{variant}.json"
+        if not path.exists():
+            continue
+        doc = load_json(path)
+        for call in doc.get("calls") or []:
+            if call.get("stage") != 2 or not call.get("images"):
+                continue
+            fid = call.get("field_id")
+            src = ROOT / call["images"][0]
+            if not src.exists():
+                continue
+            final = doc["predictions"].get(fid, "missing")
+            actual = RENAME.get((truth.get(fid) or {}).get("changed"), "not in the answer key")
+            stage_answers.append(call.get("stage2") or "unparsed")
+            badge = "good" if final == actual else "bad"
+            stage_html.append(
+                f'<div class="box"><div class="top"><b>{variant} {esc(fid)}</b><span class="pill {badge}">stage 1 changed, stage 2 {esc(call.get("stage2") or "unparsed")}, final {esc(final)} vs {esc(actual)}</span></div>'
+                f'<figure><img src="{save(Image.open(src), f"stage2_{variant}_{fid}.jpg", quality=68)}" alt="{esc(fid)} close-up"></figure></div>'
+            )
+    n_extra = sum(1 for feat in fields if feat["properties"]["field_id"] not in truth)
+    held_state = state_row.get("metrics_heldout") or {}
+    held_change = change_row.get("metrics_heldout") or {}
+    reason = (
+        f"<p>Round 2 standing vs harvested, held-out: {esc(held_state.get('accuracy_text', '—'))}, "
+        f"unsure {esc(held_state.get('unsure_text', '—'))}.</p>"
+        f"<p>Round 2 change, held-out: precision {esc(held_change.get('precision_text', '—'))}, "
+        f"recall {esc(held_change.get('recall_text', '—'))}. {esc(change_row.get('note') or '')}</p>"
+        "<p>Retired from Perceptron's scope: field outlines come from segmentation. The outline numbers below are the round 1 evidence.</p>"
+    )
+    state_examples = ", ".join(state.get("excluded_from_scoring") or []) or "none"
+    change_examples = ", ".join(change.get("excluded_from_scoring") or []) or "none"
 
     page = f"""<!doctype html>
 <html lang="en"><head><meta charset="utf-8">{style_block()}</head>
 <body><div class="wrap">
 <header>
   <span class="eyebrow">Overfield · Vision workstream · Test report</span>
-  <h1>Perceptron field test, second method</h1>
-  <p class="lede">Set-of-marks labels and seed-then-trace outlines, scored against the human answer key. Pass bars were fixed before these numbers existed.</p>
-  <div class="meta"><span>Model {esc(insights.get('model'))}</span><span>Frames 2026-10-10 and 2026-10-17</span><span>This run ${this_run:.4f}</span><span>Overall ${spend['usd']:.4f}</span><span>Fields not in the answer key: 0</span></div>
+  <h1>Perceptron field test, round 2</h1>
+  <p class="lede">A second tuning round for standing versus harvested and for change. Pass bars, the answer key, and the dev split were not moved.</p>
+  <div class="meta"><span>Model {esc(insights.get('model'))}</span><span>Frames 2026-10-02, 2026-10-10 and 2026-10-17</span><span>Round 2 ${this_run:.4f}</span><span>Round 1 ${round1_spend:.4f}</span><span>Overall ${spend['usd']:.4f}</span><span>Fields not in the answer key: {n_extra}</span></div>
 </header>
 <section>
   <div class="sec-head"><span class="num">Scoreboard</span><h2>Dev zones beside held-out zones</h2>
   <p>Dev zones are Z01 and Z07. Held-out zones are Z02, Z03, Z04, Z05, Z06, Z08 and Z09. A number in parentheses is the count behind the rate.</p></div>
   <div class="tablewrap"><table>
-    <thead><tr><th>Test</th><th>Previous result</th><th>New method</th><th>Dev</th><th>Held-out</th><th>Bar</th></tr></thead>
+    <thead><tr><th>Test</th><th>Round</th><th>Variant</th><th>Dev</th><th>Held-out</th><th>Result</th></tr></thead>
     <tbody>{''.join(rows)}</tbody>
   </table></div>
   {reason}
 </section>
 <section>
-  <div class="sec-head"><span class="num">Outlines</span><h2>Seed, then trace one field</h2>
-  <p>Variant {esc(outline_name)} won on dev-zone recall. Cyan is a traced polygon. Orange is corn and green is soybean in the segmentation reference.</p></div>
+  <div class="sec-head"><span class="num">Outlines</span><h2>Retired from Perceptron's scope: field outlines come from segmentation</h2>
+  <p>No new outline calls. Cyan polygons are round 1, variant {esc(outline_name)}. Orange is corn and green is soybean in the segmentation reference.</p></div>
   <div class="two">
     <figure><img src="{per_src}" alt="Perceptron outlines on the Oct 17 frame"><figcaption>Perceptron outlines, variant {esc(outline_name)}, {len(outlines)} polygons after merging duplicates.</figcaption></figure>
     <figure><img src="{seg_src}" alt="Segmentation outlines"><figcaption>Segmentation reference, {len(fields)} fields.</figcaption></figure>
@@ -401,25 +482,30 @@ def main():
 <section>
   <div class="sec-head"><span class="num">Standing vs harvested</span><h2>Numbered outlines on Oct 17</h2>
   <p>Green matches the answer key, red disagrees, grey is unsure on either side. Truth-unsure fields are not in the accuracy.</p>
-  <div class="chips"><span class="pill good">green matches</span><span class="pill bad">red disagrees</span><span class="pill info">grey unsure</span></div></div>
+  <div class="chips"><span class="pill good">green matches</span><span class="pill bad">red disagrees</span><span class="pill info">grey unsure</span><span class="chip on">blue example, not scored</span></div>
+  <p class="note">Examples excluded from the score: {esc(state_examples)}.</p></div>
   <div class="boxes">{cards_html(state_cards, False)}</div>
   <div class="tablewrap"><table>
     <thead><tr><th>Truth \\ predicted</th><th>standing</th><th>harvested</th><th>unsure</th></tr></thead>
     <tbody>{conf_rows}</tbody>
   </table></div>
-  <p class="note">NDVI rule (Oct 17 ≤ 0.25 = harvested), held-out: {esc(metric_cell(next(r for r in board if r['test']=='ndvi_state')['metrics_heldout'], 'accuracy'))}. Comparison only.</p>
+  <p class="note">NDVI rule (Oct 17 ≤ 0.25 = harvested), held-out: {esc(metric_cell(next(r for r in board if r['test']=='ndvi_state')['metrics_heldout'], 'accuracy'))}. NBR rule (Oct 17 ≥ 0 = harvested), held-out: {esc(metric_cell(next(r for r in board if r['test']=='nbr_state')['metrics_heldout'], 'accuracy'))}. Comparison only.</p>
   <div class="tablewrap"><table>
-    <thead><tr><th>Zone</th><th>Predicted standing</th><th>Truth standing</th><th>Predicted harvested</th><th>Truth harvested</th><th>Truth unsure</th></tr></thead>
+    <thead><tr><th>Zone</th><th>Predicted standing</th><th>Truth standing</th><th>Predicted harvested</th><th>Truth harvested</th><th>Truth unsure</th><th>Not in the answer key</th></tr></thead>
     <tbody>{''.join(count_rows)}</tbody>
   </table></div>
 </section>
 <section>
   <div class="sec-head"><span class="num">Change</span><h2>Oct 10 beside Oct 17</h2>
   <p>{esc(change_row.get('note') or '')}</p>
-  <div class="chips"><span class="pill good">green matches</span><span class="pill bad">red disagrees</span><span class="pill info">grey unsure</span></div></div>
+  <div class="chips"><span class="pill good">green matches</span><span class="pill bad">red disagrees</span><span class="pill info">grey unsure</span><span class="chip on">blue example, not scored</span></div>
+  <p class="note">Examples excluded from the score: {esc(change_examples)}. Oct 10 crops are colour-matched to Oct 17.</p></div>
   <p class="note">Held-out {esc(metric_cell(change_row.get('metrics_heldout'), 'change'))}. Dev {esc(metric_cell(change_row.get('metrics_dev'), 'change'))}.</p>
   <div class="boxes">{cards_html(change_cards, True)}</div>
-  <h3>Wrong fields ({len(wrong_cards)})</h3>
+  <h3>Two-stage checks on the dev zones, variants E and F ({len(stage_html)})</h3>
+  <p class="note">{'Variant ' + esc(chosen.get('change')) + ' is the full-frame run and has no second call. ' if chosen.get('change')=='D' else ''}E and F sent every stage-1 changed field on the dev zones to a close-up. Stage 2 answers on those {len(stage_answers)} fields: {esc(", ".join(f"{ans} {stage_answers.count(ans)}" for ans in sorted(set(stage_answers))))}.</p>
+  <div class="boxes">{''.join(stage_html)}</div>
+  <h3>Remaining errors ({len(wrong_cards)})</h3>
   <div class="boxes">{''.join(wrong_html)}</div>
   <p class="note">NDVI rule (drop ≥ 0.15 = changed), held-out: {esc(metric_cell(next(r for r in board if r['test']=='ndvi_change')['metrics_heldout'], 'change'))}. Comparison only.</p>
 </section>
@@ -434,13 +520,14 @@ def main():
     <thead><tr><th>Variant</th><th>Dev score</th><th>Difference</th></tr></thead>
     <tbody>{''.join(variant_rows)}</tbody>
   </table></div>
-  <p class="note">State C won on accuracy. Change A won on changed-recall, then precision. Outline A won on recall. Held-out zones were not used to choose.</p>
+  <p class="note">Round 2 state used the highest dev accuracy. Round 2 change used the highest dev precision among variants with dev recall at least 0.80, otherwise the highest dev recall. Held-out zones were not used to choose. {esc(chosen.get('rule') or '')}</p>
 </section>
 <section>
   <div class="sec-head"><span class="num">Cost</span><h2>This run</h2></div>
   <div class="tablewrap"><table>
     <thead><tr><th>Phase</th><th>Calls</th><th>Spend</th></tr></thead>
-    <tbody>{phase_rows}<tr><td><b>This run</b></td><td class="n"></td><td class="n"><b>${this_run:.4f}</b></td></tr>
+    <tbody>{phase_rows}<tr><td><b>Round 2</b></td><td class="n"></td><td class="n"><b>${this_run:.4f}</b></td></tr>
+    <tr><td>Round 1</td><td class="n"></td><td class="n">${round1_spend:.4f}</td></tr>
     <tr><td>Overall, including earlier tests</td><td class="n">{len(spend['calls'])}</td><td class="n">${spend['usd']:.4f}</td></tr></tbody>
   </table></div>
 </section>
@@ -450,7 +537,9 @@ def main():
     <li>Pass bars: outline recall ≥ 0.75 and precision ≥ 0.80 on fields of at least 8 ha at IoU ≥ 0.5, no pred-pred pair above IoU 0.5, every trace call finished with stop. State accuracy ≥ 0.90 with predicted unsure on at most 10% of scored fields. Change precision ≥ 0.85 and recall ≥ 0.80.</li>
     <li>Dev zones Z01 and Z07. At most three prompt variants. The winner is the one with the better dev score. Held-out zones were scored after that choice.</li>
     <li>The answer key is human labels on the Oct 10 and Oct 17 imagery, in vision/eval/truth.json. NDVI is only a comparison: standing and harvested overlap between 0.19 and 0.35.</li>
-    <li>Fields in the geojson that are not in the answer key would be classified and then left out of the score. This run had none. Labelled geometries were checked against commit ccf4be1 and were unchanged.</li>
+    <li>Fields not in the answer key are classified and left out of the score. This run had {n_extra}: F0130 through F0136. Labelled geometries were checked against commit ccf4be1 and were unchanged.</li>
+    <li>Round 2 example fields are also left out of the score. State examples are the lowest Z01 standing field and the lowest Z01 harvested field. Change examples, when used, are the lowest Z01 changed field and the lowest Z01 unchanged field.</li>
+    <li>Outlines are retired. Field outlines come from segmentation. The round 1 trace figures stay as evidence.</li>
     <li>Product wiring uses the held-out bar. A failing test does not replace counts, cues, or the segmentation fields.</li>
   </ul>
 </section>
