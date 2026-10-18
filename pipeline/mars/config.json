@@ -1,0 +1,104 @@
+{
+  "mars_radius_km": 3389.5,
+  "km_per_degree_latitude": 59.16,
+  "grid": {
+    "cell_deg": 0.125,
+    "lat_min": -60,
+    "lat_max": 60,
+    "lon_min": -180,
+    "lon_max": 180,
+    "lon_convention": "east-positive, -180..180",
+    "latitude": "planetocentric"
+  },
+  "factors": {
+    "ice": {
+      "name": "Ice within reach",
+      "from": "spacex",
+      "dataset": "SWIM ice consistency, 0-1 m and 1-5 m (PSI)",
+      "why": "Water for propellant, air and crops.",
+      "go": "0-1 m consistency >= 0.25, or 1-5 m consistency >= 0.5",
+      "watch": "0-1 m consistency >= 0, or 1-5 m consistency >= 0.25",
+      "no_go": "otherwise",
+      "goodness_rule": "max((c01 + 1) / 2, 0.85 x (c15 + 1) / 2)",
+      "cutoffs": { "go_c01": 0.25, "go_c15": 0.5, "watch_c01": 0.0, "watch_c15": 0.25, "c15_factor": 0.85 }
+    },
+    "low_elevation": {
+      "name": "Low ground",
+      "from": "spacex",
+      "dataset": "MOLA MEGDR elevation, 16 pixels per degree (NASA PDS)",
+      "why": "More atmosphere to slow the ship.",
+      "go": "elevation <= -2,500 m",
+      "watch": "elevation <= 0 m",
+      "no_go": "above 0 m",
+      "goodness_rule": "1 at -4,000 m or lower, 0 at +1,000 m or higher, linear between",
+      "cutoffs": { "go_m": -2500, "watch_m": 0, "good_m": -4000, "bad_m": 1000 }
+    },
+    "plume_safe_ground": {
+      "name": "Plume-safe ground",
+      "from": "ours",
+      "dataset": "MGS TES nighttime thermal inertia, 20 pixels per degree (Putzig and Mellon, PSI)",
+      "why": "Firm soil the engines will not dig out: very low inertia is loose dust, very high is rock and bedrock.",
+      "go": "180 <= TI <= 500",
+      "watch": "120 <= TI < 180, or 500 < TI <= 700",
+      "no_go": "TI < 120 (loose dust) or TI > 700 (rock, bedrock)",
+      "goodness_rule": "trapezoid: 0 at 80, 1 from 180 to 500, 0 at 800",
+      "cutoffs": { "go_lo": 180, "go_hi": 500, "watch_lo": 120, "watch_hi": 700, "ramp_lo": 80, "ramp_hi": 800 }
+    },
+    "science_reach": {
+      "name": "Science reach",
+      "from": "ours",
+      "dataset": "USGS Mars Global Geologic Map, SIM 3292 (Tanaka et al. 2014)",
+      "why": "More kinds of rock within a rover's range, and rock from the wet early eras.",
+      "go": ">= 4 distinct units within about 100 km, including a Noachian or Hesperian one",
+      "watch": ">= 2 units",
+      "no_go": "1 unit (a uniform plain)",
+      "goodness_rule": "0.7 x min(1, units / 6) + 0.3 x (1 if an old unit is within reach else 0)",
+      "cutoffs": { "reach_km": 100, "go_units": 4, "watch_units": 2, "units_for_full": 6, "old_weight": 0.3, "coarse_cell_deg": 0.5 }
+    },
+    "magnetic_shelter": {
+      "name": "Magnetic shelter",
+      "from": "ours",
+      "dataset": "crustal magnetic field grid (not available in this run)",
+      "why": "Patches of magnetized crust add a little local radiation cover.",
+      "go": "above the 66th percentile of |B|",
+      "watch": "above the 33rd percentile",
+      "no_go": "below",
+      "goodness_rule": "|B| scaled over its 5th to 95th percentile",
+      "cutoffs": { "go_pct": 66, "watch_pct": 33, "scale_lo_pct": 5, "scale_hi_pct": 95 }
+    }
+  },
+  "weights": {
+    "without_magnetic": { "ice": 0.35, "low_elevation": 0.2, "plume_safe_ground": 0.25, "science_reach": 0.2 },
+    "with_magnetic": { "ice": 0.3, "low_elevation": 0.15, "plume_safe_ground": 0.25, "science_reach": 0.15, "magnetic_shelter": 0.15 }
+  },
+  "shown_not_scored": [
+    { "id": "slope", "name": "Regional slope", "why": "Flat, rock-free ground is SpaceX's own screen and needs HiRISE at landing scale; a 20 km slope is context, not a verdict." },
+    { "id": "latitude", "name": "Latitude", "why": "Sunlight and power are SpaceX's own screen (within about 40 degrees of the equator); we show it and leave it to them." },
+    { "id": "albedo", "name": "Dust (albedo)", "why": "Bright ground usually means a dust cover; thermal inertia already scores the firmness, so albedo stays context." }
+  ],
+  "context": { "slope_box_km": 20 },
+  "sites": { "count": 10, "min_separation_km": 300, "best_within_km": 200 },
+  "thumbs": { "size_px": 512, "view_deg": 1.5, "stretch_pct": [2, 98] },
+  "tradeoff_bins": 10,
+  "checks": {
+    "mola": { "olympus_min_m": 20000, "hellas_max_m": -6500 },
+    "swim": { "arcadia_box": [38, 42, 185, 195], "tharsis_box": [-10, 10, 240, 260] },
+    "thermal_inertia": { "tharsis_box": [0, 10, 245, 255], "tharsis_max": 100, "syrtis_box": [5, 15, 65, 75], "syrtis_min": 200 },
+    "albedo": { "tharsis_min": 0.24, "syrtis_max": 0.16 },
+    "candidates_below_m": 0
+  },
+  "landmarks": [
+    { "name": "Jezero Crater (Perseverance)", "lat": 18.44, "lon": 77.45 },
+    { "name": "Gale Crater (Curiosity)", "lat": -4.59, "lon": 137.44 },
+    { "name": "Olympus Mons summit", "lat": 18.65, "lon": -133.8 },
+    { "name": "Hellas Planitia floor", "lat": -42.4, "lon": 70.5 }
+  ],
+  "spacex_candidates": {
+    "ESP_060706_2195": { "region": "Arcadia Planitia / Erebus Montes" },
+    "ESP_060429_2200": { "region": "Arcadia Planitia / Erebus Montes" },
+    "ESP_060719_2200": { "region": "Arcadia Planitia / Erebus Montes" },
+    "ESP_060732_2195": { "region": "Arcadia Planitia / Erebus Montes" },
+    "ESP_060811_2205": { "region": "Arcadia Planitia / Erebus Montes" },
+    "ESP_060707_2160": { "region": "Phlegra Montes" }
+  }
+}
