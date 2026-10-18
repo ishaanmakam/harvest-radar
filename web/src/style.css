@@ -3957,7 +3957,6 @@ a {
   }
 }
 
-<<<<<<< HEAD
 /* ---- one-line top bar ---- */
 .topbar {
   flex-wrap: nowrap;
@@ -4052,7 +4051,6 @@ a {
     left: 0;
     right: 0;
   }
-=======
 /* ---- the mark beside the wordmark ---- */
 .wordmark svg {
   display: inline-block;
@@ -4060,5 +4058,4 @@ a {
   height: 22px;
   margin-right: 10px;
   color: var(--fg);
->>>>>>> origin/main
 }
