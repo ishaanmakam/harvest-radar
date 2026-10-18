@@ -17,7 +17,8 @@ D = date.fromisoformat
 def outlook(**kw):
     base = {"crop": "corn", "maturity": "2026-09-12", "combine_ready": "2026-10-15",
             "window": {"start": "2026-10-17", "end": "2026-10-18"}, "next_window": {"start": "2026-10-21", "end": "2026-10-23"},
-            "rain_days": ["2026-10-19"], "frost_nights": [], "workable_days_in_forecast": 10,
+            "rain_days": ["2026-10-19"], "rain_mm": {"2026-10-19": 20.0}, "frost_nights": [], "hard_freeze": [],
+            "workable_days_in_forecast": 10, "window_to_horizon": False, "forecast_stale": False, "ready_source": "satellite",
             "summary": "Combine-ready since 2026-10-15. Best window 2026-10-17 to 2026-10-18, before 20 mm of rain on 2026-10-19; next window 2026-10-21 to 2026-10-23."}
     base.update(kw)
     return base
@@ -30,13 +31,13 @@ class TestFarmPlanWithOutlook:
         c = check(plan, "harvest_ready")
         assert c["status"] == "watch"
         assert c["window"] == {"start": "2026-10-17", "end": "2026-10-18"}        # the weather window, not the satellite's
-        assert "window 2026-10-17 to 2026-10-18" in c["detail"]
+        assert "window today and tomorrow (2026-10-17 to 2026-10-18)" in c["detail"]
         assert "2026-10-17 to 2026-10-18" in plan["today"] and "combine" in plan["today"].lower()
         assert plan["harvest_outlook"]["combine_ready"] == "2026-10-15"
 
     def test_maturing_farm_keeps_clear_but_carries_the_outlook(self):
         plan = decide.farm_plan(rec(), QUIET_PASSES, DRY, [], None, TODAY, outlook=outlook(window=None, combine_ready="2026-10-25",
-                                                                                          summary="Combine-ready about 2026-10-25 (still drying down); no window inside the forecast."))
+                                                                                          ready_source="degree_days", summary="Combine-ready about 2026-10-25 (still drying down); no window inside the forecast."))
         assert status_of(plan)["harvest_ready"] == "clear"
         assert "2026-10-25" in check(plan, "harvest_ready")["detail"]
         assert plan["harvest_outlook"]["window"] is None

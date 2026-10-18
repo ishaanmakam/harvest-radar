@@ -52,10 +52,10 @@ class TestMaturityAndDryDown:
         assert r_warm < r_cool
         assert D("2026-09-20") <= r_warm <= D("2026-09-28")                # 32% -> 25% at ~0.6/day is ~12 days
 
-    def test_soybeans_are_ready_days_after_leaf_drop(self):
+    def test_soybeans_are_ready_about_two_weeks_after_maturity(self):
         obs = observed(D("2026-09-20"), 40, tmax=20.0, tmin=8.0)
-        r = wm.combine_ready_date(obs, maturity=D("2026-09-25"), crop="soybean")
-        assert D("2026-09-30") <= r <= D("2026-10-06")
+        r = wm.combine_ready_date(obs, maturity=D("2026-09-25"), crop="soybean")      # R7 -> R8 ~10 days, then ~4 dry days
+        assert D("2026-10-06") <= r <= D("2026-10-12")
 
 
 class TestWorkability:
