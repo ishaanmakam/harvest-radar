@@ -43,7 +43,9 @@ DEFAULTS = {
     "rain_lookahead_days": 3,      # spec: "any forecast day in the next 3 days"
     "fire_lookback_days": 5,       # spec: hotspot in the last 5 days
     "flood_ndvi_max": 0.0,         # ours: standing water reads as NDVI at or below zero
-    "stress_ndvi_drop_min": 0.10,  # ours: drop between consecutive clear passes that is not a harvest
+    "stress_ndvi_drop_min": 0.10,  # ours: drop between consecutive clear passes that is not a harvest (no zone context)
+    "stress_zone_margin": 0.10,    # ours: with zone context, stress = this field's drop exceeds the zone's typical drop by this much
+    "stress_max_gap_days": 12,     # ours: two clear passes further apart than this are not compared for stress
     "change_ndvi_min": 0.15,       # ours: swing between consecutive clear passes that counts as a visible change
     "peak_ndvi_min": 0.55, "burn_nbr_max": -0.05, "harvest_ndvi_max": 0.35,   # shared with harvest_model
 }
@@ -93,6 +95,26 @@ def forecast_pairs(dates, precip):
     return [(d(x), mm) for x, mm in zip(dates, precip)]
 
 
+def zone_declines(ts, zone_of, max_gap_days=12):
+    """Per zone, the median NDVI drop between each field's last two clear passes (pairs further apart than
+    max_gap_days are skipped). A whole zone drying down together (corn in September) then reads as normal, and a
+    field falling much faster than its neighbours stands out."""
+    import statistics
+    dates = [d(x) for x in ts["dates"]]
+    drops = {}
+    for fid, series in ts["fields"].items():
+        zone = zone_of.get(fid)
+        if zone is None:
+            continue
+        clear = [(dates[i], v) for i, v in enumerate(series.get("ndvi", [])) if v is not None and i < len(dates)]
+        if len(clear) < 2:
+            continue
+        (d1, v1), (d2, v2) = clear[-2], clear[-1]
+        if (d2 - d1).days <= max_gap_days:
+            drops.setdefault(zone, []).append(round(v1 - v2, 3))
+    return {z: round(statistics.median(v), 3) for z, v in drops.items()}
+
+
 def _cue_text(cue, default):
     """A Perceptron cue's own words (or a default), tagged with its confidence."""
     text = cue.get("detail") or default
@@ -101,10 +123,11 @@ def _cue_text(cue, default):
     return f"{text} ({tag})"
 
 
-def farm_plan(rec, passes, forecast, hotspots, insight, today: date, th=None, fallback_as_of=None):
+def farm_plan(rec, passes, forecast, hotspots, insight, today: date, th=None, fallback_as_of=None, zone_drop=None):
     """One farm's plan. passes = [(date, ndvi, nbr)] clear passes; forecast = [(date, precip_mm)];
     hotspots = FIRMS detections in this field; insight = per-field Perceptron cues (kind -> cue) or None;
-    fallback_as_of = the landscape's latest clear pass, used when this farm has no clear pass of its own."""
+    fallback_as_of = the landscape's latest clear pass, used when this farm has no clear pass of its own;
+    zone_drop = the zone's typical NDVI drop between the last two passes (see zone_declines), or None."""
     th = {**DEFAULTS, **(th or {})}
     passes = sorted(p for p in passes if p[1] is not None)
     latest = passes[-1] if passes else None
@@ -229,15 +252,30 @@ def farm_plan(rec, passes, forecast, hotspots, insight, today: date, th=None, fa
                                  where=cue.get("where", ""), window=_win(prev[0], latest[0]) if prev and latest else {}))
         else:
             checks.append(_check("stress", "clear", _cue_text(cue, "Perceptron sees no browning")))
-    elif (standing and prev and latest and prev[1] - latest[1] >= th["stress_ndvi_drop_min"]
-          and latest[1] > th["harvest_ndvi_max"]):
-        checks.append(_check("stress", "watch",
-                             f"Greenness fell from {prev[1]:.2f} to {latest[1]:.2f} between {s(prev[0])} and {s(latest[0])} without a harvest",
-                             window=_win(prev[0], latest[0])))
     elif not standing:
         checks.append(_check("stress", "clear", "No standing crop to stress"))
-    elif prev:
-        checks.append(_check("stress", "clear", f"Crop holding steady since {s(prev[0])}"))
+    elif prev and latest:
+        gap = (latest[0] - prev[0]).days
+        drop = prev[1] - latest[1]
+        between = f"between {s(prev[0])} and {s(latest[0])}"
+        not_harvest = latest[1] > th["harvest_ndvi_max"]
+        if gap > th["stress_max_gap_days"]:
+            checks.append(_check("stress", "clear", f"Last two clear passes are {gap} days apart; too far apart to judge stress"))
+        elif zone_drop is not None:
+            if drop - zone_drop >= th["stress_zone_margin"] and not_harvest:
+                checks.append(_check("stress", "watch",
+                                     f"Greenness fell {drop:.2f} {between}, {drop - zone_drop:.2f} more than the zone's typical {zone_drop:.2f}",
+                                     window=_win(prev[0], latest[0])))
+            elif drop >= th["stress_ndvi_drop_min"]:
+                checks.append(_check("stress", "clear", f"Declining in step with the zone (typical drop {zone_drop:.2f} {between})"))
+            else:
+                checks.append(_check("stress", "clear", f"Crop holding steady since {s(prev[0])}"))
+        elif drop >= th["stress_ndvi_drop_min"] and not_harvest:
+            checks.append(_check("stress", "watch",
+                                 f"Greenness fell from {prev[1]:.2f} to {latest[1]:.2f} {between} without a harvest",
+                                 window=_win(prev[0], latest[0])))
+        else:
+            checks.append(_check("stress", "clear", f"Crop holding steady since {s(prev[0])}"))
     else:
         checks.append(_check("stress", "clear", "Only one clear pass; nothing to compare"))
 
@@ -344,6 +382,9 @@ def run(data_dir: Path):
         if c.get("field_id") and c.get("kind"):
             cues[c["field_id"]][c["kind"]] = c
     recs = {r["field_id"]: r for r in status["fields"]}
+    zone_of = {f["properties"]["field_id"]: f["properties"]["zone_id"] for f in fields["features"]}
+    thr = {**DEFAULTS, **th}
+    drops = zone_declines(ts, zone_of, thr["stress_max_gap_days"])
 
     plans = []
     for feat in fields["features"]:
@@ -353,7 +394,7 @@ def run(data_dir: Path):
         series = ts["fields"].get(fid, {"ndvi": [], "nbr": []})
         passes = [(dt, v, b) for dt, v, b in zip(dates, series["ndvi"], series["nbr"]) if v is not None]
         plan = farm_plan(rec, passes, forecast, hotspots.get(fid, []), cues.get(fid), today, th,
-                         fallback_as_of=latest_clear)
+                         fallback_as_of=latest_clear, zone_drop=drops.get(p["zone_id"]))
         plan["zone_id"] = p["zone_id"]
         plans.append(plan)
     route = build_route(plans, today)
