@@ -34,7 +34,7 @@ export function renderRoute(el, ctx) {
 
   const totals = [stat("Visits", String(visits.length)), stat("Calls", String(calls.length))];
   if (extra?.route.total_km != null) totals.push(stat("Driving", fmtKm(extra.route.total_km)));
-  if (extra?.route.total_hours != null) totals.push(stat("On the road", fmtHours(extra.route.total_hours)));
+  if (extra?.route.total_hours != null) totals.push(stat("Driving time", fmtHours(extra.route.total_hours)));
 
   const timing = [];
   if (extra?.route.departure) timing.push(`leaves ${extra.route.departure}`);

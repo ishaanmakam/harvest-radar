@@ -61,10 +61,9 @@ export function regionPill(region) {
 export function renderRegionCard(region, { onBack = null, onMap = null } = {}) {
   const lines = regionLines(region);
   return h("div", { class: "region-card" },
-    h("div", { class: "region-head" },
-      onBack ? h("button", { class: "region-back", type: "button", onclick: onBack }, "Return to Earth") : null,
-      h("span", { class: "world-pill is-open" }, regionPill(region))),
+    onBack ? h("div", { class: "region-head" }, h("button", { class: "region-back", type: "button", onclick: onBack }, "Return to the globe")) : null,
     h("h1", {}, region.name || region.id),
+    h("p", { class: "region-kind" }, regionPill(region)),
     region.headline ? h("p", { class: "tagline" }, region.headline) : null,
     lines.length ? h("dl", { class: "region-lines" }, ...lines.flatMap((l) => [
       h("dt", {}, l.label),

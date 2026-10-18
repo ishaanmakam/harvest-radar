@@ -31,7 +31,7 @@ const $ = (id) => document.getElementById(id);
 function showError(message) {
   const error = $("error");
   error.hidden = false;
-  error.replaceChildren(h("strong", {}, "Nothing to show."), message);
+  error.replaceChildren(h("strong", {}, "No plans to show."), message);
 }
 
 /** The badge says where the imagery and the farm group came from; with real outlines pending it toggles them. */
@@ -103,7 +103,7 @@ async function start() {
     signup.href = `#${EXPLAINER_ID}`;
     signup.removeAttribute("target");
     signup.removeAttribute("rel");
-    signup.title = "How a farmer gets the morning plan";
+    signup.title = "The morning plan, step by step";
   }
 
   const headline = $("headline");
@@ -397,7 +397,7 @@ async function start() {
 
   // Everything below is the orbit intro and its hand-off to the imagery map.
   const cardBody =
-    "Sentinel-2 passes over this place every ~5 days, so Overfield can inspect farms here the same way. The live county is Story County, Iowa: real imagery, real farm plans.";
+    "Sentinel-2 passes over this place every 2 to 5 days, the same revisit as over Iowa. The live county is Story County, Iowa, with its imagery and farm plans.";
   let moveToken = 0;
   let toastTimer = 0;
   let revealTimer = 0;

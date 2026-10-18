@@ -339,7 +339,7 @@ export function renderSeason(el, ctx) {
       h(
         "div",
         { class: "section" },
-        h("div", { class: "section-title" }, "Also in the analytics"),
+        h("div", { class: "section-title" }, "Other analytics"),
         h("dl", { class: "kv" }, ...extras.flatMap(([k, v]) => [h("dt", {}, k), h("dd", {}, v)])),
       ),
     );

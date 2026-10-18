@@ -3683,3 +3683,88 @@ tr:nth-child(even) td {
     padding: 8px 16px;
   }
 }
+
+/* ---- review round 1: rows not boxes, library controls on the system, callouts as rules ---- */
+.mars-row,
+.quick-btn,
+.outlook-card,
+.county-card {
+  border: 0;
+  border-bottom: 1px solid var(--rule);
+  background: transparent;
+}
+
+.mars-row.is-active,
+.mars-row:hover,
+.quick-btn:hover {
+  background: var(--ghost);
+}
+
+.mars-rank,
+.mars-rank.is-spacex {
+  border: 0;
+  background: transparent;
+  color: var(--fg-dim);
+}
+
+.note,
+.note-info,
+.note-watch {
+  border: 0;
+  border-left: 2px solid var(--rule-strong);
+  background: transparent;
+  color: var(--fg);
+}
+
+.note-watch {
+  border-left-color: var(--hold);
+}
+
+.region-kind {
+  margin: 8px 0 0;
+  font-family: var(--font);
+  font-size: 0.6875rem;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+
+.sat-legend {
+  background: var(--void);
+}
+
+.world-nav-foot {
+  left: calc(24% + 24px);
+  right: auto;
+  align-items: flex-start;
+}
+
+.maplibregl-ctrl-group,
+.maplibregl-ctrl-attrib {
+  border: 1px solid var(--rule-strong);
+  border-radius: 0;
+  background: var(--void);
+  color: var(--fg-faint);
+}
+
+.maplibregl-ctrl-group button {
+  border-radius: 0;
+  filter: invert(1);
+}
+
+.maplibregl-ctrl-group button + button {
+  border-top: 1px solid var(--rule-strong);
+}
+
+.maplibregl-ctrl-attrib a {
+  color: var(--fg-dim);
+}
+
+.maplibregl-ctrl-attrib-button {
+  filter: invert(1);
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--rule-strong) transparent;
+}

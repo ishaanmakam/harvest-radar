@@ -65,7 +65,7 @@ function sourceTable(rows) {
           {},
           h("th", {}, "Source"),
           h("th", {}, "Provider"),
-          h("th", {}, "What we use it for"),
+          h("th", {}, "Use"),
           h("th", {}, "Cadence"),
           h("th", {}, "Resolution"),
           h("th", {}, "Licence"),

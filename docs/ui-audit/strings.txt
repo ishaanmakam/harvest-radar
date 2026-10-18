@@ -41,10 +41,9 @@ web\src\globe\region-card.js:38: Rain next 3 days
 web\src\globe\region-card.js:47: Clear passes
 web\src\globe\region-card.js:48: Latest clear pass
 web\src\globe\region-card.js:53: Region watch${region.country ? 
-web\src\globe\region-card.js:65: Return to Earth
-web\src\globe\region-card.js:66: world-pill is-open
-web\src\globe\region-card.js:74: Open the map here
-web\src\main.js:34: Nothing to show.
+web\src\globe\region-card.js:64: Return to the globe
+web\src\globe\region-card.js:73: Open the map here
+web\src\main.js:34: No plans to show.
 web\src\main.js:45: badge badge-standin badge-toggle
 web\src\main.js:50: Imagery: ${imagery} / Farms and plans: ${farms} / Real field outlines: ${on ? "shown" : "hidden"}
 web\src\main.js:52: Hide the real field outlines (plans pending)
@@ -59,9 +58,9 @@ web\src\main.js:81: Live run
 web\src\main.js:81: Replay of an earlier run
 web\src\main.js:82: latest pass ${fmtDate(run.latest_pass)}
 web\src\main.js:96: Story County, Iowa / latest clear pass ${MONTHS[Number(month) - 1]} ${Number(day)} / ${data.plans.plans.length} farms / ${actNow} act now${standIn}
-web\src\main.js:106: How a farmer gets the morning plan
+web\src\main.js:106: The morning plan, step by step
 web\src\main.js:295: No frames in this dataset. The pipeline writes frames/frames.json with one image per clear pass.
-web\src\main.js:400: Sentinel-2 passes over this place every ~5 days, so Overfield can inspect farms here the same way. The live county is Story County, Iowa: real imagery, real farm plans.
+web\src\main.js:400: Sentinel-2 passes over this place every 2 to 5 days, the same revisit as over Iowa. The live county is Story County, Iowa, with its imagery and farm plans.
 web\src\main.js:511: world-copy region-copy
 web\src\main.js:578: worlds.json not loaded
 web\src\main.js:592: regions.json not loaded
@@ -87,7 +86,7 @@ web\src\mars\marsmap.js:168: Blind spots
 web\src\mars\marsmap.js:170: Cells scored: ${fmtNum(doc.stats.cells_scored)} (go ${fmtNum(doc.stats.go)}, watch ${fmtNum(doc.stats.watch)}, no-go ${fmtNum(doc.stats.no_go)}).
 web\src\mars\marsmap.js:181: check-row small
 web\src\mars\marsmap.js:181: Show site scores on the map
-web\src\mars\marsmap.js:183: Our top ten
+web\src\mars\marsmap.js:183: Top ten sites
 web\src\mars\marsmap.js:202: muted small
 web\src\mars\marsmap.js:203: mono small
 web\src\mars\marsmap.js:210: Shown, not scored
@@ -108,7 +107,7 @@ web\src\mars\marsmap.js:251: Best cell within 200 km
 web\src\mars\marsmap.js:252: row row-wrap
 web\src\mars\marsmap.js:253: mono small
 web\src\mars\marsmap.js:255: btn btn-primary
-web\src\mars\marsmap.js:255: Fly to that cell
+web\src\mars\marsmap.js:255: Open that cell
 web\src\mars\marsmap.js:293: Loading the Mars screen.
 web\src\pages.js:14: Data sources
 web\src\pages.js:50: .page-nav a
@@ -120,16 +119,16 @@ web\src\panel.js:83: Calibrated yield
 web\src\panel.js:87: from the ${y.calibration}
 web\src\panel.js:88: ${y.band} for its zone
 web\src\panel.js:89: relative index ${fmtNum(y.index, 2)}
-web\src\panel.js:90: ${typeof y.confidence === "number" ? fmtPct(y.confidence * 100) : y.confidence} confidence
+web\src\panel.js:90: ${typeof y.confidence === "number" ? fmtPct(y.confidence * 100) : y.confidence} confidence, from the yield estimate
 web\src\panel.js:97: Yield outlook
 web\src\panel.js:98: ${titleCase(y.band)} for its zone
 web\src\panel.js:100: relative index ${fmtNum(y.index, 2)}
 web\src\panel.js:101: about ${fmtNum(y.estimate.bu_per_acre)} bu/acre (reference only)
 web\src\panel.js:103: ${fmtNum(y.production.bu)} bu on the field
-web\src\panel.js:104: ${typeof y.confidence === "number" ? fmtPct(y.confidence * 100) : y.confidence} confidence
+web\src\panel.js:104: ${typeof y.confidence === "number" ? fmtPct(y.confidence * 100) : y.confidence} confidence, from the yield estimate
 web\src\panel.js:119: organic carbon ${fmtNum(soil.soc_g_kg, 1)} g/kg
 web\src\panel.js:143: Harvest now
-web\src\panel.js:143: Either works
+web\src\panel.js:143: Either timing
 web\src\panel.js:146: Harvest now or wait
 web\src\panel.js:151: moisture today ${fmtPct(e.moisture_today_pct, 1)}
 web\src\panel.js:159: Finish before the rain
@@ -294,7 +293,7 @@ web\src\views\data.js:137: Overfield cross-checks several sources because no sin
 web\src\views\data.js:141: muted small
 web\src\views\data.js:142: Counts: ${fmtNum(total)} sources, ${fmtNum(open)} free and open (by licence), ${fmtNum(keyed)} need a key.
 web\src\views\data.js:143:  List generated ${fmtDay(doc.generated)}.
-web\src\views\deliveries.js:9: How a farmer gets this
+web\src\views\deliveries.js:9: Delivery, step by step
 web\src\views\deliveries.js:12: small explainer-list
 web\src\views\deliveries.js:33: note note-info
 web\src\views\deliveries.js:34: No delivery log in this dataset yet. The morning queue writes deliveries.json after a dry run or a real send; until then nothing has gone out.
@@ -364,7 +363,6 @@ web\src\views\fields.js:126: ${CHECK_LABEL[kind]} needs attention
 web\src\views\fields.js:132: btn-link small
 web\src\views\fields.js:142: Reset filters
 web\src\views\fields.js:146: Farms in view
-web\src\views\fields.js:154: Today in one look
 web\src\views\fields.js:155: quick-btn quick-act
 web\src\views\fields.js:155:  act now
 web\src\views\fields.js:156: quick-btn quick-watch
@@ -379,7 +377,7 @@ web\src\views\headline.js:31: not run
 web\src\views\headline.js:45: Plan for
 web\src\views\headline.js:47: Act now
 web\src\views\route.js:25: No route in this dataset. The decision layer writes route.json beside plans.json.
-web\src\views\route.js:37: On the road
+web\src\views\route.js:37: Driving time
 web\src\views\route.js:41: last visit ${extra.route.finish_time}
 web\src\views\route.js:42: ${fmtKm(extra.route.km_saved)} saved against the listed order
 web\src\views\route.js:52: ${fmtKm(detail.km_from_previous)} from the previous stop
@@ -418,7 +416,7 @@ web\src\views\season.js:322: ${fmtNum(modules.anomaly.n_flagged)} of ${fmtNum(mo
 web\src\views\season.js:327: Burn, flood and fire
 web\src\views\season.js:328: ${fmtNum(modules.events.burned_fields ?? 0)} burn scars, ${fmtNum(modules.events.flooded_fields ?? 0)} flooded fields, ${fmtNum(modules.events.recent_hotspots ?? 0)} recent hotspots.
 web\src\views\season.js:334: ${fmtNum(modules.coverage.passes_total ?? 0)} passes this season, ${fmtPct(modules.coverage.clear_rate_season * 100)} of field looks clear; latest clear look ${modules.coverage.latest_clear_date ? fmtDate(modules.coverage.latest_clear_date) : "unknown"}.
-web\src\views\season.js:342: Also in the analytics
+web\src\views\season.js:342: Other analytics
 web\src\views\yield.js:24: held-out error about ${fmtNum(model.rmse_bu_per_acre, 1)} bu/acre
 web\src\views\yield.js:30: outlook-card county-card
 web\src\views\yield.js:32: value value-xl
@@ -446,13 +444,13 @@ web\src\views\yield.js:220: Soil and terrain across the county
 web\src\views\yield.js:224: Organic carbon
 web/index.html:5: width=device-width, initial-scale=1, viewport-fit=cover
 web/index.html:6: dark
-web/index.html:7: #0d1217
+web/index.html:7: #000000
 web/index.html:8: Overfield: the satellite visits every farm and every farmer gets a morning plan.
 web/index.html:9: Overfield
 web/index.html:12: Skip to the farm list
-web/index.html:18: Every farm, every pass
+web/index.html:18: Field inspection from orbit
 web/index.html:20: Overfield reads each new Sentinel-2 pass over a farm and turns it into a morning plan for the grower.
-web/index.html:22: Enter the season
+web/index.html:22: Open the season map
 web/index.html:26: Sentinel-2 L2A via Earth Search / NASA FIRMS VIIRS / NASA POWER and Open-Meteo / CelesTrak GP / Contains modified Copernicus Sentinel data 2026
 web/index.html:28: Mars landing-site map
 web/index.html:30: Back to worlds
@@ -483,7 +481,7 @@ web/index.html:74: Data sources
 web/index.html:75: Developers
 web/index.html:78: Get the morning plan
 web/index.html:83: Farm map
-web/index.html:84: Today at a glance
+web/index.html:84: Today
 web/index.html:85: View panel
 web/index.html:86: Expand panel
 web/index.html:89: Farm plan
@@ -503,5 +501,5 @@ web/index.html:119: Pages
 web/index.html:120: Data
 web/index.html:121: Developers
 web/index.html:122: Admin
-web/index.html:137: See the live farms
-web/index.html:138: Back to orbit
+web/index.html:137: Open the Story County map
+web/index.html:138: Return to the globe

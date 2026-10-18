@@ -143,7 +143,7 @@ export function createMarsView({ host, onBack }) {
     return h("button", { class: `mars-row${selected === s.id ? " is-active" : ""}`, type: "button", "data-id": s.id, onclick: () => select(s.id) },
       h("span", { class: "mars-rank" }, String(s.rank)),
       h("span", { class: "mars-row-main" }, h("strong", {}, s.id), s.region ? h("span", { class: "mars-region" }, ` ${s.region}`) : null, h("span", { class: "muted small" }, ` ${coords(s)}`), h("div", { class: "small" }, s.reason)),
-      h("span", { class: "mars-row-side" }, statusChip(s.status), h("span", { class: "mono small" }, s.score.toFixed(2))),
+      h("span", { class: "mars-row-side" }, statusChip(s.status), h("span", { class: "mono small" }, `score ${s.score.toFixed(2)}`)),
     );
   }
 
@@ -180,7 +180,7 @@ export function createMarsView({ host, onBack }) {
         factorChips(),
         h("label", { class: "check-row small", style: { marginTop: "8px" } }, scoreToggle, h("span", {}, "Show site scores on the map")),
       ),
-      h("div", { class: "section" }, h("div", { class: "section-title" }, "Our top ten", h("span", { class: "count" }, String(doc.sites.length))),
+      h("div", { class: "section" }, h("div", { class: "section-title" }, "Top ten sites"),
         h("div", { class: "mars-list" }, ...doc.sites.map((s) => { list.push(s.id); return siteRow(s); }))),
       h("div", { class: "section" }, h("div", { class: "section-title" }, "SpaceX's 2019 sites"),
         h("p", { class: "small" }, "SpaceX scouted six sites in 2019. We graded them on our four checks."),
@@ -252,7 +252,7 @@ export function createMarsView({ host, onBack }) {
         h("div", { class: "row row-wrap", style: { gap: "8px", alignItems: "center" } }, statusChip(cand.best_within_200km.status),
           h("span", { class: "mono small" }, `score ${cand.best_within_200km.score.toFixed(3)}`),
           h("span", { class: "small" }, `${fmtNum(cand.best_within_200km.km)} km ${cand.best_within_200km.bearing}`),
-          h("button", { class: "btn btn-primary", type: "button", onclick: () => map?.flyTo({ center: [cand.best_within_200km.lon, cand.best_within_200km.lat], zoom: 5.5 }) }, "Fly to that cell"))) : null,
+          h("button", { class: "btn btn-primary", type: "button", onclick: () => map?.flyTo({ center: [cand.best_within_200km.lon, cand.best_within_200km.lat], zoom: 5.5 }) }, "Open that cell"))) : null,
     );
     drawer.hidden = false;
   }

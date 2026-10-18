@@ -6,7 +6,7 @@ function explainer(ctx) {
   return h(
     "div",
     { class: "explainer", id: ctx.explainerId || "signup-explainer", tabindex: "-1" },
-    h("div", { class: "section-title" }, "How a farmer gets this"),
+    h("div", { class: "section-title" }, "Delivery, step by step"),
     h(
       "ul",
       { class: "small explainer-list" },

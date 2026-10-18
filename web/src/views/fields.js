@@ -151,7 +151,7 @@ export function renderFields(el, ctx) {
   const stops = data.route?.stops?.length ?? 0;
   const quick = h(
     "div",
-    { class: "quick", role: "group", "aria-label": "Today in one look" },
+    { class: "quick", role: "group", "aria-label": "Today" },
     h("button", { class: "quick-btn quick-act", type: "button", onclick: () => ctx.go("route") }, h("strong", {}, String(flagCounts.act_now)), " act now"),
     h("button", { class: "quick-btn quick-watch", type: "button", onclick: () => ctx.go("route") }, h("strong", {}, String(flagCounts.watch)), " watch"),
     h("button", { class: "quick-btn", type: "button", onclick: () => ctx.go("route"), disabled: stops ? null : true }, h("strong", {}, String(stops)), stops === 1 ? " stop on the route" : " stops on the route"),

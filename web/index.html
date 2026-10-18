@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="dark" />
-    <meta name="theme-color" content="#0d1217" />
+    <meta name="theme-color" content="#000000" />
     <meta name="description" content="Overfield: the satellite visits every farm and every farmer gets a morning plan." />
     <title>Overfield</title>
   </head>
@@ -15,11 +15,11 @@
       <p id="toast" hidden></p>
       <div id="intro-copy">
         <div id="earth-copy">
-          <h1>Every farm, every pass</h1>
+          <h1>Field inspection from orbit</h1>
           <!-- {MISSION_LINE} -->
           <p class="tagline">Overfield reads each new Sentinel-2 pass over a farm and turns it into a morning plan for the grower.</p>
           <p id="intro-stats"></p>
-          <button id="enter" type="button">Enter the season</button>
+          <button id="enter" type="button">Open the season map</button>
         </div>
       </div>
       <div id="world-nav"></div>
@@ -81,7 +81,7 @@
       <p id="error" class="error-banner" role="alert" hidden></p>
       <main class="stage">
         <div id="map" class="map" aria-label="Farm map"></div>
-        <section id="headline" class="headline" aria-label="Today at a glance" hidden></section>
+        <section id="headline" class="headline" aria-label="Today" hidden></section>
         <aside id="dock" class="dock" aria-label="View panel" data-view="fields" hidden>
           <button id="dock-handle" class="sheet-handle" type="button" aria-label="Expand panel" aria-expanded="false"><span></span></button>
           <div id="dock-body" class="dock-body" tabindex="-1"></div>
@@ -134,8 +134,8 @@
       <h2 id="place-title"></h2>
       <p id="place-body"></p>
       <div class="card-actions">
-        <button id="see-live" type="button">See the live farms</button>
-        <button id="back-orbit" type="button">Back to orbit</button>
+        <button id="see-live" type="button">Open the Story County map</button>
+        <button id="back-orbit" type="button">Return to the globe</button>
       </div>
     </div>
     <script type="module" src="./src/main.js"></script>
