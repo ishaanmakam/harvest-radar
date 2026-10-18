@@ -2,69 +2,48 @@ import * as THREE from "three";
 import { makeAtmosphere } from "./atmosphere.js";
 import { latLngToVector3 } from "./geo.js";
 import { h } from "../dom.js";
+import { bodyPlacement, frontWorlds } from "./worlds-front.js";
 
 /**
- * Worlds beyond Earth on the opening globe. Earth stays at the origin with everything it already has; the other
- * worlds from worlds.json sit along a line in space, and the camera eases from one to the next. Left drag keeps
- * rotating the focused world; right-click, right-drag, the arrow keys, the chevrons and a two-finger swipe move
- * between worlds. Mars is a textured sphere painted from MOLA and TES data with the landing-site markers from
- * sites.json; moons and exoplanets are procedural spheres, labelled as illustrations because no image of them exists.
+ * Earth and Mars in one scene on the opening page. Earth stays at the origin with everything it already has; Mars,
+ * painted from MOLA and TES data with the landing-site markers from sites.json, sits in the same frame at its true
+ * size ratio (distance not to scale). The camera orbits whichever planet is in focus, with the left or the right
+ * mouse button, CAD-style, and eases across when the focus changes: a click on Mars or its tag, the Earth/Mars
+ * switch, or the arrow keys. A click on the focused Mars opens the landing map.
  */
-const SPACING = 7;
 const SPIN_RATE = 0.05;
 const MOVE_SECONDS = 1.1;
-const DRAG_STEP_PX = 40;
-const HINT_KEY = "overfield.worlds-hint";
-const ORDER_KIND = { home: 0, planet: 1, ocean_moon: 2, exoplanet: 3 };
+const HINT_KEY = "overfield.worlds-hint-2";
 
 function easeInOut(t) {
   return t < 0.5 ? 2 * t * t : 1 - ((-2 * t + 2) ** 2) / 2;
 }
 
-function worldRadius(world) {
-  if (world.kind === "home") return 1;
-  if (world.id === "mars") return 0.53;
-  if (world.kind === "ocean_moon") return { europa: 0.25, enceladus: 0.16, titan: 0.4 }[world.id] || 0.3;
-  const r = world.radius_earth || 1;
-  return Math.min(1.5, Math.max(0.55, r * 0.8));
-}
-
-function worldColor(world) {
-  if (world.kind === "ocean_moon") return { europa: 0xd8d0c2, enceladus: 0xf1f3f5, titan: 0xc48b3c }[world.id] || 0xcfd3d8;
-  const t = world.eq_temp_k;
-  if (t == null) return 0x9fb3c8;
-  if (t < 220) return 0xcfe0ef;
-  if (t < 320) return 0x6f9bb0;
-  return 0xc69a62;
-}
-
-function fmt(value, digits = 1) {
-  if (value == null) return null;
-  return Number(value).toLocaleString("en-US", { maximumFractionDigits: digits });
-}
-
 export function createWorlds({ scene, camera, controls, domElement, earth, label, reduced, legendHost, copyHost, navHost, hooks }) {
-  const worlds = [];                   // { def, group, radius, center, markers: [] }
-  const pick = [];                     // pickable marker meshes on Mars
+  const worlds = [];                   // { def, group, radius, center, markers, mesh? }
+  const pick = [];                     // Mars: the planet mesh first, then the site markers
   const disposables = [];
   let focused = 0;
-  let move = null;                     // { from, to, t0 }
+  let mars = null;
+  let move = null;                     // { fromT, toT, fromC, toC, t0 }
   let elapsedNow = 0;
   let enabled = true;
+  let aspect = 1.6;
   let marsLegend = null;
   let loader = null;
   const tmp = new THREE.Vector3();
   const offset = new THREE.Vector3();
   const listeners = new Set();
 
-  // ---------- DOM: chevrons, dots, hint, copy ----------
-  const prev = h("button", { class: "world-chevron is-prev", type: "button", "aria-label": "Previous world", onclick: () => step(-1) }, "‹");
-  const next = h("button", { class: "world-chevron is-next", type: "button", "aria-label": "Next world", onclick: () => step(1) }, "›");
-  const dots = h("div", { class: "world-dots", role: "tablist", "aria-label": "Worlds" });
-  const hint = h("p", { class: "world-hint" }, "Right-click to explore other worlds");
-  const nav = h("div", { class: "world-nav" }, prev, next, h("div", { class: "world-nav-foot" }, dots, hint));
+  // ---------- DOM: the Earth/Mars switch, the hint, the Mars tag, the copy ----------
+  const switchBox = h("div", { class: "world-switch", role: "group", "aria-label": "Worlds" });
+  const hint = h("p", { class: "world-hint" }, "Drag with the right mouse button to orbit. Click Mars to focus it.");
+  const nav = h("div", { class: "world-nav" }, h("div", { class: "world-nav-foot" }, switchBox, hint));
   nav.hidden = true;
   navHost.append(nav);
+  const tag = h("button", { class: "world-tag", type: "button", onclick: () => focusId("mars") }, "Mars", h("small", {}, "landing sites"));
+  tag.hidden = true;
+  (domElement.parentElement || navHost).append(tag);
   const copy = h("div", { class: "world-copy" });
   copy.hidden = true;
   copyHost.append(copy);
@@ -75,6 +54,7 @@ export function createWorlds({ scene, camera, controls, domElement, earth, label
   }
 
   function hideHint() {
+    if (hint.hidden) return;
     hint.hidden = true;
     try {
       window.localStorage.setItem(HINT_KEY, "1");
@@ -83,46 +63,27 @@ export function createWorlds({ scene, camera, controls, domElement, earth, label
     }
   }
 
-  // ---------- building the worlds ----------
-  function addWorld(def, index) {
-    const radius = worldRadius(def);
+  // ---------- Mars ----------
+  function addMars(def) {
+    const { radius, position } = bodyPlacement("mars", aspect);
     const group = new THREE.Group();
-    const center = new THREE.Vector3(index * SPACING, 0, 0);
+    const center = new THREE.Vector3(...position);
     group.position.copy(center);
-    const entry = { def, group, radius, center, markers: [], spin: true };
-    if (def.id === "mars") buildMars(entry);
-    else buildPlain(entry);
-    scene.add(group);
-    worlds.push(entry);
-    return entry;
-  }
-
-  function buildPlain(entry) {
-    const { def, radius, group } = entry;
-    const geo = new THREE.SphereGeometry(radius, 64, 64);
-    const mat = new THREE.MeshPhongMaterial({ color: worldColor(def), shininess: def.kind === "ocean_moon" ? 40 : 8, specular: new THREE.Color(0x222222) });
-    const mesh = new THREE.Mesh(geo, mat);
-    group.add(mesh);
-    disposables.push(geo, mat);
-    if (def.id === "titan" || def.kind === "exoplanet") {
-      const atm = makeAtmosphere(radius, def.id === "titan" ? 0xe0a050 : 0x9fbad8);
-      group.add(atm.group);
-      entry.atmosphere = atm;
-    }
-  }
-
-  function buildMars(entry) {
-    const { radius, group } = entry;
     loader = loader || new THREE.TextureLoader();
     const geo = new THREE.SphereGeometry(radius, 96, 96);
     const mat = new THREE.MeshPhongMaterial({ color: 0xb06a44, shininess: 4, specular: new THREE.Color(0x111111) });
     const mesh = new THREE.Mesh(geo, mat);
+    mesh.userData.body = "mars";
+    mesh.userData.place = { name: "Mars" };
     group.add(mesh);
     disposables.push(geo, mat);
-    entry.mesh = mesh;
-    const atm = makeAtmosphere(radius, 0xe0a070);
-    group.add(atm.group);
-    entry.atmosphere = atm;
+    const atmosphere = makeAtmosphere(radius, 0xe0a070);
+    group.add(atmosphere.group);
+    scene.add(group);
+    const entry = { def, group, radius, center, markers: [], mesh, atmosphere };
+    worlds.push(entry);
+    pick.unshift(mesh);
+    return entry;
   }
 
   function textureMars(entry, assets, base) {
@@ -170,49 +131,40 @@ export function createWorlds({ scene, camera, controls, domElement, earth, label
     }
   }
 
-  // ---------- copy and legend ----------
+  /** How squarely a Mars marker faces the camera (1 = dead centre, negative = far side). */
+  function facing(object) {
+    if (!mars) return 1;
+    object.getWorldPosition(tmp);
+    tmp.sub(mars.center).normalize();
+    offset.copy(camera.position).sub(mars.center).normalize();
+    return tmp.dot(offset);
+  }
+
+  // ---------- copy, legend, switch ----------
   function renderCopy(entry) {
-    const def = entry.def;
     const earthCopy = copyHost.querySelector("#earth-copy");
-    if (def.kind === "home") {
+    if (entry.def.kind === "home") {
       if (earthCopy) earthCopy.hidden = false;
       copy.hidden = true;
       return;
     }
     if (earthCopy) earthCopy.hidden = true;
     copy.hidden = false;
-    copy.replaceChildren();
-    if (def.id === "mars") {
-      copy.append(...[
-        h("span", { class: "world-pill is-open" }, "Mars · Open"),
-        h("h1", {}, "The next home"),
-        h("p", { class: "tagline" }, "A city on Mars starts with one landing: near water, through enough air to slow down, on ground that holds."),
-        h("p", { class: "world-line" }, "Every 7 km of Mars between 60 S and 60 N, checked against four rules from public orbital data."),
-        h("ul", { class: "world-facts" }, ...(def.facts || []).map((f) => h("li", {}, f))),
-        h("button", { class: "world-open", type: "button", onclick: () => hooks.onOpenMars?.() }, "Open Mars map"),
-      ].filter(Boolean));
-      return;
-    }
-    const numbers = [];
-    if (def.distance_ly != null) numbers.push(`${fmt(def.distance_ly, 1)} light-years`);
-    if (def.radius_earth != null) numbers.push(`${fmt(def.radius_earth, 2)} Earth radii`);
-    if (def.eq_temp_k != null) numbers.push(`about ${fmt(def.eq_temp_k, 0)} K`);
-    if (def.orbital_period_days != null) numbers.push(`a ${fmt(def.orbital_period_days, 1)}-day year`);
-    copy.append(...[
-      h("span", { class: "world-pill is-soon" }, "Coming soon"),
-      h("h1", {}, def.name),
-      h("p", { class: "tagline" }, def.tagline || ""),
-      numbers.length ? h("p", { class: "world-numbers" }, numbers.join(" · ")) : null,
-      def.kind === "exoplanet" && def.host_star ? h("p", { class: "world-line" }, `Orbits ${def.host_star}${def.spectral_type ? ` (${def.spectral_type})` : ""}${def.discovered ? `, found ${def.discovered}` : ""}${def.method ? ` by ${String(def.method).toLowerCase()}` : ""}.`) : null,
-      h("p", { class: "world-source" }, def.illustration ? "Illustration: no image of this world exists. " : "", def.source ? `Source: ${def.source}.` : ""),
+    copy.replaceChildren(...[
+      h("span", { class: "world-pill is-open" }, "Mars · Open"),
+      h("h1", {}, "The next home"),
+      h("p", { class: "tagline" }, "A city on Mars starts with one landing: near water, through enough air to slow down, on ground that holds."),
+      h("p", { class: "world-line" }, "Every 7 km of Mars between 60 S and 60 N, checked against four rules from public orbital data."),
+      h("ul", { class: "world-facts" }, ...(entry.def.facts || []).map((f) => h("li", {}, f))),
+      h("button", { class: "world-open", type: "button", onclick: () => hooks.onOpenMars?.() }, "Open Mars map"),
     ].filter(Boolean));
   }
 
   function renderLegend(entry, orbiters) {
     if (!marsLegend) {
       marsLegend = h("div", { class: "sat-legend mars-legend", id: "mars-legend" },
-        h("div", { class: "sat-row is-s2" }, h("i"), h("strong", {}, "Watching Mars")),
-        ...(orbiters || []).map((o) => h("div", { class: "sat-row is-img" }, h("i"), h("strong", {}, `${o.name} (${o.years})`), h("span", {}, o.used_for))),
+        h("div", { class: "sat-row is-s2" }, h("i"), h("div", { class: "sat-txt" }, h("strong", {}, "Watching Mars"))),
+        ...(orbiters || []).map((o) => h("div", { class: "sat-row is-img" }, h("i"), h("div", { class: "sat-txt" }, h("strong", {}, `${o.name} (${o.years})`), h("span", {}, o.used_for)))),
         h("p", { class: "sat-src" }, "These orbiters made the data behind the landing-site screen."),
       );
       legendHost.append(marsLegend);
@@ -220,11 +172,10 @@ export function createWorlds({ scene, camera, controls, domElement, earth, label
     marsLegend.hidden = entry.def.id !== "mars";
   }
 
-  function renderDots() {
-    dots.replaceChildren(...worlds.map((w, i) => h("button", {
-      class: `world-dot${i === focused ? " is-active" : ""}`, type: "button", role: "tab", "aria-selected": String(i === focused),
-      title: w.def.name, onclick: () => focus(i),
-    }, h("span", { class: "world-dot-name" }, w.def.name))));
+  function renderSwitch() {
+    switchBox.replaceChildren(...worlds.map((w, i) => h("button", {
+      type: "button", "aria-pressed": String(i === focused), onclick: () => focus(i),
+    }, w.def.name)));
   }
 
   // ---------- focus and movement ----------
@@ -232,10 +183,10 @@ export function createWorlds({ scene, camera, controls, domElement, earth, label
     return 3.2 * Math.max(0.5, entry.radius);
   }
 
-  function focus(index, { instant = false } = {}) {
+  function focus(index, { instant = false, force = false } = {}) {
     if (!worlds.length) return;
     index = ((index % worlds.length) + worlds.length) % worlds.length;
-    if (index === focused && !move) return;
+    if (index === focused && !move && !force) return;
     const from = worlds[focused];
     const to = worlds[index];
     focused = index;
@@ -259,13 +210,49 @@ export function createWorlds({ scene, camera, controls, domElement, earth, label
     hooks.onFocus?.(to.def, from?.def);
     renderCopy(to);
     renderLegend(to, hooks.orbiters?.());
-    renderDots();
+    renderSwitch();
     for (const cb of listeners) cb(to.def);
+  }
+
+  function focusId(id, opts) {
+    const i = worlds.findIndex((w) => w.def.id === id);
+    if (i >= 0) focus(i, opts);
   }
 
   function step(delta) {
     if (!enabled || worlds.length < 2) return;
     focus(focused + delta);
+  }
+
+  /** The viewport changed shape: Mars keeps its place on screen, further away as the window narrows. */
+  function layout(nextAspect) {
+    if (!Number.isFinite(nextAspect) || nextAspect <= 0) return;
+    aspect = nextAspect;
+    if (!mars) return;
+    const { position } = bodyPlacement("mars", aspect);
+    if (tmp.set(...position).distanceTo(mars.center) < 1e-3) return;
+    mars.center.copy(tmp);
+    mars.group.position.copy(mars.center);
+    if (worlds[focused] === mars) focus(focused, { instant: true, force: true });
+  }
+
+  function placeTag() {
+    const show = mars && enabled && worlds[focused] !== mars && !move && hooks.introVisible?.() !== false;
+    if (!show) {
+      tag.hidden = true;
+      return;
+    }
+    tmp.copy(mars.center);
+    tmp.y -= mars.radius * 1.25;
+    tmp.project(camera);
+    const size = hooks.viewSize?.() || { width: domElement.clientWidth, height: domElement.clientHeight };
+    if (tmp.z > 1 || Math.abs(tmp.x) > 1 || Math.abs(tmp.y) > 1) {
+      tag.hidden = true;
+      return;
+    }
+    tag.hidden = false;
+    tag.style.left = `${(tmp.x * 0.5 + 0.5) * size.width}px`;
+    tag.style.top = `${(-tmp.y * 0.5 + 0.5) * size.height}px`;
   }
 
   function update(delta, elapsed) {
@@ -282,126 +269,77 @@ export function createWorlds({ scene, camera, controls, domElement, earth, label
         controls.update();
       }
     }
-    const current = worlds[focused];
-    for (const w of worlds) {
-      if (w.def.kind === "home") continue;
-      if (w === current && !reduced) w.group.rotation.y += delta * SPIN_RATE;
-      if (w.atmosphere) {
-        tmp.copy(hooks.sunWorld?.() || new THREE.Vector3(1, 0, 0));
-        w.atmosphere.update(tmp, camera.position.clone().sub(w.center));
-      }
+    if (mars) {
+      if (!reduced) mars.group.rotation.y += delta * SPIN_RATE;
+      tmp.copy(hooks.sunWorld?.() || new THREE.Vector3(1, 0, 0));
+      mars.atmosphere.update(tmp, camera.position.clone().sub(mars.center));
     }
+    placeTag();
   }
 
   // ---------- input ----------
   const onContext = (event) => event.preventDefault();
-  let rightDrag = null;
-  const onDown = (event) => {
-    if (event.button === 2) rightDrag = { x: event.clientX, stepped: false };
-  };
-  const onMove = (event) => {
-    if (!rightDrag || !(event.buttons & 2)) return;
-    const dx = event.clientX - rightDrag.x;
-    if (!rightDrag.stepped && Math.abs(dx) > DRAG_STEP_PX) {
-      rightDrag.stepped = true;
-      step(dx < 0 ? 1 : -1);
-    }
-  };
-  const onUp = (event) => {
-    if (event.button !== 2 || !rightDrag) return;
-    const dx = Math.abs(event.clientX - rightDrag.x);
-    if (!rightDrag.stepped && dx < 6) step(1);
-    rightDrag = null;
-  };
-  let swipe = null;
-  const onTouchStart = (event) => {
-    if (event.touches.length === 2) swipe = { x: (event.touches[0].clientX + event.touches[1].clientX) / 2, stepped: false };
-  };
-  const onTouchMove = (event) => {
-    if (!swipe || event.touches.length !== 2) return;
-    const x = (event.touches[0].clientX + event.touches[1].clientX) / 2;
-    const dx = x - swipe.x;
-    if (!swipe.stepped && Math.abs(dx) > 60) {
-      swipe.stepped = true;
-      step(dx < 0 ? 1 : -1);
-    }
-  };
-  const onTouchEnd = () => {
-    swipe = null;
-  };
   const onKey = (event) => {
     if (!enabled || !hooks.introVisible?.()) return;
     if (event.key === "ArrowRight") step(1);
     else if (event.key === "ArrowLeft") step(-1);
   };
   domElement.addEventListener("contextmenu", onContext);
-  domElement.addEventListener("pointerdown", onDown);
-  domElement.addEventListener("pointermove", onMove);
-  domElement.addEventListener("pointerup", onUp);
-  domElement.addEventListener("touchstart", onTouchStart, { passive: true });
-  domElement.addEventListener("touchmove", onTouchMove, { passive: true });
-  domElement.addEventListener("touchend", onTouchEnd, { passive: true });
   document.addEventListener("keydown", onKey);
-  if (controls.mouseButtons) controls.mouseButtons.RIGHT = null;
+  controls.addEventListener("start", hideHint);
 
   return {
-    /** worlds.json (and sites.json plus the assets base, when Mars data exists) build the line of worlds. */
+    /** worlds.json (and sites.json plus the assets base, when Mars data exists) put Mars next to Earth. */
     setWorlds(doc, sites, assetsBase) {
-      const list = [...(doc?.worlds || [])].sort((a, b) => (ORDER_KIND[a.kind] - ORDER_KIND[b.kind]) || (a.order - b.order) || ((a.distance_ly ?? 1e9) - (b.distance_ly ?? 1e9)));
-      const earthDef = list.find((w) => w.kind === "home") || { id: "earth", name: "Earth", kind: "home", status: "live", facts: [], tagline: "" };
+      const list = frontWorlds(doc?.worlds);
       worlds.length = 0;
-      worlds.push({ def: earthDef, group: earth, radius: 1, center: new THREE.Vector3(0, 0, 0), markers: [] });
-      let i = 1;
-      for (const def of list) {
-        if (def.kind === "home") continue;
-        addWorld(def, i);
-        i += 1;
+      worlds.push({ def: list[0], group: earth, radius: 1, center: new THREE.Vector3(0, 0, 0), markers: [] });
+      const marsDef = list.find((w) => w.id === "mars");
+      if (marsDef && !mars) {
+        mars = addMars(marsDef);
+        if (sites) {
+          textureMars(mars, sites.assets, assetsBase);
+          marsMarkers(mars, sites);
+        } else if (assetsBase) {
+          textureMars(mars, { globe_color: "mars_color_2k.jpg", globe_bump: "mars_bump_2k.png" }, assetsBase);
+        }
+      } else if (mars) {
+        worlds.push(mars);
       }
-      const mars = worlds.find((w) => w.def.id === "mars");
-      if (mars && sites) {
-        textureMars(mars, sites.assets, assetsBase);
-        marsMarkers(mars, sites);
-      } else if (mars && assetsBase) {
-        textureMars(mars, { globe_color: "mars_color_2k.jpg", globe_bump: "mars_bump_2k.png" }, assetsBase);
-      }
-      nav.hidden = worlds.length < 2;
-      renderDots();
+      nav.hidden = !enabled || worlds.length < 2;
+      renderSwitch();
       renderCopy(worlds[0]);
     },
     focus,
-    focusId(id, opts) {
-      const i = worlds.findIndex((w) => w.def.id === id);
-      if (i >= 0) focus(i, opts);
-    },
+    focusId,
     step,
     update,
+    layout,
+    facing,
     current: () => worlds[focused]?.def || null,
     isEarth: () => !worlds.length || worlds[focused].def.kind === "home",
     moving: () => Boolean(move),
     setEnabled(on) {
       enabled = on;
+      nav.hidden = !on || worlds.length < 2;
     },
-    pickMeshes: () => pick,
+    /** The Mars sphere and its site markers, always pickable. */
+    marsPickables: () => pick,
     onChange(cb) {
       listeners.add(cb);
       return () => listeners.delete(cb);
     },
     dispose() {
       domElement.removeEventListener("contextmenu", onContext);
-      domElement.removeEventListener("pointerdown", onDown);
-      domElement.removeEventListener("pointermove", onMove);
-      domElement.removeEventListener("pointerup", onUp);
-      domElement.removeEventListener("touchstart", onTouchStart);
-      domElement.removeEventListener("touchmove", onTouchMove);
-      domElement.removeEventListener("touchend", onTouchEnd);
       document.removeEventListener("keydown", onKey);
-      for (const w of worlds) {
-        if (w.def.kind === "home") continue;
-        w.atmosphere?.dispose();
-        scene.remove(w.group);
+      controls.removeEventListener("start", hideHint);
+      if (mars) {
+        mars.atmosphere.dispose();
+        scene.remove(mars.group);
       }
       for (const d of disposables) d.dispose?.();
       nav.remove();
+      tag.remove();
       copy.remove();
       marsLegend?.remove();
     },

@@ -15,6 +15,7 @@ import { localFromEcf } from "./geo.js";
 
 const EARTH_KM = 6371;
 const SPEEDS = [1, 60, 600];
+const FOLD_KEY = "overfield.sat-panel-folded";
 const TRACK_MINUTES = 90;
 const TRACK_STEPS = 60;
 const TRACK_REFRESH_MS = 90 * 1000;
@@ -201,14 +202,20 @@ export function createSatellites({ earth, overlay, legendHost, reduced }) {
   // ----- legend -----
   const legend = el("div", "sat-legend");
   legend.id = "sat-legend";
-  const rowS2 = el("div", "sat-row is-s2");
-  rowS2.append(el("i"), el("strong", null, "Sentinel-2A, 2B, 2C"), el("span", null, "the satellite that visits every farm: 10 m pixels, every few days"));
-  const rowImg = el("div", "sat-row is-img");
-  rowImg.append(el("i"), el("strong", null, "Landsat 8, 9, Terra, Aqua"), el("span", null, "Landsat joins Sentinel-2 in the HLS record; Terra and Aqua carry MODIS, the fire detections"));
-  const rowSl = el("div", "sat-row is-sl");
-  const slTitle = el("strong", null, "Starlink");
-  rowSl.append(el("i"), slTitle, el("span", null, "shown for connectivity context only; not a data source"));
-  const pass = el("p", "sat-pass", "Next Sentinel-2 pass near Story County: computing an estimate…");
+  const row = (cls, name, note) => {
+    const node = el("div", `sat-row ${cls}`);
+    const txt = el("div", "sat-txt");
+    const title = el("strong", null, name);
+    txt.append(title, el("span", null, note));
+    node.append(el("i"), txt);
+    return { node, title };
+  };
+  const rowS2 = row("is-s2", "Sentinel-2A/B/C", "visits every farm: 10 m pixels, every few days").node;
+  const rowImg = row("is-img", "Landsat 8/9, Terra, Aqua", "HLS record; MODIS fire detections").node;
+  const sl = row("is-sl", "Starlink", "context only, not a data source");
+  const rowSl = sl.node;
+  const slTitle = sl.title;
+  const pass = el("p", "sat-pass", "Next Sentinel-2 pass near Story County: computing…");
   const foot = el("div", "sat-foot");
   const clock = el("span", "sat-clock");
   const speedBox = el("div", "sat-speed");
@@ -221,14 +228,36 @@ export function createSatellites({ earth, overlay, legendHost, reduced }) {
     speedBox.append(button);
     return button;
   });
-  foot.append(clock, speedBox);
-  const source = el("p", "sat-src", "Orbits: CelesTrak GP data, SGP4 at the clock above");
-  const track = el("p", "sat-src", "Lines: ground track for the next 90 minutes");
-  legend.append(rowS2, rowImg, rowSl, pass, foot, source, track);
+  const fold = el("button", "sat-fold", "Hide");
+  fold.type = "button";
+  fold.addEventListener("click", () => setFolded(!legend.classList.contains("is-folded")));
+  foot.append(clock, speedBox, fold);
+  const source = el("p", "sat-src", "Orbits: CelesTrak GP data, SGP4 at the clock above · lines: ground track, next 90 min");
+  legend.append(rowS2, rowImg, rowSl, pass, foot, source);
   legendHost.append(legend);
+
+  /** Folded, the panel is one line: the clock, the speed and the Show button. The choice is remembered. */
+  function setFolded(on) {
+    legend.classList.toggle("is-folded", on);
+    fold.textContent = on ? "Show" : "Hide";
+    fold.setAttribute("aria-label", on ? "Show the satellite panel" : "Collapse the satellite panel");
+    fold.setAttribute("aria-expanded", String(!on));
+    try {
+      window.localStorage.setItem(FOLD_KEY, on ? "1" : "");
+    } catch {
+      /* storage off */
+    }
+  }
+  try {
+    setFolded(Boolean(window.localStorage.getItem(FOLD_KEY)));
+  } catch {
+    setFolded(false);
+  }
 
   function setSpeed(value) {
     speed = value;
+    // 1× is the wall clock: snap back to it, so "real time" never shows a time the faster clocks ran ahead to.
+    if (value === 1) simMs = Date.now();
     for (const [index, button] of speedButtons.entries()) {
       button.setAttribute("aria-pressed", String(SPEEDS[index] === value));
     }
@@ -238,13 +267,13 @@ export function createSatellites({ earth, overlay, legendHost, reduced }) {
   function renderPass() {
     if (nextPassMs == null) {
       pass.textContent = passSearching
-        ? "Next Sentinel-2 pass near Story County: computing an estimate…"
-        : "Next Sentinel-2 pass near Story County: no pass found in the next 5 days (estimate)";
+        ? "Next Sentinel-2 pass near Story County: computing…"
+        : "Next Sentinel-2 pass near Story County: none in the next 5 days (estimate)";
       return;
     }
     const wait = nextPassMs - Date.now();
     pass.textContent = wait > -600000
-      ? `Next Sentinel-2 pass near Story County in about ${fmtRelative(Math.max(0, wait))} (estimate: sub-satellite point within 150 km of Ames)`
+      ? `Next Sentinel-2 pass near Story County: in about ${fmtRelative(Math.max(0, wait))} (estimate, within 150 km of Ames)`
       : "Next Sentinel-2 pass near Story County: recomputing…";
   }
 
@@ -454,7 +483,7 @@ export function createSatellites({ earth, overlay, legendHost, reduced }) {
     loaded = imaging.length > 0 || starlink.total > 0;
     const snapshot = snapshots.filter(Boolean).sort().pop();
     source.textContent = loaded
-      ? `Orbits: CelesTrak GP data, snapshot ${fmtSnapshot(snapshot)}, propagated with SGP4`
+      ? `Orbits: CelesTrak GP, snapshot ${fmtSnapshot(snapshot)}, SGP4 · lines: ground track, next 90 min`
       : "Orbits: the satellite snapshot (sats/*.json) did not load";
     if (!imaging.length) pass.hidden = true;
     searchPass();
