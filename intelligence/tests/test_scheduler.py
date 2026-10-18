@@ -75,3 +75,18 @@ class TestTick:
     def test_dry_run_tick_reports_what_was_due(self, data):
         assert scheduler.tick(data, data / "roster.csv", datetime(2026, 10, 17, 11, 31, tzinfo=UTC), dry_run=True) == ["R001", "R003"]
         assert scheduler.tick(data, data / "roster.csv", datetime(2026, 10, 17, 3, 0, tzinfo=UTC), dry_run=True) == []
+
+
+class TestChannelFilter:
+    def test_channels_limits_a_due_phone_row_to_the_text(self, data):
+        providers = {"grok_voice": FakeProvider(), "photon_sms": FakeProvider(), "email": FakeProvider()}
+        sent = scheduler.tick(data, data / "roster.csv", datetime(2026, 10, 17, 11, 31, tzinfo=UTC), dry_run=False,
+                              providers=providers, channels=("photon_sms",))
+        assert sent == ["R001", "R003"]
+        assert sorted(h for h, _ in providers["photon_sms"].sent) == ["+15155550101", "+15155550103"]
+        assert providers["grok_voice"].sent == []
+        again = scheduler.tick(data, data / "roster.csv", datetime(2026, 10, 17, 11, 45, tzinfo=UTC), dry_run=False,
+                               providers=providers, channels=("photon_sms",))
+        assert again == []                                                        # the text went; the call is not owed
+        deliveries = json.loads((data / "deliveries.json").read_text())["deliveries"]
+        assert {d["channel"] for d in deliveries} == {"photon_sms"}

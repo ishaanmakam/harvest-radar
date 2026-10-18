@@ -1,7 +1,7 @@
 import { h } from "../dom.js";
 import { CHANNEL_LABEL, chip, titleCase } from "../format.js";
 import { MAX_MATCH_KM, geocode, matchField, parseLatLon } from "../geo.js";
-import { NOT_CONFIGURED, configured, deleteMyAccount, demoText, myDeliveries, signIn, signUp, updateMyProfile } from "../backend.js";
+import { NOT_CONFIGURED, configured, deleteMyAccount, demoLine, demoText, myDeliveries, signIn, signUp, updateMyProfile } from "../backend.js";
 import { card, errorNote, field, fmtDateTime, fmtDay, loading, notice, select, statusLine } from "../ui.js";
 
 // Mirrors LANGUAGE_NAMES in intelligence/providers.py.
@@ -215,6 +215,15 @@ function demoSection(ctx, profile, current) {
   const farm = h("input", { class: "input mono", type: "text", value: profile?.farm_id || "", placeholder: "Farm, or the matched field", "aria-label": "Farm id", style: { maxWidth: "200px" } });
   const status = statusLine();
   const button = h("button", { class: "btn btn-primary", type: "button" }, "Text me today's plan");
+  const lineNote = h("p", { class: "small muted" }, "");
+  if (profile?.phone) {
+    demoLine().then((r) => {
+      if (!r?.line) return;
+      lineNote.textContent = r.inbound_first
+        ? `Overfield texts you over iMessage from ${r.line}. Send that number one message first, from your phone, so it can reply; after that the plan arrives on its own.`
+        : `Overfield texts you from ${r.line}.`;
+    }).catch(() => {});
+  }
   button.addEventListener("click", async () => {
     button.disabled = true;
     status.set("Sending the plan.");
@@ -232,6 +241,7 @@ function demoSection(ctx, profile, current) {
   return h("div", { class: "section" },
     h("div", { class: "section-title" }, "Demo: the morning text"),
     h("p", { class: "small" }, "Every morning the plan goes out by text at the time above. Send today's plan now to see it: the phone that should receive it, and the farm whose plan to send (your matched field by default)."),
+    lineNote,
     h("div", { class: "row row-wrap", style: { gap: "8px", margin: "8px 0" } }, phone, farm, button),
     status.el);
 }
@@ -371,11 +381,12 @@ function profileForm(el, ctx) {
   showMatch();
 
   const findButton = h("button", { class: "btn", type: "button" }, "Find my field");
-  findButton.addEventListener("click", async () => {
-    const text = address.value.trim();
+  /** Geocode the address box and match the nearest field; true when a field is set. Save runs this too. */
+  async function findField() {
+    const text = address.value.trim() || String(form.address || "").trim();
     if (!text) {
       findStatus.set("Type an address or lat, lon first.", "warn");
-      return;
+      return false;
     }
     findButton.disabled = true;
     findStatus.set("Looking up the address.");
@@ -386,15 +397,15 @@ function profileForm(el, ctx) {
         const hit = await geocode(text);
         if (!hit) {
           findStatus.set("Could not find that address. Add the town and state, or type lat, lon.", "warn");
-          return;
+          return false;
         }
         point = [hit.lon, hit.lat];
-        where = hit.display_name;
+        where = hit.approximate ? `${hit.display_name} (the nearest place the map knows for that address)` : hit.display_name;
       }
       const data = await ctx.dataPromise.catch(() => null);
       if (!data?.fields) {
         findStatus.set("The field map has not loaded, so the address cannot be matched yet. Try again in a moment.", "warn");
-        return;
+        return false;
       }
       form.lon = Math.round(point[0] * 1e5) / 1e5;
       form.lat = Math.round(point[1] * 1e5) / 1e5;
@@ -403,17 +414,20 @@ function profileForm(el, ctx) {
         form.farm_id = null;
         showMatch();
         findStatus.set(`Overfield does not cover that location yet (${form.lat}, ${form.lon}). No field is within ${MAX_MATCH_KM} km.`, "warn");
-        return;
+        return false;
       }
       form.farm_id = match.field_id;
       showMatch(match.inside ? "(the address is inside this field)" : `(nearest field, ${match.distance_km} km away)`);
       findStatus.set(where ? `Found: ${where}. Save the profile to keep this field.` : "Matched. Save the profile to keep this field.", "ok");
+      return true;
     } catch (err) {
       findStatus.set(err.message, "warn");
     } finally {
       findButton.disabled = false;
     }
-  });
+    return false;
+  }
+  findButton.addEventListener("click", findField);
 
   const code = select("acct-code", COUNTRY_CODES, form.code, { class: "select select-code", "aria-label": "Country code", onchange: (e) => (form.code = e.target.value) });
   const national = h("input", {
@@ -467,6 +481,7 @@ function profileForm(el, ctx) {
       class: "card",
       onsubmit: async (event) => {
         event.preventDefault();
+        if (!form.farm_id && String(form.address || "").trim() && !findButton.disabled) await findField(); // an address without a field: match it first
         const digits = form.national.replace(/\D/g, "");
         const channelList = CHANNELS.map(([k]) => k).filter((k) => form.channels.has(k));
         const patch = {

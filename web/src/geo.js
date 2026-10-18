@@ -103,8 +103,25 @@ export function parseLatLon(text) {
   return [lon, lat];
 }
 
-/** One Nominatim call: { lon, lat, display_name } or null. */
+/** Nominatim, with fallbacks for the rural addresses it does not know: the query as typed, then without the house
+ * number, then its last two parts (town, state). approximate is true when a fallback answered. */
 export async function geocode(query) {
+  const q = String(query || "").trim();
+  if (!q) return null;
+  const tries = [q];
+  const noNumber = q.replace(/^\s*\d+[A-Za-z]?\s+/, "");
+  if (noNumber !== q) tries.push(noNumber);
+  const parts = q.split(",").map((p) => p.trim()).filter(Boolean);
+  if (parts.length > 2) tries.push(parts.slice(-2).join(", "));
+  for (const t of tries) {
+    const hit = await geocodeOnce(t);
+    if (hit) return { ...hit, approximate: t !== q };
+  }
+  return null;
+}
+
+/** One Nominatim call: { lon, lat, display_name } or null. */
+export async function geocodeOnce(query) {
   const url = `${NOMINATIM}?format=json&limit=1&q=${encodeURIComponent(String(query || "").trim())}`;
   const res = await fetch(url, { headers: { Accept: "application/json" } });
   if (!res.ok) throw new Error(`The address lookup failed (${res.status}).`);
