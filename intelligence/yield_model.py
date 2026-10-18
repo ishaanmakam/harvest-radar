@@ -438,6 +438,46 @@ def analyze(data, config, prior=None):
             zt["production_bu"] += est["production_bu"]
             zt["production_t"] += est["production_t"]
 
+    # calibration to the county model (yield_train.py) and soil/terrain pass-through (field_env.py), when present:
+    # a field's bushels are the county estimate times its relative index, the county's 90% band scaled the same way
+    ym = data.get("yield_model") if isinstance(data.get("yield_model"), dict) else None
+    county = {}
+    for crop_name, c in ((ym or {}).get("crops") or {}).items():
+        if not isinstance(c, dict) or "error" in c or _num(c.get("estimate_bu_per_acre")) is None:
+            continue
+        iv = c.get("interval_bu_per_acre")
+        iv = [float(iv[0]), float(iv[1])] if isinstance(iv, list) and len(iv) == 2 and all(_num(v) is not None for v in iv) else None
+        county[str(crop_name).lower()] = {
+            "county": c.get("county"), "county_estimate_bu_per_acre": _r(float(c["estimate_bu_per_acre"]), 1),
+            "interval_bu_per_acre": [_r(iv[0], 1), _r(iv[1], 1)] if iv else None,
+            "rmse_bu_per_acre": _num(c.get("rmse_bu_per_acre")), "years": c.get("years"),
+            "source": ((ym or {}).get("sources") or [None])[0]}
+    env = data.get("field_env") if isinstance(data.get("field_env"), dict) else None
+    env_fields = env.get("fields") if env and isinstance(env.get("fields"), dict) else {}
+    calibrated_sum = {}
+    for fid, f in fields.items():
+        if f.get("index") is None:
+            continue
+        cal = county.get(f["crop"])
+        if cal:
+            f["bu_per_acre_calibrated"] = _r(cal["county_estimate_bu_per_acre"] * f["index"], 1)
+            if cal["interval_bu_per_acre"]:
+                f["interval_bu_per_acre"] = [_r(cal["interval_bu_per_acre"][0] * f["index"], 1), _r(cal["interval_bu_per_acre"][1] * f["index"], 1)]
+            f["calibration"] = "county model"
+            s_ = calibrated_sum.setdefault(f["crop"], [0.0, 0])
+            s_[0] += f["bu_per_acre_calibrated"]
+            s_[1] += 1
+        else:
+            f["calibration"] = "reference only"
+        e = env_fields.get(fid)
+        if isinstance(e, dict):
+            f["soil"] = {k: e.get(k) for k in ("texture", "soc_g_kg", "clay_pct", "sand_pct", "ph")}
+            f["terrain"] = {k: e.get(k) for k in ("elevation_m", "slope_pct", "aspect")}
+            f["env_note"] = e.get("note")
+        else:
+            f["soil"] = None
+            f["terrain"] = None
+
     crops = {}
     for crop, a in crops_out.items():
         arr = np.array(a["indices"], dtype=float)
@@ -462,7 +502,10 @@ def analyze(data, config, prior=None):
     for crop in REFERENCE_YIELD:
         if crop not in reference and any((f.get("properties") or {}).get("crop") == crop for f in feats):
             notes.append(f"no {crop} field could be scored, so no {crop} reference")
-    landscape = {"crops": crops, "scored": len([f for f in fields.values() if f.get("index") is not None]),
+    for crop_name, (tot, n) in calibrated_sum.items():
+        if crop_name in crops and n:
+            crops[crop_name]["calibrated_mean_bu_per_acre"] = _r(tot / n, 1)
+    landscape = {"crops": crops, "calibration": county, "scored": len([f for f in fields.values() if f.get("index") is not None]),
                  "skipped": skipped, "reference_integral": {k: _r(v, 2) for k, v in reference.items()},
                  "band_cuts": {k: None if v is None else [_r(v[0], 3), _r(v[1], 3)] for k, v in cuts.items()}}
     return result(fields, landscape, zones)

@@ -81,6 +81,8 @@ def load_data(data_dir: Path):
         "route": read_optional(data_dir, "route.json"),
         "truth": read_optional(data_dir, "truth.json"),
         "usda": read_optional(data_dir, "usda_crop_progress.json"),
+        "yield_model": read_optional(data_dir, "yield_model.json"),     # the county model (yield_train.py), optional
+        "field_env": read_optional(data_dir, "field_env.json"),         # soil and terrain per field (field_env.py), optional
         "chcs": chcs,
     }
 
@@ -244,10 +246,22 @@ def farm_outlook(doc, farm_id):
         est = y.get("estimate") or {}
         bu = est.get("bu_per_acre")
         band = y.get("band")
-        txt = f"Yield outlook: {band} for the zone" if band else "Yield outlook"
-        if bu is not None:
-            txt += f", about {bu:.0f} bushels an acre by the greenness curve (a relative index, not a measured yield)"
+        cal = y.get("bu_per_acre_calibrated")
+        if cal is not None:
+            txt = f"Yield estimate: about {cal:.0f} bushels an acre"
+            iv = y.get("interval_bu_per_acre")
+            if iv:
+                txt += f" ({iv[0]:.0f} to {iv[1]:.0f})"
+            if band:
+                txt += f", {band} for the zone"
+            txt += ", from the county model and the greenness curve of this field"
+        else:
+            txt = f"Yield outlook: {band} for the zone" if band else "Yield outlook"
+            if bu is not None:
+                txt += f", about {bu:.0f} bushels an acre by the greenness curve (a relative index, not a measured yield)"
         lines.append(txt + ".")
+    if y.get("env_note"):
+        lines.append(f"Soil and terrain: {y['env_note'].rstrip('.')}.")
     e = f.get("economics") or {}
     if e.get("recommendation"):
         rec = {"harvest_now": "Harvest now", "wait": "Waiting a week looks cheaper", "either": "Harvest now or wait: about the same"}
