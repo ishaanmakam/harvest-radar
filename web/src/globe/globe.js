@@ -170,6 +170,10 @@ export function createGlobe(container, { bounds, onEnter, onToast, worldsHosts =
   controls.minDistance = 1.6;
   controls.maxDistance = 6;
   controls.autoRotate = false;
+  // CAD-style: the right mouse button orbits the view around the planet in focus, as the left one does; the wheel or
+  // the middle button zooms. Pan stays off, so the planets never leave the frame.
+  controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE };
+  controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_ROTATE };
   controls.target.set(0, 0, 0);
 
   // The slow spin pauses on any drag, wheel or touch and eases back in six seconds after the last one.
@@ -305,7 +309,7 @@ export function createGlobe(container, { bounds, onEnter, onToast, worldsHosts =
   glow.visible = false;
   earth.add(arcLine, glow);
 
-  // Other worlds along a line in space; Earth keeps everything it has and hides its extras while another world is focused.
+  // Mars shares the scene with Earth; the camera orbits whichever planet is in focus and only the legend follows the focus.
   const worlds = createWorlds({
     scene, camera, controls, domElement: renderer.domElement, earth, label, reduced,
     legendHost: container.parentElement || container,
@@ -315,14 +319,9 @@ export function createGlobe(container, { bounds, onEnter, onToast, worldsHosts =
       introVisible: introVisible || (() => true),
       orbiters: () => orbiters?.() || [],
       sunWorld: () => sunWorld,
+      viewSize: () => ({ width: viewWidth, height: viewHeight }),
       onFocus(def) {
-        const home = def.kind === "home";
-        sats.setVisible(home);
-        for (const g of markerGroups) g.visible = home;
-        if (!home) {
-          arcLine.visible = false;
-          glow.visible = false;
-        }
+        sats.legend.hidden = def.kind !== "home";
         hovered = null;
         label.hidden = true;
       },
@@ -386,17 +385,48 @@ export function createGlobe(container, { bounds, onEnter, onToast, worldsHosts =
   renderer.domElement.addEventListener("pointerdown", (event) => {
     pointerDown = { x: event.clientX, y: event.clientY };
   });
+  // Mars and its markers are always clickable, unless Earth is in front of them; Earth's markers only while Earth is
+  // the focus and they face the camera; the Earth sphere itself while Mars is the focus, to come back.
+  function marsUnderPointer() {
+    const hit = raycaster.intersectObjects(worlds.marsPickables(), false)
+      .find((h) => h.object.userData.body === "mars" || worlds.facing(h.object) > 0.05);
+    if (!hit) return null;
+    const earthHit = raycaster.intersectObject(earthMesh, false)[0];
+    return earthHit && earthHit.distance < hit.distance ? null : hit;
+  }
+
   renderer.domElement.addEventListener("pointermove", (event) => {
     if (fly.active) return;
     setRay(event);
-    const hits = raycaster.intersectObjects(worlds.isEarth() ? pickMeshes : worlds.pickMeshes(), false);
-    hovered = hits.find((hit) => (worlds.isEarth() ? facingCamera(hit.object) > 0.08 : true))?.object || null;
+    const marsHit = marsUnderPointer();
+    if (marsHit) {
+      hovered = marsHit.object;
+      if (hovered.userData.body === "mars") {
+        hovered.userData.place = { name: worlds.isEarth() ? "Mars · click to focus" : "Mars · click to open the landing map" };
+      }
+    } else if (worlds.isEarth()) {
+      hovered = raycaster.intersectObjects(pickMeshes, false).find((hit) => facingCamera(hit.object) > 0.08)?.object || null;
+    } else {
+      hovered = raycaster.intersectObject(earthMesh, false).length ? earthMesh : null;
+      if (hovered) earthMesh.userData.place = { name: "Earth · click to focus" };
+    }
     renderer.domElement.style.cursor = hovered ? "pointer" : "";
   });
   renderer.domElement.addEventListener("click", (event) => {
-    if (fly.active || !pointerDown || !worlds.isEarth()) return;
+    if (fly.active || !pointerDown || worlds.moving()) return;
     if (Math.hypot(event.clientX - pointerDown.x, event.clientY - pointerDown.y) > 5) return;
     setRay(event);
+    // Mars: the first click focuses it; a click on the focused planet opens the landing map.
+    if (marsUnderPointer()) {
+      if (worlds.isEarth()) worlds.focusId("mars");
+      else if (onOpenMars) onOpenMars();
+      return;
+    }
+    if (!worlds.isEarth()) {
+      // From Mars, a click on Earth brings the camera home.
+      if (raycaster.intersectObject(earthMesh, false).length) worlds.focusId("earth");
+      return;
+    }
     const markerHit = raycaster.intersectObjects(pickMeshes, false).find((hit) => facingCamera(hit.object) > 0.08);
     if (markerHit) {
       const place = markerHit.object.userData.place;
@@ -430,6 +460,7 @@ export function createGlobe(container, { bounds, onEnter, onToast, worldsHosts =
     const baseFov = 42;
     camera.fov = camera.aspect < 1 ? (2 * Math.atan(Math.tan((baseFov * Math.PI) / 360) / camera.aspect) * 180) / Math.PI : baseFov;
     camera.updateProjectionMatrix();
+    worlds.layout(camera.aspect);
     renderer.setSize(viewWidth, viewHeight, false);
     const scale = viewHeight * 0.5 * pixelRatio;
     stars.material.uniforms.uScale.value = scale;
@@ -546,7 +577,7 @@ export function createGlobe(container, { bounds, onEnter, onToast, worldsHosts =
       return;
     }
     hovered.getWorldPosition(labelPos);
-    const facing = worlds.isEarth() ? labelPos.clone().normalize().dot(camera.position.clone().normalize()) : 1;
+    const facing = pickMeshes.includes(hovered) ? labelPos.clone().normalize().dot(camera.position.clone().normalize()) : 1;
     const ndc = labelPos.clone().project(camera);
     if (facing < 0.05 || ndc.z > 1) {
       label.hidden = true;
@@ -565,7 +596,7 @@ export function createGlobe(container, { bounds, onEnter, onToast, worldsHosts =
     last = now;
     elapsed += delta;
     if (fly.active) stepFly();
-    else if (!dragging && worlds.isEarth()) {
+    else if (!dragging) {
       const idle = elapsed - idleSince;
       if (idle > SPIN_RESUME_AFTER) {
         const ramp = Math.min(1, (idle - SPIN_RESUME_AFTER) / SPIN_RAMP);
@@ -576,10 +607,8 @@ export function createGlobe(container, { bounds, onEnter, onToast, worldsHosts =
     if (!fly.active && !worlds.moving()) controls.update();
     camera.updateMatrixWorld();
     earth.updateMatrixWorld();
-    if (worlds.isEarth()) {
-      sats.update(delta, camera, viewWidth, viewHeight);
-      updateArc(sats.nearestSentinel(aoiDir));
-    }
+    sats.update(delta, camera, viewWidth, viewHeight);
+    updateArc(sats.nearestSentinel(aoiDir));
     const pulse = (elapsed % 2) / 2;
     for (const ring of pulses) {
       ring.scale.setScalar(1 + pulse * 2.4);

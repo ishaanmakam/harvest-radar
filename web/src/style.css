@@ -1709,42 +1709,57 @@ select {
 /* The satellite legend: what each point is, the clock and its speed, and the next-pass estimate. */
 .sat-legend {
   position: absolute;
-  right: 20px;
-  bottom: 20px;
+  right: 16px;
+  bottom: 16px;
   z-index: 3;
-  width: min(340px, calc(100% - 40px));
-  padding: 12px 14px;
+  width: min(300px, calc(100% - 32px));
+  padding: 8px 10px;
   border: 1px solid rgba(255, 255, 255, 0.14);
   border-radius: var(--r-lg);
   background: rgba(8, 12, 22, 0.66);
   color: #fff;
-  font-size: 12px;
-  line-height: 1.35;
+  font-size: 11px;
+  line-height: 1.3;
   backdrop-filter: blur(10px);
   -webkit-backdrop-filter: blur(10px);
 }
 
+.sat-legend.is-folded {
+  width: auto;
+}
+
+.sat-legend.is-folded .sat-row,
+.sat-legend.is-folded .sat-pass,
+.sat-legend.is-folded .sat-src {
+  display: none;
+}
+
+.sat-legend.is-folded .sat-foot {
+  margin-top: 0;
+}
+
 .sat-row {
   display: grid;
-  grid-template-columns: 14px 1fr;
-  column-gap: 8px;
-  align-items: baseline;
-  margin: 0 0 6px;
+  grid-template-columns: 12px 1fr;
+  column-gap: 7px;
+  align-items: start;
+  margin: 0 0 3px;
 }
 
 .sat-row i {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
+  margin-top: 4px;
   border-radius: 50%;
-  align-self: center;
   justify-self: center;
   background: #cfe6ff;
   box-shadow: 0 0 8px rgba(207, 230, 255, 0.9);
 }
 
 .sat-row.is-s2 i {
-  width: 10px;
-  height: 10px;
+  width: 9px;
+  height: 9px;
+  margin-top: 3px;
   background: #8fe0a8;
   box-shadow: 0 0 10px rgba(143, 224, 168, 1);
 }
@@ -1752,6 +1767,7 @@ select {
 .sat-row.is-sl i {
   width: 5px;
   height: 5px;
+  margin-top: 5px;
   background: #9cc0ea;
   box-shadow: none;
   opacity: 0.8;
@@ -1759,16 +1775,16 @@ select {
 
 .sat-row strong {
   font-weight: 600;
+  margin-right: 5px;
 }
 
 .sat-row span {
-  grid-column: 2;
   opacity: 0.68;
 }
 
 .sat-pass {
-  margin: 8px 0 0;
-  padding-top: 8px;
+  margin: 5px 0 0;
+  padding-top: 5px;
   border-top: 1px solid rgba(255, 255, 255, 0.12);
   color: #b9f0c9;
 }
@@ -1776,18 +1792,19 @@ select {
 .sat-foot {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
-  margin-top: 8px;
+  margin-top: 6px;
   font-variant-numeric: tabular-nums;
 }
 
 .sat-clock {
   opacity: 0.8;
+  white-space: nowrap;
 }
 
 .sat-speed {
   display: inline-flex;
+  margin-left: auto;
   border: 1px solid rgba(255, 255, 255, 0.2);
   border-radius: var(--r-pill);
   overflow: hidden;
@@ -1798,8 +1815,8 @@ select {
   background: transparent;
   color: #fff;
   font: inherit;
-  font-size: 11px;
-  padding: 3px 9px;
+  font-size: 10.5px;
+  padding: 2px 7px;
   cursor: pointer;
   opacity: 0.7;
 }
@@ -1817,14 +1834,26 @@ select {
   opacity: 1;
 }
 
-.sat-src {
-  margin: 6px 0 0;
-  font-size: 11px;
-  opacity: 0.55;
+.sat-fold {
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-size: 10.5px;
+  padding: 2px 8px;
+  cursor: pointer;
+  opacity: 0.7;
 }
 
-.sat-src + .sat-src {
-  margin-top: 2px;
+.sat-fold:hover {
+  opacity: 1;
+}
+
+.sat-src {
+  margin: 4px 0 0;
+  font-size: 10.5px;
+  opacity: 0.55;
 }
 
 #toast {
@@ -2642,36 +2671,6 @@ body.has-page {
   pointer-events: none;
 }
 
-.world-chevron {
-  position: absolute;
-  top: 50%;
-  width: 44px;
-  height: 44px;
-  margin-top: -22px;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.25);
-  background: rgba(8, 12, 22, 0.55);
-  color: #fff;
-  font-size: 26px;
-  line-height: 1;
-  cursor: pointer;
-  pointer-events: auto;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
-}
-
-.world-chevron:hover {
-  background: rgba(255, 255, 255, 0.16);
-}
-
-.world-chevron.is-prev {
-  left: calc(min(460px, 34vw) + 64px);
-}
-
-.world-chevron.is-next {
-  right: 16px;
-}
-
 .world-nav-foot {
   position: absolute;
   left: 24%;
@@ -2684,46 +2683,37 @@ body.has-page {
   pointer-events: none;
 }
 
-.world-dots {
-  display: flex;
-  flex-wrap: wrap;
-  justify-content: center;
-  gap: 6px;
-  max-width: min(640px, 90%);
+/* The Earth/Mars switch: two pills, the planet in focus lit. */
+.world-switch {
+  display: inline-flex;
+  padding: 3px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: var(--r-pill);
+  background: rgba(8, 12, 22, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
   pointer-events: auto;
 }
 
-.world-dot {
-  width: 10px;
-  height: 10px;
-  padding: 0;
+.world-switch button {
   border: 0;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.28);
+  border-radius: var(--r-pill);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.72);
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  padding: 5px 14px;
   cursor: pointer;
-  position: relative;
 }
 
-.world-dot.is-active {
-  background: #fff;
-  transform: scale(1.25);
-}
-
-.world-dot-name {
-  position: absolute;
-  left: 50%;
-  bottom: 16px;
-  transform: translateX(-50%);
-  white-space: nowrap;
-  font-size: 11px;
+.world-switch button:hover {
   color: #fff;
-  opacity: 0;
-  pointer-events: none;
 }
 
-.world-dot:hover .world-dot-name,
-.world-dot.is-active .world-dot-name {
-  opacity: 0.85;
+.world-switch button[aria-pressed="true"] {
+  background: rgba(255, 255, 255, 0.92);
+  color: #0d1217;
 }
 
 .world-hint {
@@ -2731,6 +2721,40 @@ body.has-page {
   font-size: 12px;
   letter-spacing: 0.04em;
   color: rgba(255, 255, 255, 0.7);
+}
+
+/* The caption under Mars while Earth is in focus; left/top carry the projected position. */
+.world-tag {
+  position: absolute;
+  z-index: 2;
+  transform: translate(-50%, 4px);
+  padding: 4px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.22);
+  border-radius: var(--r-pill);
+  background: rgba(8, 12, 22, 0.6);
+  color: #fff;
+  font: inherit;
+  font-size: 12px;
+  letter-spacing: 0.03em;
+  white-space: nowrap;
+  cursor: pointer;
+  pointer-events: auto;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+.world-tag small {
+  margin-left: 6px;
+  font-size: 11px;
+  opacity: 0.65;
+}
+
+.world-tag:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.world-tag[hidden] {
+  display: none;
 }
 
 .world-copy h1 {
@@ -3076,16 +3100,12 @@ body.has-page {
 }
 
 @media (max-width: 767px) {
-  .world-chevron.is-prev {
-    left: 12px;
-  }
-
   .world-nav-foot {
     left: 0;
     bottom: calc(34% + 8px);
   }
 
-  .world-dot-name {
+  .world-hint {
     display: none;
   }
 

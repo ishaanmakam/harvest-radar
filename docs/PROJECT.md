@@ -217,8 +217,9 @@ searched the whole ice belt for alternatives.
 
 ### 30-second demo
 
-1. On the opening globe, right-click (or press the right arrow): the camera slides from Earth to Mars. The legend
-   switches to "Watching Mars" and the copy reads Mars, open.
+1. On the opening globe Mars sits beside Earth. Click it, its tag or the Mars pill (or press the right arrow): the
+   camera eases over, the legend switches to "Watching Mars" and the copy reads Mars, open. Drag with either mouse
+   button to orbit the planet in focus, CAD-style.
 2. "Open Mars map". The whole planet between 60 S and 60 N with the score overlay, our ten sites numbered, SpaceX's six
    sites as white rings.
 3. Click M01 (52 N, 167 E): the THEMIS frame, then the four checks as go, watch, no-go rows, the same visual language as
