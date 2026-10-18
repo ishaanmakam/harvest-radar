@@ -6,8 +6,7 @@ import { h } from "../dom.js";
  * The file's thumbnails are stage-coloured illustrations, not imagery, so the card leaves them out.
  */
 export const HONESTY_LINE = "Region-level preview: one box about 5 km across at the region centre. The canopy curve is the "
-  + "Iowa season shape adjusted for this region's hemisphere and crop, not a new satellite read. An account here gets "
-  + "real reads of your own fields.";
+  + "Iowa season shape adjusted for this region's hemisphere and crop, not a new satellite read.";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -72,8 +71,7 @@ export function renderRegionCard(region, { onBack = null, onMap = null } = {}) {
       h("dd", { class: l.key === "alert" || (l.key === "rain" && region.rain_flag) ? "is-alert" : "" }, l.value),
     ])) : null,
     h("p", { class: "region-note" }, HONESTY_LINE),
-    h("div", { class: "region-actions" },
-      h("a", { class: "world-open", href: "#account" }, "Farm here? Create an account"),
-      onMap ? h("button", { class: "region-back", type: "button", onclick: onMap }, "Open the map here") : null),
+    onMap ? h("div", { class: "region-actions" },
+      h("button", { class: "world-open", type: "button", onclick: onMap }, "Open the map here")) : null,
   );
 }
