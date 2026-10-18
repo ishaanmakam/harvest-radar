@@ -79,6 +79,11 @@ drop trigger if exists profiles_protect on public.profiles;
 create trigger profiles_protect before update on public.profiles
   for each row execute function public.protect_profile_fields();
 
+-- Users who signed up before this migration existed get their profile row now (safe to run again).
+insert into public.profiles (id, email, phone, name)
+select u.id, u.email, u.phone, coalesce(u.raw_user_meta_data ->> 'name', '') from auth.users u
+on conflict (id) do nothing;
+
 -- ---------------------------------------------------------------- terms
 create table if not exists public.terms_acceptances (
   id          bigserial primary key,
@@ -241,7 +246,7 @@ create policy deliveries_staff_read on public.deliveries for select using (publi
 -- deliveries are written only by the Python queue with the service role, which bypasses RLS
 
 grant usage on schema public to anon, authenticated;
-grant select, update on public.profiles to authenticated;
+grant select, insert, update on public.profiles to authenticated;   -- insert: the site seeds its own row if the trigger missed it
 grant select on public.terms_acceptances, public.api_keys, public.api_usage, public.deliveries, public.signups_per_day to authenticated;
 grant execute on function public.accept_terms(text, text, text), public.issue_api_key(text), public.revoke_api_key(uuid), public.delete_my_account() to authenticated;
 revoke execute on function public.verify_api_key(text), public.log_api_use(uuid, text, integer) from anon, authenticated;
