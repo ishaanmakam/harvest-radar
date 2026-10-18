@@ -30,7 +30,8 @@ STACK_WINDOWS = ("W1", "W2", "W3", "W4")
 GEOD = Geod(ellps="WGS84")
 TO_METRES = Transformer.from_crs("EPSG:4326", "EPSG:32615", always_xy=True)
 TO_DEGREES = Transformer.from_crs("EPSG:32615", "EPSG:4326", always_xy=True)
-COLORS = {"corn": (255, 255, 0), "soybean": (0, 255, 255), "unknown": (255, 0, 255)}
+RECTANGULARITY_MIN = 0.75
+CONVEXITY_MIN = 0.85
 
 
 def fail(msg):
@@ -545,30 +546,50 @@ def publish(doc):
     log(STEP, f"wrote {OUT / 'fields.geojson'}")
 
 
+def outline_rings(geometry):
+    coords = geometry["coordinates"]
+    if geometry["type"] == "Polygon":
+        return coords
+    if geometry["type"] == "MultiPolygon":
+        rings = []
+        for polygon in coords:
+            rings.extend(polygon)
+        return rings
+    return []
+
+
 def draw_overlay(features, region, new_from=None):
+    del region
     frames = json.loads((OUT / "frames" / "frames.json").read_text())
     latest = max(frames["frames"], key=lambda frame: frame["date"])
     image = Image.open(OUT / latest["rgb"]).convert("RGB")
-    if image.size != (1000, 900):
-        fail(f"latest frame is {image.size}, expected 1000x900")
-    west, south, east, north = region["bbox"]
-    width, height = image.size
+    west, south, east, north = frames["bounds"]
+    pixel_width = frames["width"]
+    pixel_height = frames["height"]
+    if image.size != (pixel_width, pixel_height):
+        fail(f"latest frame is {image.size}, expected {pixel_width}x{pixel_height}")
 
     def pixel(lon, lat):
-        return ((lon - west) / (east - west) * width, (north - lat) / (north - south) * height)
+        x = (lon - west) / (east - west) * pixel_width
+        y = (north - lat) / (north - south) * pixel_height
+        return (x, y)
 
     draw = ImageDraw.Draw(image)
     for index, feature in enumerate(features):
-        new = new_from is not None and index >= new_from
-        color = (255, 255, 255) if new else COLORS[feature["properties"]["crop"]]
-        width = 3 if new else 2
-        rings = feature["geometry"]["coordinates"]
-        for ring in rings:
-            draw.line([pixel(lon, lat) for lon, lat in ring], fill=color, width=width)
+        appended = new_from is not None and index >= new_from
+        color = (255, 255, 255) if appended else (255, 255, 0)
+        stroke = 3 if appended else 2
+        for ring in outline_rings(feature["geometry"]):
+            if len(ring) < 2:
+                continue
+            draw.line([pixel(lon, lat) for lon, lat in ring], fill=color, width=stroke)
     path = CACHE / "quicklook" / "fields_overlay.png"
     path.parent.mkdir(parents=True, exist_ok=True)
     image.save(path)
+    desktop = os.path.expanduser("~/Desktop/fields_overlay.png")
+    image.save(desktop)
     log(STEP, f"overlay {path}")
+    log(STEP, f"overlay {desktop}")
 
 
 def box_area_ha(region):
@@ -762,6 +783,42 @@ def resolve_new(fields):
     return accepted
 
 
+def shape_scores(lonlat):
+    """Rectangularity and convexity in EPSG:32615."""
+    metric = project(lonlat, TO_METRES)
+    if metric.is_empty:
+        return 0.0, 0.0
+    if not metric.is_valid:
+        metric = metric.buffer(0)
+    if metric.is_empty or metric.area <= 0:
+        return 0.0, 0.0
+    try:
+        rectangle = metric.minimum_rotated_rectangle
+    except Exception:
+        return 0.0, 0.0
+    hull = metric.convex_hull
+    if rectangle.is_empty or rectangle.area <= 0 or hull.is_empty or hull.area <= 0:
+        return 0.0, 0.0
+    return metric.area / rectangle.area, metric.area / hull.area
+
+
+def quality_gate(fields):
+    """Append-only. Keep fields that are close to a rectangle and to their convex hull."""
+    kept = []
+    for index, field in enumerate(fields, start=1):
+        rectangularity, convexity = shape_scores(field["geom"])
+        accept = rectangularity >= RECTANGULARITY_MIN and convexity >= CONVEXITY_MIN
+        log(
+            STEP,
+            f"candidate {index} rect={rectangularity:.3f} convex={convexity:.3f} "
+            f"{'kept' if accept else 'dropped'}",
+        )
+        if accept:
+            kept.append(field)
+    log(STEP, f"quality gate kept {len(kept)} dropped {len(fields) - len(kept)}")
+    return kept
+
+
 def crop_from_threshold(field, threshold):
     early = field["series"].get("W2")
     late = field["series"].get("W4")
@@ -840,7 +897,7 @@ def append_fields():
     log(STEP, f"coverage of existing fields {before:.1%}")
     candidates, _stats = segment_once(stack, planes, masks, names, frame_box.affine, 0.06)
     barrier = unary_union([project(shape(feature["geometry"]), TO_METRES) for feature in existing]).buffer(5)
-    fresh = resolve_new(trim_against_existing(candidates, barrier))
+    fresh = quality_gate(resolve_new(trim_against_existing(candidates, barrier)))
     threshold, recomputed = stored_threshold(debug)
     if recomputed:
         debug.setdefault("crop", {})
@@ -880,6 +937,8 @@ def append_fields():
         "median_ha": None if median is None else round(median, 2),
         "crops": crops,
         "threshold": threshold,
+        "rectangularity_min": RECTANGULARITY_MIN,
+        "convexity_min": CONVEXITY_MIN,
     }
     write_json(debug_path, debug, pretty=True)
     draw_overlay(checked["features"], region, new_from=len(existing))
