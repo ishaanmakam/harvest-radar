@@ -2,4 +2,5 @@ jsonschema
 shapely
 numpy
 pillow
-scipy
+scipy<1.18  # 1.18.1 win-arm64 wheel is blocked by Windows Smart App Control (unknown reputation); older wheels load fine
+pytest

@@ -3,7 +3,8 @@
 intelligence layer can be built before real satellite data exists.
 
 Writes to data/mock/: fields.geojson, zones.geojson, timeseries.json, weather.json,
-fires.json, frames/*.jpg + frames.json, insights.json.
+fires.json, frames/*.jpg + frames.json, insights.json, and truth.json (the ground truth the
+mock world was generated from, so intelligence/evaluate.py can score the model).
 Then run `python intelligence/run_all.py --data data/mock` to produce status/demand/routing.
 
 Deterministic (seeded) so everyone sees the same mock world.
@@ -190,7 +191,8 @@ while d < AS_OF:
 fc_dates = [d2s(AS_OF + timedelta(days=k)) for k in range(14)]
 fc_precip = [0.0] * 14
 fc_prob = [5] * 14
-fc_precip[5], fc_prob[5] = 14.0, 65  # a rain event ~5 days out -> urgency
+fc_precip[2], fc_prob[2] = 16.0, 70  # heavy rain 2 days out: ready farms get "harvest before the rain" (act_now)
+fc_precip[5], fc_prob[5] = 14.0, 65  # a second, lighter event ~5 days out
 fc_precip[6], fc_prob[6] = 6.0, 55
 weather = {
     "observed": {"source": "mock", "dates": obs_dates, "precip_mm": precip, "tmax_c": tmax, "tmin_c": tmin},
@@ -283,4 +285,12 @@ dump("weather.json", weather)
 dump("fires.json", fires)
 dump("frames/frames.json", frames_doc)
 dump("insights.json", insights)
+dump("truth.json", {
+    "source": "mock", "as_of": d2s(AS_OF),
+    "note": "Ground truth the mock world was generated from. Mock only; harvest_date can be after as_of (not yet harvested).",
+    "fields": {fid: {"crop": t["crop"], "peak_date": d2s(t["peak"]), "peak_ndvi": round(t["peak_ndvi"], 3),
+                     "harvest_date": d2s(t["harvest"]), "burned": t["burned"],
+                     "burn_date": d2s(t["burn_date"]) if t["burn_date"] else None, "sown": t["sown"]}
+               for fid, t in truth.items()},
+})
 print(f"mock: {len(fields)} fields, {len(dates)} passes ({len(frames)} clear frames), {len(detections)} fire detections -> {OUT}")

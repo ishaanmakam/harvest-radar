@@ -27,7 +27,16 @@ FILES = {
     "demand.json": "demand.schema.json",
     "routing.json": "routing.schema.json",
     "insights.json": "insights.schema.json",
+    "plans.json": "plans.schema.json",
+    "route.json": "route.schema.json",
+    "deliveries.json": "deliveries.schema.json",
 }
+
+# Written by the morning queue on its first run, so never required, even with --strict
+OPTIONAL = {"deliveries.json"}
+
+CHECK_KINDS = ["harvest_ready", "harvest_before_rain", "establishment", "burn_scar", "fire", "flood", "stress", "visible_change"]
+STATUS_RANK = {"clear": 0, "watch": 1, "act_now": 2}
 
 
 def load(p):
@@ -45,7 +54,7 @@ def main():
         path = data_dir / rel
         if not path.exists():
             msg = f"missing {rel}"
-            (errors.append(msg) if strict else print(f"  WARN {msg}"))
+            (errors.append(msg) if strict and rel not in OPTIONAL else print(f"  WARN {msg}"))
             continue
         try:
             doc = load(path)
@@ -106,6 +115,31 @@ def main():
             for key in ("rgb", "ndvi"):
                 if fr.get(key) and not (data_dir / fr[key]).exists():
                     errors.append(f"frame image missing: {fr[key]}")
+
+    plans = loaded.get("plans.json")
+    if plans:
+        for p in plans["plans"]:
+            if [c["kind"] for c in p["checks"]] != CHECK_KINDS:
+                errors.append(f"plan {p['farm_id']}: checks must list the 8 kinds in table order")
+                break
+            worst = max(STATUS_RANK[c["status"]] for c in p["checks"])
+            if p["flag"] != {0: "fine", 1: "watch", 2: "act_now"}[worst]:
+                errors.append(f"plan {p['farm_id']}: flag {p['flag']} is not the worst check status")
+                break
+        if field_ids:
+            unknown = {p["farm_id"] for p in plans["plans"]} - field_ids
+            if unknown:
+                errors.append(f"plans reference unknown farms: {sorted(unknown)[:5]}")
+
+    route = loaded.get("route.json")
+    if route and plans:
+        plan_ids = {p["farm_id"] for p in plans["plans"]}
+        stop_ids = [s["farm_id"] for s in route["stops"]]
+        if len(stop_ids) != len(set(stop_ids)):
+            errors.append("route lists a farm more than once")
+        unknown = set(stop_ids) - plan_ids
+        if unknown:
+            errors.append(f"route stops without a plan: {sorted(unknown)[:5]}")
 
     if errors:
         print(f"\nFAILED ({len(errors)} problems) in {data_dir}:")

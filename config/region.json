@@ -25,6 +25,7 @@
     "burn_nbr_max": -0.05,
     "sown_ndvi_min": 0.3,
     "clear_fraction_min": 0.6,
-    "default_peak_to_harvest_days": 40
+    "default_peak_to_harvest_days": 40,
+    "peak_plateau_drop": 0.04
   }
 }
