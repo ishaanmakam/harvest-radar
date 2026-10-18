@@ -23,3 +23,7 @@ Then open the repo in Cursor and point it at your task brief.
 Product spec (source of truth): [docs/superpowers/specs/2026-10-17-field-inspector-design.md](docs/superpowers/specs/2026-10-17-field-inspector-design.md)
 
 Branches: `niranjan-pipeline`, `b/intel`, `c/vision` → PR into `main` often. Coordinate in Slack `#bot-channel`.
+
+## Licence
+
+The code and documentation are released under the [Apache License 2.0](LICENSE); see [NOTICE](NOTICE). Data files keep the terms of the sources they come from, listed with each source in [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md).
