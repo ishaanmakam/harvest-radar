@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "deliveries.schema.json",
+  "title": "deliveries.json — one row per morning-queue attempt; the restart checkpoint (spec: field-inspector design, Data)",
+  "type": "object",
+  "required": ["deliveries"],
+  "properties": {
+    "deliveries": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["date", "roster_id", "channel", "status", "detail"],
+        "properties": {
+          "date": {"type": "string"},
+          "roster_id": {"type": "string"},
+          "channel": {"enum": ["grok_voice", "photon_sms"]},
+          "status": {"enum": ["pending", "sent", "failed"]},
+          "detail": {"type": "string", "description": "Short provider result"}
+        }
+      }
+    }
+  }
+}

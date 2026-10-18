@@ -4,10 +4,12 @@ Inputs:  fields.geojson, timeseries.json, fires.json (optional)
 Output:  status.json  (contract: contracts/status.schema.json)
 
 Logic (keep it explainable for judges):
-  1. Peak greenness (NDVI) = heading/flowering.
+  1. Peak greenness (NDVI) = heading/flowering. Dated at the time-centre of the NDVI plateau (steadier than
+     argmax, which wanders with noise on a flat top).
   2. Harvest = first clear pass after the peak where NDVI collapses (low and a big drop).
   3. Regional lag = median(harvest - peak) over fields ALREADY harvested this season.
-     Unharvested fields: predicted harvest = their own peak + regional lag, +/- IQR/2.
+     Unharvested fields: predicted harvest = their own peak + regional lag, +/- half the 10th-90th pct range
+     (an ~80% window). Stage = ready / maturing / growing by how far out the window centre is.
      (Neighbouring fields teach the model this season's timing. No crop calendar needed.)
   4. Burn = NBR goes strongly negative after harvest (scar) and/or a FIRMS hotspot in the field.
   5. Sown = NDVI climbing again after harvest (wheat emerging).
@@ -27,6 +29,35 @@ def median_smooth(vals):
     return out
 
 
+def plateau_centre(xs, sm, pk, drop):
+    """Time-midpoint of the run of smoothed values within `drop` of the maximum around index pk.
+    xs are the observation dates (or positions) aligned with sm. argmax on a flat NDVI plateau jumps around
+    with noise, and index-midpoints skew towards densely sampled stretches, so take the centre in time."""
+    lo = hi = pk
+    while lo > 0 and sm[lo - 1] >= sm[pk] - drop:
+        lo -= 1
+    while hi < len(sm) - 1 and sm[hi + 1] >= sm[pk] - drop:
+        hi += 1
+    return xs[lo] + (xs[hi] - xs[lo]) / 2
+
+
+def lag_window(lags, default_lag, default_half=7):
+    """Regional peak->harvest lag (median of fields already harvested) and a half-width that covers ~80% of
+    them (10th-90th percentile). Needs at least 10 harvested fields, otherwise the configured default."""
+    if len(lags) < 10:
+        return default_lag, default_half
+    q = statistics.quantiles(lags, n=10)
+    return statistics.median(lags), max(3, (q[8] - q[0]) / 2)
+
+
+def predicted_stage(start, end, as_of):
+    """Stage for a field with a predicted harvest window, judged from the window centre (the best point estimate):
+    ready = expected within 3 days, maturing = within 14, else growing. Returns (stage, days_out)."""
+    centre = start + (end - start) / 2
+    days_out = max(0, (centre - as_of).days)
+    return ("ready" if days_out <= 3 else ("maturing" if days_out <= 14 else "growing")), days_out
+
+
 def analyze_field(fid, zone_id, dates, ndvi, nbr, fires_by_field, th):
     obs = [(d(dt), v, b) for dt, v, b in zip(dates, ndvi, nbr) if v is not None]
     rec = {"field_id": fid, "zone_id": zone_id, "stage": "unknown", "peak_date": None, "peak_ndvi": None,
@@ -38,7 +69,8 @@ def analyze_field(fid, zone_id, dates, ndvi, nbr, fires_by_field, th):
 
     sm = median_smooth([v for _, v, _ in obs])
     pk = max(range(len(sm)), key=lambda i: sm[i])
-    peak_date, peak_ndvi = obs[pk][0], obs[pk][1]
+    peak_date = plateau_centre([o[0] for o in obs], sm, pk, th.get("peak_plateau_drop", 0.04))
+    peak_ndvi = sm[pk]   # the smoothed value the crop-level gate below uses (a raw spike would overstate it)
     rec["peak_date"], rec["peak_ndvi"] = s(peak_date), round(peak_ndvi, 3)
     if sm[pk] < th["peak_ndvi_min"]:
         rec["notes"] = "never reached crop-level greenness (not paddy?)"
@@ -105,12 +137,7 @@ def run(data_dir: Path):
         if lag is not None:
             lags.append(lag)
 
-    if len(lags) >= 10:
-        lag = statistics.median(lags)
-        q = statistics.quantiles(lags, n=4)
-        half_spread = max(3, (q[2] - q[0]) / 2)
-    else:
-        lag, half_spread = th["default_peak_to_harvest_days"], 7
+    lag, half_spread = lag_window(lags, th["default_peak_to_harvest_days"])
     print(f"  regional peak->harvest lag: {lag:.1f} d (+/-{half_spread:.1f}) from {len(lags)} harvested fields")
 
     for rec in recs:
@@ -126,8 +153,7 @@ def run(data_dir: Path):
             start = max(start, as_of)
             rec["predicted_harvest_start"], rec["predicted_harvest_end"] = s(start), s(end)
             rec["sowing_deadline"] = s(add_days(start + (end - start) / 2, window))
-            days_out = (start - as_of).days
-            rec["stage"] = "ready" if days_out <= 3 else ("maturing" if days_out <= 14 else "growing")
+            rec["stage"], days_out = predicted_stage(start, end, as_of)
             rec["confidence"] = round(max(0.35, 0.75 - 0.02 * days_out), 2)
             rec["notes"] = rec["notes"] or f"peak {rec['peak_date']}; regional lag {lag:.0f} d"
 
