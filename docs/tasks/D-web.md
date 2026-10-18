@@ -1,20 +1,19 @@
-# Web app + pitch (`web/`) — whole team, starts by ~10 PM at the latest
+# Srikar — the web map (`web/`)
 
-Whoever finishes their part first scaffolds this; everyone joins after. Paste into your agent:
-"Read AGENTS.md and docs/tasks/D-web.md, then scaffold the web app against data/mock."
+Paste into your agent: "Read AGENTS.md, the spec in docs/superpowers/specs/2026-10-17-field-inspector-design.md,
+and docs/tasks/D-web.md, then scaffold the map against data/mock."
 
-Stack: Vite + vanilla JS (or React) + MapLibre GL. Serve `../data` as the public dir so `fetch('/mock/fields.geojson')` works;
-load `/out/...` if `out/status.json` exists, else `/mock/...` (show a MOCK/REAL badge). No live API calls.
+Owner: Srikar (confirmed by Ishaan, Oct 17). Stack: Vite + vanilla JS (or React) + MapLibre GL.
+Serve `../data` as the public dir so `fetch('/mock/fields.geojson')` works; load `/out/...` when `out/plans.json` exists,
+else `/mock/...` (show a MOCK/REAL badge). The map reads finished files only: no live Perceptron or Grok calls.
 
-Screens (one page):
-1. Map: Esri World Imagery basemap; satellite frame overlay from `frames/frames.json` (image source on `bounds`) with a date slider/play button;
-   fields colored by `status.json` stage (growing/maturing/ready/harvested/burned/sown); fire points from `fires.json`;
-   zone outlines; CHC markers + dispatch lines (CHC → zone, width = machines) from `routing.json.plan` for the selected day.
-   Use HTML markers for labels (no glyph server needed).
-2. Side panel: KPI row (fields monitored, % harvested, ha needing machines next 7 days, optimized vs baseline % served);
-   zone list sorted by `demand.json` machine_days_next_7d with Perceptron summary from `insights.json`;
-   "Tomorrow's dispatch" table; forecast rain strip from `weather.json`; scenario slider from `scenarios.json` if it exists.
-3. Click a field: NDVI sparkline (timeseries.json) with peak/harvest markers, stage, dates, burn evidence.
+What it shows (spec "Map" + "Testing"):
+1. Esri World Imagery basemap; the season time-lapse from `frames/frames.json` (image source on `bounds`) with a date slider/play.
+2. Field boundaries coloured by each farm's `flag` from `plans.json` (`fine` / `watch` / `act_now`).
+3. Click a farm: its full plan, all 8 checks with status, `detail`, `where`, `window`, plus `today` and `risks`.
+4. The officer route from `route.json`: numbered stops in order, with `action` and `why`.
+5. Delivery status per farm from `deliveries.json` (`pending` / `sent` / `failed`, per channel).
+6. Optional: NDVI sparkline from `timeseries.json` on the farm panel; FIRMS points from `fires.json`.
 
-Then: pitch deck + 2-minute demo script + backup screen recording by 7 AM.
-Pitch spine: problem (15-day window, scarce machines, burning) → existing tools are reactive/punitive → we forecast demand from orbit → dispatch plan → hero metric.
+Until Ishaan's `plans.json` / `route.json` land on main, build against a hand-written sample that follows the spec's Data section.
+Then: demo script + backup screen recording by 7 AM.

@@ -1,0 +1,30 @@
+name: Team digest
+
+on:
+  schedule:
+    - cron: "5 * * * *"   # every hour (UTC); GitHub may delay scheduled runs by a few minutes
+  workflow_dispatch:       # "Run workflow" button in the Actions tab posts a digest immediately
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install jsonschema shapely numpy pillow
+      - run: python scripts/digest.py --hours 1.1
+        env:
+          XAI_API_KEY: ${{ secrets.XAI_API_KEY }}
+          XAI_MODEL: grok-4.7
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          FORCE_DIGEST: ${{ github.event_name == 'workflow_dispatch' }}
