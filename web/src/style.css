@@ -3863,3 +3863,34 @@ a {
     bottom: 56px;
   }
 }
+
+/* ---- readable time-lapse buttons, spaced page links ---- */
+.btn-icon {
+  width: auto;
+  min-width: 44px;
+  min-height: 36px;
+  padding: 0 12px;
+  font-size: 0.8125rem;
+  white-space: nowrap;
+}
+
+#timelapse .btn {
+  white-space: nowrap;
+}
+
+.page-links {
+  gap: 24px;
+}
+
+.page-links a {
+  padding: 10px 0;
+}
+
+.page-bar nav,
+.page-bar .page-nav {
+  gap: 24px;
+}
+
+.topbar-right {
+  gap: 20px;
+}

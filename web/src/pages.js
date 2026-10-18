@@ -8,8 +8,10 @@ import { renderDeveloper } from "./views/developer.js";
 import { renderAdmin } from "./views/admin.js";
 import { renderData } from "./views/data.js";
 import { renderAccount } from "./views/account.js";
+import { renderRegions } from "./views/regions.js";
 
 const PAGES = {
+  regions: { title: "Regions", render: renderRegions },
   account: { title: "Account", render: renderAccount },
   developers: { title: "Developers", render: renderDeveloper },
   admin: { title: "Admin", render: renderAdmin },
