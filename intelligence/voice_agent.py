@@ -26,6 +26,7 @@ import queue_morning as q
 from providers import LANGUAGE_NAMES
 from common import product_name
 from tools import UNKNOWN_CALLER_MESSAGE, Tools, resolve_caller
+from voice_guard import VOICE_OF_THE_MORNING
 
 VOICES = ("ara", "rex", "sal", "eve", "leo")
 DEFAULT_VOICE = "ara"
@@ -72,7 +73,8 @@ def _instructions(row, data_dir, roster):
             pass
         scope = f"this caller's own farm, {row['farm_id']}"
         who = f"You are {product_name()}'s voice assistant speaking with farmer {row['name']} about farm {row['farm_id']}."
-    return "\n".join([who, RULES.format(language=language, scope=scope), "Today's facts (English; translate as you speak):", words])
+    return "\n".join([who, RULES.format(language=language, scope=scope), VOICE_OF_THE_MORNING,
+                      "Today's facts (English; translate as you speak):", words])
 
 
 def session_config(handle, data_dir, roster, voice=DEFAULT_VOICE):

@@ -31,7 +31,7 @@ const $ = (id) => document.getElementById(id);
 function showError(message) {
   const error = $("error");
   error.hidden = false;
-  error.replaceChildren(h("strong", {}, "Nothing to show."), message);
+  error.replaceChildren(h("strong", {}, "No plans to show."), message);
 }
 
 /** The badge says where the imagery and the farm group came from; with real outlines pending it toggles them. */
@@ -47,7 +47,7 @@ function setBadge(data, mapApi) {
     badge = button;
     const render = () => {
       const on = mapApi.realOutlinesOn();
-      badge.textContent = `Imagery: ${imagery} · Farms & plans: ${farms} · Real field outlines: ${on ? "shown" : "hidden"}`;
+      badge.textContent = `Imagery: ${imagery} / Farms and plans: ${farms} / Real field outlines: ${on ? "shown" : "hidden"}`;
       badge.setAttribute("aria-pressed", String(on));
       badge.title = on ? "Hide the real field outlines (plans pending)" : "Show the real field outlines (plans pending)";
     };
@@ -59,10 +59,10 @@ function setBadge(data, mapApi) {
     return;
   }
 
-  badge.textContent = standIn ? `Imagery: ${imagery} · Farms & plans: ${farms}` : "Live season";
+  badge.textContent = standIn ? `Imagery: ${imagery} / Farms and plans: ${farms}` : "Live season";
   badge.className = standIn ? "badge badge-standin" : "badge badge-live";
   badge.title = standIn ? "Stand-in season: at least one file came from data/mock" : "Every file came from data/out";
-  // run.json already says "Live · date" in its own badge; a second "Live season" pill next to it says nothing new.
+  // run.json already says "Live / date" in its own badge; a second "Live season" pill next to it says nothing new.
   badge.hidden = !standIn && Boolean(data.run?.mode);
 }
 
@@ -75,7 +75,7 @@ function setRunBadge(data) {
     return;
   }
   const live = String(run.mode).toLowerCase() === "live";
-  badge.textContent = `${live ? "Live" : "Replay"} · ${fmtDate(run.as_of)}`;
+  badge.textContent = `${live ? "Live" : "Replay"} / ${fmtDate(run.as_of)}`;
   badge.className = `badge ${live ? "badge-live" : "badge-replay"}`;
   badge.title = [
     live ? "Live run" : "Replay of an earlier run",
@@ -83,7 +83,7 @@ function setRunBadge(data) {
     run.generated_at ? `generated ${run.generated_at}` : null,
   ]
     .filter(Boolean)
-    .join(" · ");
+    .join(" / ");
   badge.hidden = false;
 }
 
@@ -93,7 +93,7 @@ function setIntroStats(data) {
   let actNow = 0;
   for (const plan of data.plans.plans) if (plan.flag === "act_now") actNow += 1;
   const standIn = data.sources.plans === "out" ? "" : " (stand-in farms)";
-  $("intro-stats").textContent = `Story County, Iowa · latest clear pass ${MONTHS[Number(month) - 1]} ${Number(day)} · ${data.plans.plans.length} farms · ${actNow} act now${standIn}`;
+  $("intro-stats").textContent = `Story County, Iowa / latest clear pass ${MONTHS[Number(month) - 1]} ${Number(day)} / ${data.plans.plans.length} farms / ${actNow} act now${standIn}`;
 }
 
 async function start() {
@@ -103,7 +103,7 @@ async function start() {
     signup.href = `#${EXPLAINER_ID}`;
     signup.removeAttribute("target");
     signup.removeAttribute("rel");
-    signup.title = "How a farmer gets the morning plan";
+    signup.title = "The morning plan, step by step";
   }
 
   const headline = $("headline");
@@ -165,6 +165,7 @@ async function start() {
 
   const mapApi = createMap({ container: "map", data, onSelect: selectFarm, onHover: showTooltip });
   const { map } = mapApi;
+  $("map").__map = map; // the season map, for the browser checks in the audit
   setBadge(data, mapApi);
   const timelapse = createTimelapse({
     data,
@@ -368,7 +369,7 @@ async function start() {
     const props = data.featuresById.get(id)?.properties || {};
     tooltip.replaceChildren(
       h("div", { class: "tip-head" }, h("span", {}, id), chip(plan?.flag ?? "none")),
-      h("div", { class: "tip-meta" }, `${CROP_LABEL[props.crop] || titleCase(props.crop)} · ${fmtHa(props.area_ha)}${plan ? "" : ` · ${FLAG_LABEL.none}`}`),
+      h("div", { class: "tip-meta" }, `${CROP_LABEL[props.crop] || titleCase(props.crop)} / ${fmtHa(props.area_ha)}${plan ? "" : ` / ${FLAG_LABEL.none}`}`),
       plan ? h("div", { class: "tip-today" }, plan.today) : null,
     );
     tooltip.hidden = false;
@@ -397,7 +398,7 @@ async function start() {
 
   // Everything below is the orbit intro and its hand-off to the imagery map.
   const cardBody =
-    "Sentinel-2 passes over this place every ~5 days, so Overfield can inspect farms here the same way. Our live demo landscape is Story County, Iowa: real imagery, real farm plans.";
+    "Sentinel-2 passes over this place every 2 to 5 days, the same revisit as over Iowa. The live county is Story County, Iowa, with its imagery and farm plans.";
   let moveToken = 0;
   let toastTimer = 0;
   let revealTimer = 0;
@@ -470,9 +471,10 @@ async function start() {
     } else {
       showFarmChrome(false);
       map.jumpTo({ center: [detail.lng, detail.lat], zoom: 3 });
+      setRegionOverlay(detail.overlay || null);
       map.flyTo({
         center: [detail.lng, detail.lat],
-        zoom: 11,
+        zoom: detail.zoom || 11,
         duration: reducedMotion ? 0 : 2200,
         essential: true,
       });
@@ -480,7 +482,7 @@ async function start() {
       const reveal = () => {
         window.clearTimeout(revealTimer);
         $("place-title").textContent = title;
-        $("place-body").textContent = cardBody;
+        $("place-body").textContent = detail.body || cardBody;
         card.hidden = false;
       };
       if (reducedMotion) reveal();
@@ -495,8 +497,38 @@ async function start() {
     }, 500);
   }
 
+  /** A region field-pattern image over its 5.5 km box (data/global/overlays), or none. It is a plain image placed
+   *  over the map and re-projected on every move, so it never depends on the map style. */
+  let overlayImg = null;
+  let overlayBox = null;
+  function placeRegionOverlay() {
+    if (!overlayImg || !overlayBox) return;
+    const [w, s, e, n] = overlayBox;
+    const a = map.project([w, n]);
+    const b = map.project([e, s]);
+    overlayImg.style.left = `${a.x}px`;
+    overlayImg.style.top = `${a.y}px`;
+    overlayImg.style.width = `${Math.max(1, b.x - a.x)}px`;
+    overlayImg.style.height = `${Math.max(1, b.y - a.y)}px`;
+  }
+  function setRegionOverlay(overlay) {
+    if (overlayImg) {
+      overlayImg.remove();
+      overlayImg = null;
+      overlayBox = null;
+      map.off("move", placeRegionOverlay);
+    }
+    if (!overlay) return;
+    overlayBox = overlay.bbox;
+    overlayImg = h("img", { class: "region-overlay", src: `global/overlays/${overlay.id}.png`, alt: "" });
+    map.getContainer().append(overlayImg);
+    map.on("move", placeRegionOverlay);
+    placeRegionOverlay();
+  }
+
   function backToOrbit() {
     if (!globe) return;
+    setRegionOverlay(null);
     card.hidden = true;
     moveToken += 1;
     window.clearTimeout(revealTimer);
@@ -516,7 +548,11 @@ async function start() {
       onBack: hideRegion,
       onMap: () => {
         hideRegion();
-        handoff({ live: false, lat: region.lat, lng: region.lon, name: `${region.name}, ${region.country}` });
+        handoff({
+          live: false, lat: region.lat, lng: region.lon, name: `${region.name}, ${region.country}`, zoom: 13.2,
+          body: region.headline || "",
+          overlay: Array.isArray(region.bbox) && region.bbox.length === 4 ? { id: region.id, bbox: region.bbox } : null,
+        });
       },
     }));
     $("earth-copy").hidden = true;

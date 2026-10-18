@@ -3,7 +3,7 @@ import { SEVERITY } from "./format.js";
 // The four farm files are one group: real fields joined to mock plans would show the wrong flags,
 // because real and mock farm ids overlap (F0001...) but are different farms. The group comes from
 // data/out only when BOTH fields.geojson and plans.json are real JSON there; otherwise all four come
-// from data/mock, and a missing route or deliveries file inside a real group simply means "none yet".
+// from data/mock, and a missing route or deliveries file inside a real group means "none yet".
 // Every other file is tried in data/out first and falls back to data/mock on its own, so a
 // half-finished real season still renders. `?base=/mock` (or any folder under data/) pins every file
 // to one base with no fallback, which is how the missing-optional-files path gets exercised.

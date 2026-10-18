@@ -6,8 +6,7 @@ import { h } from "../dom.js";
  * The file's thumbnails are stage-coloured illustrations, not imagery, so the card leaves them out.
  */
 export const HONESTY_LINE = "Region-level preview: one box about 5 km across at the region centre. The canopy curve is the "
-  + "Iowa season shape adjusted for this region's hemisphere and crop, not a new satellite read. An account here gets "
-  + "real reads of your own fields.";
+  + "Iowa season shape adjusted for this region's hemisphere and crop, not a new satellite read.";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
@@ -51,7 +50,7 @@ export function regionLines(region) {
 }
 
 export function regionPill(region) {
-  return `Region watch${region.country ? ` · ${region.country}` : ""}`;
+  return `Region watch${region.country ? ` / ${region.country}` : ""}`;
 }
 
 /**
@@ -62,10 +61,8 @@ export function regionPill(region) {
 export function renderRegionCard(region, { onBack = null, onMap = null } = {}) {
   const lines = regionLines(region);
   return h("div", { class: "region-card" },
-    h("div", { class: "region-head" },
-      onBack ? h("button", { class: "region-back", type: "button", onclick: onBack }, "← Back to Earth") : null,
-      h("span", { class: "world-pill is-open" }, regionPill(region))),
     h("h1", {}, region.name || region.id),
+    h("p", { class: "region-kind" }, regionPill(region)),
     region.headline ? h("p", { class: "tagline" }, region.headline) : null,
     lines.length ? h("dl", { class: "region-lines" }, ...lines.flatMap((l) => [
       h("dt", {}, l.label),
@@ -73,7 +70,7 @@ export function renderRegionCard(region, { onBack = null, onMap = null } = {}) {
     ])) : null,
     h("p", { class: "region-note" }, HONESTY_LINE),
     h("div", { class: "region-actions" },
-      h("a", { class: "world-open", href: "#account" }, "Farm here? Create an account"),
-      onMap ? h("button", { class: "region-back", type: "button", onclick: onMap }, "Open the map here") : null),
+      onMap ? h("button", { class: "world-open", type: "button", onclick: onMap }, "Open the map here") : null,
+      onBack ? h("button", { class: "region-back", type: "button", onclick: onBack }, "Return to the globe") : null),
   );
 }

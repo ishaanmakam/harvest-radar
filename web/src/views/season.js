@@ -157,7 +157,7 @@ function usdaSection(usda) {
   return h(
     "div",
     { class: "section" },
-    h("div", { class: "section-title" }, "Against USDA crop progress"),
+    h("div", { class: "section-title" }, "USDA crop progress"),
     standIn ? h("div", { class: "note note-watch", style: { marginBottom: "8px" } }, "Stand-in USDA rows shaped like a QuickStats answer, not published figures.") : null,
     rows.length
       ? h(
@@ -225,7 +225,7 @@ export function renderSeason(el, ctx) {
       "div",
       { class: "section" },
       h("h2", { class: "panel-title" }, "The season so far"),
-      h("p", { class: "muted small" }, `Analytics as of ${fmtDate(analytics.as_of || today, "long")}${land.latest_pass ? ` · latest pass ${fmtDate(land.latest_pass)}` : ""}.`),
+      h("p", { class: "muted small" }, `Analytics as of ${fmtDate(analytics.as_of || today, "long")}.${land.latest_pass ? ` Latest pass ${fmtDate(land.latest_pass)}.` : ""}`),
     ),
   ];
 
@@ -236,9 +236,9 @@ export function renderSeason(el, ctx) {
   if (land.pct_harvested_area != null) tiles.push(stat("Harvested", fmtPct(land.pct_harvested_area), land.harvested_ha != null ? `${fmtHa(land.harvested_ha)} of area` : null));
   if (land.standing_ha != null) {
     const stages = land.standing_by_stage && typeof land.standing_by_stage === "object" ? Object.entries(land.standing_by_stage).map(([k, v]) => `${titleCase(k).toLowerCase()} ${fmtHa(v)}`).join(", ") : null;
-    tiles.push(stat("Still standing", fmtHa(land.standing_ha), stages));
+    tiles.push(stat("Standing fields", fmtHa(land.standing_ha), stages));
   }
-  if (land.flags) tiles.push(stat("Today", `${fmtNum(land.flags.act_now ?? 0)} act now`, `${fmtNum(land.flags.watch ?? 0)} watch · ${fmtNum(land.flags.fine ?? 0)} fine`));
+  if (land.flags) tiles.push(stat("Today", `${fmtNum(land.flags.act_now ?? 0)} act now`, `${fmtNum(land.flags.watch ?? 0)} watch / ${fmtNum(land.flags.fine ?? 0)} fine`));
   if (tiles.length) sections.push(h("div", { class: "section" }, h("div", { class: "milestones" }, ...tiles)));
 
   const progress = land.harvest_progress && typeof land.harvest_progress === "object" ? land.harvest_progress : null;
@@ -299,7 +299,7 @@ export function renderSeason(el, ctx) {
       h(
         "div",
         { class: "section" },
-        h("div", { class: "section-title" }, "Combining the next two weeks"),
+        h("div", { class: "section-title" }, "Combining the two weeks ahead"),
         h("p", { class: "muted small", style: { marginBottom: "6px" } }, "Machine-days of combining the standing crop asks for each day, against the simulated depot capacity."),
         demand,
       ),
@@ -339,7 +339,7 @@ export function renderSeason(el, ctx) {
       h(
         "div",
         { class: "section" },
-        h("div", { class: "section-title" }, "Also in the analytics"),
+        h("div", { class: "section-title" }, "Other analytics"),
         h("dl", { class: "kv" }, ...extras.flatMap(([k, v]) => [h("dt", {}, k), h("dd", {}, v)])),
       ),
     );

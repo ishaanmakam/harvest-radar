@@ -398,7 +398,7 @@ def main():
         factors.append({"id": fid, "name": f["name"], "from": f["from"], "dataset": f["dataset"], "why": f["why"], "go": f["go"], "watch": f["watch"],
                         "no_go": f["no_go"], "goodness_rule": f["goodness_rule"], "weight": round(weights[fid], 3)})
     method = (f"Every {CELL} degree cell between {LAT0} and {LAT1} degrees latitude (about 7 km) gets four checks from public orbital data: ice within "
-              "reach and low ground from SpaceX's stated criteria, plume-safe ground and science reach from us. Each check is go, watch or no-go with a "
+              "reach, low ground, plume-safe ground and science reach, all four set by us from the public record. Each check is go, watch or no-go with a "
               "0 to 1 goodness; a cell's status is its worst check, the same rule as a farm's flag on Earth; the score is the weighted mean of goodness "
               f"({', '.join(f'{k} {v:.2f}' for k, v in weights.items())}). Sunlight, latitude and landing-scale rock hazards are shown but not scored: "
               "SpaceX screens for them and HiRISE is the right tool. Sites are the best go cells at least 300 km apart.")

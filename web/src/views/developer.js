@@ -9,7 +9,7 @@ const ENDPOINTS = [
   ["GET /v1/plans", "Every farm's plan for the latest morning (the published plans.json)."],
   ["GET /v1/farms/{farm_id}/plan", "One farm's plan."],
   ["GET /v1/route", "The officer route."],
-  ["GET /v1/landscape", "The landscape analytics block and the forecast source."],
+  ["GET /v1/landscape", "The county analytics block and the forecast source."],
   ["GET /v1/sources", "The data sources list."],
 ];
 const ATTRIBUTION = "Overfield (ishaanmakam/harvest-radar). Imagery: Copernicus Sentinel-2. Weather: Open-Meteo. Yields: USDA NASS.";
@@ -27,7 +27,7 @@ const TERMS = [
 function docs() {
   const base = API_BASE || API_BASE_PLACEHOLDER;
   const envelope = JSON.stringify(
-    { served_at: "2026-10-18T11:30:00.000Z", as_of: "2026-10-18", attribution: ATTRIBUTION, licence: LICENCE, data: { "...": "the plan, route, landscape block or sources list" } },
+    { served_at: "2026-10-18T11:30:00.000Z", as_of: "2026-10-18", attribution: ATTRIBUTION, licence: LICENCE, data: { "fields": "the plan, route, county block or sources list" } },
     null,
     2,
   );
@@ -47,7 +47,7 @@ function docs() {
         h("code", { class: "inline-code" }, base),
         API_BASE ? null : h("span", { class: "muted" }, " (shown as a placeholder until the backend is deployed)"),
       ),
-      h("p", { class: "small muted", style: { marginTop: "4px" } }, "Send the key as ", h("code", { class: "inline-code" }, "Authorization: Bearer ovf_..."), " or as ", h("code", { class: "inline-code" }, "?key=ovf_..."), "."),
+      h("p", { class: "small muted", style: { marginTop: "4px" } }, "Send the key as ", h("code", { class: "inline-code" }, "Authorization: Bearer ovf_<key>"), " or as ", h("code", { class: "inline-code" }, "?key=ovf_<key>"), "."),
     ),
     h(
       "div",
@@ -68,7 +68,7 @@ function docs() {
       "div",
       { class: "section" },
       h("div", { class: "section-title" }, "Example"),
-      codeBlock(`curl -H "Authorization: Bearer ovf_..." ${base}/v1/farms/F0001/plan`),
+      codeBlock(`curl -H "Authorization: Bearer ovf_<key>" ${base}/v1/farms/F0001/plan`),
       h("p", { class: "small muted", style: { margin: "8px 0 6px" } }, "Every response is the same envelope: when the data was served, which morning it describes, how to attribute it, and the licence."),
       codeBlock(envelope),
     ),
@@ -83,7 +83,7 @@ function docs() {
         h("li", {}, "429 past the key's daily limit: 1000 calls by default, counted over the last 24 hours."),
         h("li", {}, "404 for an unknown farm or endpoint; 503 while a file is not published yet."),
         h("li", {}, "GET only. Responses are cached for up to five minutes. CORS is open, so a browser can call it."),
-        h("li", {}, "At most five live keys per account."),
+        h("li", {}, "At most five live keys per holder."),
       ),
     ),
     h(
@@ -102,7 +102,7 @@ async function loadKeys() {
 }
 
 function keysTable(keys, calls, onRevoke) {
-  if (!keys.length) return h("div", { class: "empty" }, "No keys yet.");
+  if (!keys.length) return h("div", { class: "empty" }, "You have not created a key.");
   return h(
     "div",
     { class: "table-wrap" },
@@ -118,7 +118,7 @@ function keysTable(keys, calls, onRevoke) {
             "tr",
             { class: k.revoked_at ? "is-revoked" : null },
             h("td", {}, k.name),
-            h("td", { class: "mono" }, `${k.key_prefix}...`),
+            h("td", { class: "mono" }, k.key_prefix),
             h("td", { class: "muted" }, fmtDateTime(k.created_at)),
             h("td", { class: "muted" }, k.last_used_at ? fmtDateTime(k.last_used_at) : "never"),
             h("td", { class: "num" }, fmtNum(calls.get(k.id) || 0)),
@@ -127,7 +127,7 @@ function keysTable(keys, calls, onRevoke) {
               {},
               k.revoked_at
                 ? h("span", { class: "muted small" }, `revoked ${fmtDateTime(k.revoked_at)}`)
-                : h("button", { class: "btn btn-link", type: "button", onclick: () => onRevoke(k) }, "Revoke"),
+                : h("button", { class: "btn btn-link", type: "button", onclick: () => onRevoke(k) }, "Revoke key"),
             ),
           ),
         ),
@@ -153,7 +153,7 @@ function keysSection(ctx, el) {
     return { section, destroy() {} };
   }
   if (!auth.user) {
-    body.append(signInPrompt(ctx, "accept the terms and create a key"));
+    body.append(h("p", { class: "small muted" }, "Keys are issued by the Overfield team for now."));
     return { section, destroy() {} };
   }
 
@@ -180,7 +180,7 @@ function keysSection(ctx, el) {
               type: "button",
               onclick: async (event) => {
                 event.currentTarget.disabled = true;
-                status.set("Recording your acceptance...");
+                status.set("Recording your acceptance.");
                 try {
                   await acceptTerms();
                   status.set("");
@@ -190,7 +190,7 @@ function keysSection(ctx, el) {
                   event.currentTarget.disabled = false;
                 }
               },
-            }, "I agree to the developer terms"),
+            }, "Accept the developer terms"),
           ),
           status.el,
         ),
@@ -207,7 +207,7 @@ function keysSection(ctx, el) {
         onsubmit: async (event) => {
           event.preventDefault();
           createButton.disabled = true;
-          status.set("Creating the key...");
+          status.set("Creating the key.");
           try {
             newKey = await issueApiKey(nameInput.value);
             status.set("");
@@ -231,14 +231,14 @@ function keysSection(ctx, el) {
             "div",
             { class: "key-box" },
             h("div", { class: "section-title" }, "Your new key"),
-            h("div", { class: "row row-wrap" }, h("code", { class: "key-value" }, shown), copyButton(() => shown)),
+            h("div", { class: "row row-wrap" }, h("code", { class: "key-value" }, shown), copyButton(() => shown, "Copy the key")),
             h("p", { class: "small", style: { marginTop: "6px" } }, h("strong", {}, "Copy it now. "), "It will not be shown again; only its prefix stays visible here."),
           )
         : null,
-      h("div", { class: "card", style: { marginTop: "10px" } }, h("div", { class: "section-title" }, "Create a key"), createForm, status.el),
+      h("div", { class: "card", style: { marginTop: "10px" } }, h("div", { class: "section-title" }, "New key"), createForm, status.el),
       h("div", { style: { marginTop: "12px" } },
         keysTable(state.keys, state.calls, async (k) => {
-          status.set(`Revoking ${k.key_prefix}...`);
+          status.set(`Revoking ${k.key_prefix}.`);
           try {
             await revokeApiKey(k.id);
             status.set("");

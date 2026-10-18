@@ -16,7 +16,7 @@ const FACTOR_LINE = {
   low_elevation: "Low ground: more atmosphere to slow the ship.",
   plume_safe_ground: "Plume-safe ground: firm soil the engines will not dig out.",
   science_reach: "Science reach: more kinds of rock within a rover's range.",
-  magnetic_shelter: "Magnetic shelter: a little local radiation cover from magnetized crust.",
+  magnetic_shelter: "Magnetic shelter: radiation cover from magnetized crust, strength not scored.",
 };
 
 function statusChip(status, large = false) {
@@ -69,7 +69,7 @@ export function createMarsView({ host, onBack }) {
 
   function emptyState() {
     dockBody.replaceChildren(
-      h("div", { class: "empty" }, "Mars data not built yet. Run ", h("code", { class: "inline-code" }, "python pipeline/mars/run_all.py"), "."),
+      h("div", { class: "empty" }, "The Mars data has not been built. Run ", h("code", { class: "inline-code" }, "python pipeline/mars/run_all.py"), "."),
     );
   }
 
@@ -136,20 +136,20 @@ export function createMarsView({ host, onBack }) {
   // ---------- dock ----------
   function factorChips() {
     return h("div", { class: "mars-factors" }, ...doc.factors.map((f) =>
-      h("span", { class: `mars-factor-chip is-${f.from}`, title: f.why }, h("b", {}, f.from === "spacex" ? "SpaceX" : "Ours"), f.name)));
+      h("span", { class: "mars-factor-chip", title: f.why }, f.name)));
   }
 
   function siteRow(s) {
     return h("button", { class: `mars-row${selected === s.id ? " is-active" : ""}`, type: "button", "data-id": s.id, onclick: () => select(s.id) },
       h("span", { class: "mars-rank" }, String(s.rank)),
       h("span", { class: "mars-row-main" }, h("strong", {}, s.id), s.region ? h("span", { class: "mars-region" }, ` ${s.region}`) : null, h("span", { class: "muted small" }, ` ${coords(s)}`), h("div", { class: "small" }, s.reason)),
-      h("span", { class: "mars-row-side" }, statusChip(s.status), h("span", { class: "mono small" }, s.score.toFixed(2))),
+      h("span", { class: "mars-row-side" }, statusChip(s.status), h("span", { class: "mono small" }, `score ${s.score.toFixed(2)}`)),
     );
   }
 
   function candidateRow(c) {
     return h("button", { class: `mars-row${selected === c.id ? " is-active" : ""}`, type: "button", "data-id": c.id, onclick: () => select(c.id) },
-      h("span", { class: "mars-rank is-spacex" }, "○"),
+      h("span", { class: "mars-rank is-spacex" }, ""),
       h("span", { class: "mars-row-main" }, h("strong", {}, c.id), h("span", { class: "muted small" }, ` ${c.region}`),
         h("div", { class: "small" }, c.missing ? "Page could not be read; listed as missing." : `Scores better than ${fmtNum(c.percentile)} percent of scored cells.`)),
       h("span", { class: "mars-row-side" }, c.missing ? statusChip("no_data") : statusChip(c.status), c.score != null ? h("span", { class: "mono small" }, c.score.toFixed(2)) : null),
@@ -158,7 +158,7 @@ export function createMarsView({ host, onBack }) {
 
   function rules() {
     return h("details", { class: "mars-rules" },
-      h("summary", {}, "How we rank"),
+      h("summary", {}, "Ranking rules"),
       h("p", { class: "small muted" }, doc.method),
       h("table", { class: "table mars-rules-table" },
         h("thead", {}, h("tr", {}, h("th", {}, "Check"), h("th", {}, "Go"), h("th", {}, "Watch"), h("th", {}, "No-go"), h("th", {}, "Weight"))),
@@ -176,14 +176,14 @@ export function createMarsView({ host, onBack }) {
     const scoreToggle = h("input", { type: "checkbox", checked: true, onchange: (e) => setScoreVisible(e.target.checked) });
     dockBody.replaceChildren(
       h("div", { class: "section" },
-        h("p", { class: "small" }, "Four checks on every cell. From SpaceX's stated criteria: ice within reach and low ground. From us: plume-safe ground and science reach. Sunlight and landing-scale rocks are shown, not scored."),
+        h("p", { class: "small" }, "Four checks on every cell: ice within reach, low ground, plume-safe ground and science reach. Sunlight and landing-scale rocks are shown, not scored."),
         factorChips(),
         h("label", { class: "check-row small", style: { marginTop: "8px" } }, scoreToggle, h("span", {}, "Show site scores on the map")),
       ),
-      h("div", { class: "section" }, h("div", { class: "section-title" }, "Our top ten", h("span", { class: "count" }, String(doc.sites.length))),
+      h("div", { class: "section" }, h("div", { class: "section-title" }, "Top ten sites"),
         h("div", { class: "mars-list" }, ...doc.sites.map((s) => { list.push(s.id); return siteRow(s); }))),
       h("div", { class: "section" }, h("div", { class: "section-title" }, "SpaceX's 2019 sites"),
-        h("p", { class: "small" }, "SpaceX scouted six sites in 2019. We graded them on what they don't publicly screen for."),
+        h("p", { class: "small" }, "SpaceX scouted six sites in 2019. We graded them on our four checks."),
         h("div", { class: "mars-list" }, ...doc.spacex_candidates.map((c) => { if (!c.missing) list.push(c.id); return candidateRow(c); })),
         h("p", { class: "small", style: { marginTop: "8px" } }, doc.spacex_summary)),
       h("div", { class: "section" }, rules()),
@@ -197,7 +197,7 @@ export function createMarsView({ host, onBack }) {
       return h("div", { class: "mars-check" },
         statusChip(c.status),
         h("div", { class: "mars-check-main" },
-          h("strong", {}, f?.name || c.factor), h("span", { class: `mars-from is-${f?.from || "ours"}` }, f?.from === "spacex" ? "SpaceX" : "ours"),
+          h("strong", {}, f?.name || c.factor),
           h("div", { class: "small" }, c.detail),
           h("div", { class: "muted small" }, FACTOR_LINE[c.factor] || "")),
         h("span", { class: "mono small" }, c.goodness == null ? "" : c.goodness.toFixed(2)));
@@ -217,7 +217,7 @@ export function createMarsView({ host, onBack }) {
   function geologyBlock(p) {
     const g = p.geology || {};
     return h("div", { class: "section" }, h("div", { class: "section-title" }, "Geology"),
-      h("p", { class: "small" }, g.unit ? `Unit ${g.unit} (${g.age || "age unknown"}) at the site; ${g.units_within_100km ?? "?"} distinct units within about 100 km; ${g.oldest_within_100km || "age mix unknown"}.` : "Geology layer not available for this site."));
+      h("p", { class: "small" }, g.unit ? `Unit ${g.unit} (${g.age || "age unknown"}) at the site; ${g.units_within_100km ?? "an unknown number of"} distinct units within about 100 km; ${g.oldest_within_100km || "age mix unknown"}.` : "Geology layer not available for this site."));
   }
 
   function thumb(p) {
@@ -236,14 +236,14 @@ export function createMarsView({ host, onBack }) {
     const isCand = Boolean(cand);
     drawerBody.replaceChildren(
       h("div", { class: "row", style: { justifyContent: "space-between", alignItems: "center" } },
-        h("div", {}, h("h2", { class: "panel-title" }, isCand ? cand.id : `${site.id} · rank ${site.rank}`),
-          h("p", { class: "muted small", style: { margin: "2px 0 0" } }, isCand ? `${cand.name || "HiRISE candidate"} · ${cand.region}${cand.acquired ? ` · imaged ${cand.acquired}` : ""}` : `${coords(site)}${site.region ? ` · ${site.region}` : ""}`)),
-        h("button", { class: "btn btn-ghost", type: "button", "aria-label": "Close", onclick: closeDrawer }, "×")),
+        h("div", {}, h("h2", { class: "panel-title" }, isCand ? cand.id : `${site.id} / rank ${site.rank}`),
+          h("p", { class: "muted small", style: { margin: "2px 0 0" } }, isCand ? `${cand.name || "HiRISE candidate"} / ${cand.region}${cand.acquired ? ` / imaged ${cand.acquired}` : ""}` : `${coords(site)}${site.region ? ` / ${site.region}` : ""}`)),
+        h("button", { class: "btn btn-ghost", type: "button", "aria-label": "Close site details", onclick: closeDrawer }, "×")),
       h("div", { class: "row row-wrap", style: { gap: "8px", margin: "10px 0" } }, statusChip(p.status, true),
         h("span", { class: "mono" }, `score ${p.score != null ? p.score.toFixed(3) : "n/a"}`),
-        isCand && cand.percentile != null ? h("span", { class: "muted small" }, `better than ${fmtNum(cand.percentile)}% of scored cells`) : null,
+        isCand && cand.percentile != null ? h("span", { class: "muted small" }, `better than ${fmtNum(cand.percentile)} percent of scored cells`) : null,
         site?.nearest_spacex ? h("span", { class: "muted small" }, `${fmtNum(site.nearest_spacex.km)} km from ${site.nearest_spacex.id}`) : null),
-      isCand ? h("p", { class: "small" }, coords(cand), " · ", h("a", { href: cand.url, target: "_blank", rel: "noopener" }, "HiRISE page")) : h("p", { class: "small" }, site.reason),
+      isCand ? h("p", { class: "small" }, coords(cand), " / ", h("a", { href: cand.url, target: "_blank", rel: "noopener" }, "HiRISE page")) : h("p", { class: "small" }, site.reason),
       thumb(p),
       h("div", { class: "section" }, h("div", { class: "section-title" }, "The four checks"), checksTable(p)),
       shownNotScored(p),
@@ -252,7 +252,7 @@ export function createMarsView({ host, onBack }) {
         h("div", { class: "row row-wrap", style: { gap: "8px", alignItems: "center" } }, statusChip(cand.best_within_200km.status),
           h("span", { class: "mono small" }, `score ${cand.best_within_200km.score.toFixed(3)}`),
           h("span", { class: "small" }, `${fmtNum(cand.best_within_200km.km)} km ${cand.best_within_200km.bearing}`),
-          h("button", { class: "btn btn-primary", type: "button", onclick: () => map?.flyTo({ center: [cand.best_within_200km.lon, cand.best_within_200km.lat], zoom: 5.5 }) }, "Fly there"))) : null,
+          h("button", { class: "btn btn-primary", type: "button", onclick: () => map?.flyTo({ center: [cand.best_within_200km.lon, cand.best_within_200km.lat], zoom: 5.5 }) }, "Open that cell"))) : null,
     );
     drawer.hidden = false;
   }
@@ -290,7 +290,7 @@ export function createMarsView({ host, onBack }) {
       host.hidden = false;
       document.body.classList.add("has-mars");
       document.addEventListener("keydown", onKey);
-      dockBody.replaceChildren(h("div", { class: "empty" }, "Loading the Mars screen…"));
+      dockBody.replaceChildren(h("div", { class: "empty" }, "Loading the Mars screen."));
       const data = await loadSites();
       if (!open) return;
       if (!data) {

@@ -37,7 +37,7 @@ export function createTimelapse({ data, store, mapApi, els }) {
     els.date.textContent = fmtDate(current.date, "long");
     const parts = [`pass ${index + 1} of ${frames.length}`];
     if (current.clear_frac != null) parts.push(`${fmtPct(current.clear_frac * 100)} clear`);
-    els.clear.textContent = parts.join(" · ");
+    els.clear.textContent = parts.join(" / ");
     els.slider.value = String(index);
     els.slider.setAttribute("aria-valuetext", fmtDate(current.date, "long"));
     els.opacity.value = String(frame.opacity);

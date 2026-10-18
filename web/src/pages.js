@@ -4,20 +4,18 @@
 import { h } from "./dom.js";
 import { configured, myProfile, onAuth, signOut as backendSignOut } from "./backend.js";
 import { isStaff } from "./ui.js";
-import { renderAccount } from "./views/account.js";
 import { renderDeveloper } from "./views/developer.js";
 import { renderAdmin } from "./views/admin.js";
 import { renderData } from "./views/data.js";
 
 const PAGES = {
-  account: { title: "Account", render: renderAccount },
   developers: { title: "Developers", render: renderDeveloper },
   admin: { title: "Admin", render: renderAdmin },
   data: { title: "Data sources", render: renderData },
 };
 const AFTER_SIGN_IN = "overfield.after-sign-in";
 
-/** The page a hash names, or null: "#account" -> "account"; "#access_token=..." and "#dock-body" -> null. */
+/** The page a hash names, or null: "#data" names "data"; "#access_token=" and "#dock-body" name nothing. */
 export function pageFromHash(hash = window.location.hash) {
   const name = String(hash || "")
     .replace(/^#\/?/, "")
@@ -98,7 +96,6 @@ export function initPages({ dataPromise }) {
     for (const slot of slots) {
       if (!auth.user) {
         slot.replaceChildren(
-          h("button", { class: "btn btn-ghost auth-btn", type: "button", onclick: () => go("account") }, "Sign in"),
         );
         continue;
       }
@@ -222,7 +219,7 @@ export function initPages({ dataPromise }) {
     page.hidden = false;
     document.body.classList.add("has-page");
     setCovered(true);
-    document.title = `${def.title} · ${baseTitle}`;
+    document.title = `${def.title} / ${baseTitle}`;
     title.textContent = def.title;
     for (const a of navLinks) {
       if (a.getAttribute("href") === `#${name}`) a.setAttribute("aria-current", "page");

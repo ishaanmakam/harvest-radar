@@ -28,10 +28,10 @@ function countyCard(crop, model) {
   return h(
     "div",
     { class: "outlook-card county-card" },
-    h("div", { class: "label" }, `${CROP_LABEL[crop] || titleCase(crop)} · ${model.county || "county"}`),
+    h("div", { class: "label" }, `${CROP_LABEL[crop] || titleCase(crop)} / ${model.county || "county"}`),
     h("div", { class: "value value-xl" }, model.estimate_bu_per_acre != null ? `${fmtNum(model.estimate_bu_per_acre)} bu/acre` : "no estimate"),
     model.interval_bu_per_acre ? h("div", { class: "sub" }, `90 percent band ${band(model.interval_bu_per_acre)} bu/acre`) : null,
-    parts.length ? h("div", { class: "sub" }, parts.join(" · ")) : null,
+    parts.length ? h("div", { class: "sub" }, parts.join(" / ")) : null,
   );
 }
 
@@ -56,7 +56,7 @@ function yieldLegend(data) {
       h(
         "div",
         { style: { marginBottom: "8px" } },
-        h("div", { class: "small", style: { fontWeight: 600, marginBottom: "2px" } }, `${CROP_LABEL[crop] || titleCase(crop)}`, h("span", { class: "muted" }, ` · ${bins.count} fields`)),
+        h("div", { class: "small", style: { fontWeight: 600, marginBottom: "2px" } }, `${CROP_LABEL[crop] || titleCase(crop)}`, h("span", { class: "muted" }, ` / ${bins.count} fields`)),
         h(
           "div",
           { class: "ramp" },
@@ -83,7 +83,7 @@ function totalsTable(data) {
     h(
       "table",
       { class: "table" },
-      h("thead", {}, h("tr", {}, h("th", {}, "Crop"), h("th", {}, "Fields"), h("th", {}, "Area"), h("th", {}, "Reference mean"), h("th", {}, "Calibrated mean"), h("th", {}, "County model"), h("th", {}, "Production"))),
+      h("thead", {}, h("tr", {}, h("th", {}, "Crop"), h("th", {}, "Fields"), h("th", {}, "Area"), h("th", {}, "Reference mean"), h("th", {}, "Calibrated mean"), h("th", {}, "County estimate"), h("th", {}, "Production"))),
       h(
         "tbody",
         {},
@@ -121,7 +121,7 @@ export function renderYield(el, ctx) {
   ];
 
   if (!model && !analytics) {
-    sections.push(h("div", { class: "note note-info" }, "The yield layer has not run on this dataset: no county model and no calibrated field values yet."));
+    sections.push(h("div", { class: "note note-info" }, "The yield layer has not run on this dataset: no county estimate and no calibrated field values yet."));
     el.replaceChildren(...sections);
     return { update() {} };
   }
@@ -151,7 +151,7 @@ export function renderYield(el, ctx) {
     }
   } else {
     sections.push(
-      h("div", { class: "note note-info" }, "yield_model.json is not in this dataset, so there is no county model: the field values below are reference-only indices."),
+      h("div", { class: "note note-info" }, "yield_model.json is not in this dataset, so there is no county estimate. The field values below are reference-only indices."),
     );
   }
 
@@ -171,10 +171,10 @@ export function renderYield(el, ctx) {
       h(
         "div",
         { class: "section" },
-        h("div", { class: "section-title" }, "Landscape totals"),
+        h("div", { class: "section-title" }, "County totals"),
         totals,
         Array.isArray(analytics?.landscape?.yield?.notes) && analytics.landscape.yield.notes.length
-          ? h("p", { class: "muted small", style: { marginTop: "6px" } }, analytics.landscape.yield.notes.join(" · "))
+          ? h("p", { class: "muted small", style: { marginTop: "6px" } }, analytics.landscape.yield.notes.join(" "))
           : null,
       ),
     );
@@ -204,7 +204,7 @@ export function renderYield(el, ctx) {
         h(
           "p",
           { class: "muted small", style: { marginTop: "6px" } },
-          `Fields of The World is the open global field map; its ${fmtNum(data.ftw.features.length)} polygons for this box are drawn for comparison and are not the farms in the roster.`,
+          `Fields of The World is the open global field map. Its ${fmtNum(data.ftw.features.length)} polygons for this box are drawn for comparison and are not the farms in the roster.`,
         ),
       ),
     );
@@ -217,7 +217,7 @@ export function renderYield(el, ctx) {
       h(
         "div",
         { class: "section" },
-        h("div", { class: "section-title" }, "Soil and terrain across the landscape"),
+        h("div", { class: "section-title" }, "Soil and terrain across the county"),
         h(
           "div",
           { class: "milestones" },

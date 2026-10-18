@@ -28,7 +28,7 @@ function yieldTiles(data) {
   }
   const scored = Object.values(data.yieldBins || {}).reduce((sum, bins) => sum + bins.count, 0);
   if (scored) tiles.push(tile("Farms scored", `${scored} of ${data.fields.features.length}`));
-  if (!crops.length && !scored) tiles.push(tile("County model", "not run"));
+  if (!crops.length && !scored) tiles.push(tile("County estimate", "not run"));
   return tiles;
 }
 

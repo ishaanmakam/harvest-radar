@@ -49,7 +49,7 @@ function weatherIcon() {
 }
 
 function joinParts(parts) {
-  return parts.filter((p) => p != null && p !== "").join(" · ");
+  return parts.filter((p) => p != null && p !== "").join(" / ");
 }
 
 function card(label, value, sub, { span = false } = {}) {
@@ -87,7 +87,7 @@ function outlookBlock(modules, env) {
           y.calibration ? `from the ${y.calibration}` : null,
           y.band ? `${y.band} for its zone` : null,
           y.index != null ? `relative index ${fmtNum(y.index, 2)}` : null,
-          y.confidence != null ? `${typeof y.confidence === "number" ? fmtPct(y.confidence * 100) : y.confidence} confidence` : null,
+          y.confidence != null ? `${typeof y.confidence === "number" ? fmtPct(y.confidence * 100) : y.confidence} confidence, from the yield estimate` : null,
         ]),
       ),
     );
@@ -101,7 +101,7 @@ function outlookBlock(modules, env) {
           y.estimate?.bu_per_acre != null ? `about ${fmtNum(y.estimate.bu_per_acre)} bu/acre (reference only)` : null,
           y.estimate?.t_per_ha != null ? `${fmtNum(y.estimate.t_per_ha, 1)} t/ha` : null,
           y.production?.bu != null ? `${fmtNum(y.production.bu)} bu on the field` : null,
-          y.confidence != null ? `${typeof y.confidence === "number" ? fmtPct(y.confidence * 100) : y.confidence} confidence` : null,
+          y.confidence != null ? `${typeof y.confidence === "number" ? fmtPct(y.confidence * 100) : y.confidence} confidence, from the yield estimate` : null,
         ]),
       ),
     );
@@ -140,7 +140,7 @@ function outlookBlock(modules, env) {
 
   const e = modules.economics;
   if (e && (e.recommendation || e.reason)) {
-    const label = { harvest_now: "Harvest now", wait: "Wait", either: "Either works" }[e.recommendation] || titleCase(e.recommendation);
+    const label = { harvest_now: "Harvest now", wait: "Wait", either: "Either timing" }[e.recommendation] || titleCase(e.recommendation);
     cards.push(
       card(
         "Harvest now or wait",
@@ -184,7 +184,7 @@ function outlookBlock(modules, env) {
           ph.green_up_date ? `green-up ${fmtDate(ph.green_up_date)}` : null,
           ph.senescence_onset ? `senescence ${fmtDate(ph.senescence_onset)}` : null,
           ph.curve_harvest_date ? `curve harvest ${fmtDate(ph.curve_harvest_date)}` : null,
-          ph.agreement ? `${typeof ph.agreement === "number" ? fmtNum(ph.agreement, 2) : titleCase(ph.agreement)} with the model` : null,
+          ph.agreement ? `${typeof ph.agreement === "number" ? fmtNum(ph.agreement, 2) : titleCase(ph.agreement)} with the lag estimate` : null,
         ]),
       ),
     );
@@ -194,7 +194,7 @@ function outlookBlock(modules, env) {
   if (a && (a.anomaly_type || a.note)) {
     cards.push(
       card(
-        "Against its peers",
+        "Peer comparison",
         a.anomaly_type ? (a.anomaly_type === "none" ? "In step" : titleCase(a.anomaly_type)) : null,
         joinParts([a.note, a.latest_z != null && !String(a.note || "").includes("z ") ? `z ${fmtNum(a.latest_z, 1)}` : null]),
         { span: true },

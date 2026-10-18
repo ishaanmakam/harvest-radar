@@ -212,7 +212,7 @@ it too: in 2019 HiRISE photographed six sites titled "Candidate Landing Site for
 Planitia and Erebus Montes, one at Phlegra Montes). Independent analysis from public NASA, USGS and PSI data. Not
 affiliated with or endorsed by SpaceX.
 
-**The line:** SpaceX scouted six sites in 2019. We graded them on what SpaceX doesn't publicly screen for, then
+**The line:** SpaceX scouted six sites in 2019. We graded them on our four checks, then
 searched the whole ice belt for alternatives.
 
 ### 30-second demo
@@ -224,8 +224,8 @@ searched the whole ice belt for alternatives.
    sites as white rings.
 3. Click M01 in Arcadia Planitia (52 N, 167 E), the region SpaceX has been scouting: the THEMIS frame, then the four checks as go, watch, no-go rows, the same visual language as
    a farm's eight checks.
-4. Scroll the dock to "SpaceX's 2019 sites", click ESP_060811_2205: no-go on our science-reach check with everything
-   SpaceX screens for passing, and "best within 200 km" with a Fly there button.
+4. Scroll the dock to "SpaceX's 2019 sites", click ESP_060811_2205: no-go on the science-reach check with the other
+   three passing, and "best within 200 km" with a Fly there button.
 5. End on the footer line: "Independent analysis from public NASA, USGS and PSI data. Not affiliated with or endorsed
    by SpaceX."
 
@@ -233,8 +233,8 @@ searched the whole ice belt for alternatives.
 
 | check | from | dataset | why |
 |---|---|---|---|
-| Ice within reach | SpaceX | SWIM 2025 ice consistency, 0-1 m and 1-5 m (PSI) | Water for propellant, air and crops. |
-| Low ground | SpaceX | MOLA MEGDR 16 ppd (NASA PDS) | More atmosphere to slow the ship. |
+| Ice within reach | ours | SWIM 2025 ice consistency, 0-1 m and 1-5 m (PSI) | Water for propellant, air and crops. |
+| Low ground | ours | MOLA MEGDR 16 ppd (NASA PDS) | More atmosphere to slow the ship. |
 | Plume-safe ground | ours | MGS TES nighttime thermal inertia (Putzig and Mellon, PSI) | Firm soil the engines will not dig out: very low inertia is loose dust, very high is rock. |
 | Science reach | ours | USGS SIM 3292 geologic units within about 100 km | More kinds of rock within a rover's range, and rock from the wet early eras. |
 

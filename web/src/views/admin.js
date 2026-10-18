@@ -109,7 +109,7 @@ function rosterSection(ctx, profiles) {
   const countEl = h("span", { class: "count" });
 
   async function update(p, patch, revert) {
-    status.set(`Saving ${p.roster_id || p.name}...`);
+    status.set(`Saving ${p.roster_id || p.name}.`);
     try {
       const row = await adminUpdate(p.id, patch);
       Object.assign(p, row || patch);
@@ -279,7 +279,7 @@ function deliveriesSection(dates) {
             { class: "outlook-card" },
             h("div", { class: "label" }, CHANNEL_LABEL[channel] || titleCase(channel)),
             h("div", { class: "value" }, fmtNum([...c.values()].reduce((a, b) => a + b, 0))),
-            h("div", { class: "sub" }, [...c].map(([s, n]) => `${n} ${s}`).join(" · ")),
+            h("div", { class: "sub" }, [...c].map(([s, n]) => `${n} ${s}`).join(" / ")),
           ),
         ),
       ),
@@ -368,7 +368,7 @@ function exportSection(profiles) {
           class: "btn btn-primary",
           type: "button",
           onclick: () => downloadText(`roster-${new Date().toISOString().slice(0, 10)}.csv`, rosterCsv(profiles, onlyReady.checked)),
-        }, "Export roster CSV"),
+        }, "Download the roster CSV"),
       ),
     ),
   );
