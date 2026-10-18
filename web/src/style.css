@@ -3956,3 +3956,12 @@ a {
     display: none;
   }
 }
+
+/* ---- the mark beside the wordmark ---- */
+.wordmark svg {
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  margin-right: 10px;
+  color: var(--fg);
+}
