@@ -50,7 +50,8 @@ def say_language(code):
 
 def _urllib_http(method, url, headers, body, timeout):
     """(status, body bytes); HTTP errors come back as a status, transport errors raise ProviderError."""
-    req = urllib.request.Request(url, data=body, method=method, headers=headers)
+    # Photon sits behind Cloudflare, which refuses requests with no browser-like identity.
+    req = urllib.request.Request(url, data=body, method=method, headers={"User-Agent": "Overfield/1.0 (+https://ishaanmakam.github.io/harvest-radar/)", **headers})
     try:
         with urllib.request.urlopen(req, timeout=timeout) as r:
             return r.status, r.read()
