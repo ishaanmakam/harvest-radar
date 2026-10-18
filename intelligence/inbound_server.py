@@ -60,10 +60,11 @@ def twiml_for(handle, speech, data_dir, roster):
             f'<Say language="{lang}">{escape(prompt)}</Say></Gather></Response>')
 
 
-def make_handler(data_dir, roster_path, bridge_token=None, twilio_auth_token=None, public_url=None):
+def make_handler(data_dir, roster_path, bridge_token=None, twilio_auth_token=None, public_url=None, public_ws_url=None):
     data_dir = Path(data_dir)
     roster = load_roster(roster_path)
     public_url = (public_url or "").rstrip("/")
+    public_ws_url = public_ws_url or None
 
     class Handler(BaseHTTPRequestHandler):
         server_version = "HarvestRadarInbound/1"
@@ -104,6 +105,16 @@ def make_handler(data_dir, roster_path, bridge_token=None, twilio_auth_token=Non
         def do_POST(self):
             path = self.path.split("?")[0]
             raw = self._body()
+            if path == "/twilio/stream":
+                # TwiML that connects the call to the Grok bridge; `from` identifies the person on the line
+                params = {k: v[0] for k, v in urllib.parse.parse_qs(raw.decode("utf-8", "replace"), keep_blank_values=True).items()}
+                query = urllib.parse.parse_qs(urllib.parse.urlparse(self.path).query)
+                person = (query.get("to") or [None])[0] or params.get("From", "")
+                if not public_ws_url:
+                    return self._send(503, XML_HEAD + "<Response><Say>The voice bridge is not configured.</Say><Hangup/></Response>", "text/xml; charset=utf-8")
+                body = (f'<Response><Connect><Stream url="{escape(public_ws_url.rstrip("/"))}/media-stream">'
+                        f'<Parameter name="from" value="{escape(person)}"/></Stream></Connect></Response>')
+                return self._send(200, XML_HEAD + body, "text/xml; charset=utf-8")
             if path == "/twilio/voice":
                 params = {k: v[0] for k, v in urllib.parse.parse_qs(raw.decode("utf-8", "replace"), keep_blank_values=True).items()}
                 if twilio_auth_token:
@@ -137,7 +148,8 @@ def serve(data_dir, roster_path=None, host="0.0.0.0", port=8788, public_url=None
     load_env()
     handler = make_handler(data_dir, roster_path, bridge_token=os.environ.get("INBOUND_TOKEN") or None,
                            twilio_auth_token=os.environ.get("TWILIO_AUTH_TOKEN") or None,
-                           public_url=public_url or os.environ.get("PUBLIC_URL"))
+                           public_url=public_url or os.environ.get("PUBLIC_URL"),
+                           public_ws_url=os.environ.get("PUBLIC_WS_URL"))
     httpd = ThreadingHTTPServer((host, port), handler)
     print(f"  inbound service on http://{host}:{port}  (data {data_dir}; Twilio signature check "
           f"{'on' if os.environ.get('TWILIO_AUTH_TOKEN') else 'off'}; bearer token {'on' if os.environ.get('INBOUND_TOKEN') else 'off'})")

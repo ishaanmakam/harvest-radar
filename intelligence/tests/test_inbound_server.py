@@ -83,6 +83,31 @@ class TestTwilioVoice:
         assert "Rain &amp; wind &lt;tonight&gt;" in body
 
 
+class TestStreamTwiml:
+    def test_stream_twiml_points_at_the_bridge_with_the_person_on_the_line(self, tmp_path):
+        (tmp_path / "plans.json").write_text(json.dumps({"as_of": "2026-10-16", "plans": [plan("F0001")]}))
+        (tmp_path / "route.json").write_text(json.dumps({"as_of": "2026-10-17", "stops": []}))
+        (tmp_path / "roster.csv").write_text(ROSTER_CSV)
+        app = srv.make_handler(tmp_path, tmp_path / "roster.csv", public_ws_url="wss://bridge.example")
+        httpd = ThreadingHTTPServer(("127.0.0.1", 0), app)
+        threading.Thread(target=httpd.serve_forever, daemon=True).start()
+        base = f"http://127.0.0.1:{httpd.server_address[1]}"
+        try:
+            _, ctype, body = post_form(base + "/twilio/stream", {"From": "+919876500002"})          # inbound call
+            assert ctype.startswith("text/xml")
+            assert '<Stream url="wss://bridge.example/media-stream">' in body
+            assert '<Parameter name="from" value="+919876500002"/>' in body
+            _, _, body = post_form(base + "/twilio/stream?to=%2B919876500003&language=hi", {"CallSid": "CA2"})   # outbound call
+            assert 'value="+919876500003"' in body
+        finally:
+            httpd.shutdown()
+
+    def test_without_a_bridge_url_the_call_is_told_and_hung_up(self, service):
+        with pytest.raises(urllib.error.HTTPError) as e:
+            post_form(service + "/twilio/stream", {"From": "+919876500002"})
+        assert e.value.code == 503
+
+
 class TestPhotonInbound:
     def test_officer_imessage_gets_a_reply_json(self, service):
         status, doc = post_json(service + "/photon/inbound", {"from": "+919876500001", "text": "plan for F0001"},
