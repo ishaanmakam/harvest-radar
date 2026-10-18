@@ -4,6 +4,8 @@ Paste into your agent: "Read AGENTS.md and docs/tasks/A-pipeline.md, then build 
 
 Goal: produce REAL versions of the mock files in `data/mock/` into `data/out/`, for the AOI in `config/region.json`.
 
+Spec rules for the pipeline: Sangrur stays the demo landscape only if the season yields **at least 4 clear frames** (the Perceptron probe's minimum); otherwise run the same pipeline on the clearer smallholder area. `weather.json` must include the **forecast** (the harvest-before-rain check needs any day ≥ 15 mm in the next 3 days), and `fires.json` must cover at least the **last 5 days**.
+
 Build these scripts (Python; deps in `pipeline/requirements.txt`: pystac-client odc-stac rasterio shapely pyproj scikit-image numpy pillow imageio imageio-ffmpeg requests):
 1. `s01_search.py` — STAC search Sentinel-2 L2A over bbox, season_start→as_of, cloud < 70%.
    Fastest source: Earth Search `https://earth-search.aws.element84.com/v1`, collection `sentinel-2-l2a` (no auth).
