@@ -77,11 +77,23 @@ class TestFlood:
         assert plan["flag"] == "act_now"
 
     def test_perceptron_flood_cue_wins_and_sets_source(self):
-        insight = {"flood": {"date": "2026-10-16", "where": "north-east corner", "detail": "standing water on ~30% of the field"}}
+        insight = {"flood": {"kind": "flood", "observed": True, "date": "2026-10-16", "where": "north-east corner",
+                             "detail": "standing water on ~30% of the field", "confidence": 0.8}}
         plan = decide.farm_plan(rec(), QUIET_PASSES, DRY, [], insight, TODAY)
         assert status_of(plan)["flood"] == "act_now"
         assert check(plan, "flood")["where"] == "north-east corner"
         assert plan["source"] == "perceptron"
+
+    def test_perceptron_saw_no_water_is_clear_but_still_perceptron_sourced(self):
+        insight = {"flood": {"kind": "flood", "observed": False, "date": "2026-10-16", "where": "", "detail": "", "confidence": 0.9}}
+        passes = QUIET_PASSES[:2] + [(D("2026-10-16"), -0.08, 0.10)]      # index cue would say flood
+        plan = decide.farm_plan(rec(), passes, DRY, [], insight, TODAY)
+        assert status_of(plan)["flood"] == "clear"
+        assert plan["source"] == "perceptron"
+
+    def test_stale_perceptron_flood_is_not_current(self):
+        insight = {"flood": {"kind": "flood", "observed": True, "date": "2026-10-06", "where": "", "detail": "", "confidence": 0.7}}
+        assert status_of(decide.farm_plan(rec(), QUIET_PASSES, DRY, [], insight, TODAY))["flood"] == "clear"
 
 
 class TestHarvestBeforeRain:
@@ -182,11 +194,53 @@ class TestVisibleChange:
         assert status_of(decide.farm_plan(r, passes, DRY, [], None, TODAY))["visible_change"] == "clear"
 
     def test_perceptron_dated_change_with_place(self):
-        insight = {"change": {"date": "2026-10-14", "where": "western half", "detail": "cut between Oct 11 and Oct 16"}}
+        insight = {"visible_change": {"kind": "visible_change", "observed": True, "date": "2026-10-14", "where": "western half",
+                                      "detail": "cut between Oct 11 and Oct 16", "confidence": 0.85}}
         plan = decide.farm_plan(rec(), QUIET_PASSES, DRY, [], insight, TODAY)
         assert status_of(plan)["visible_change"] == "watch"
         assert check(plan, "visible_change")["where"] == "western half"
         assert plan["source"] == "perceptron"
+
+    def test_perceptron_change_before_previous_pass_does_not_count(self):
+        insight = {"visible_change": {"kind": "visible_change", "observed": True, "date": "2026-10-09", "where": "", "detail": "", "confidence": 0.6}}
+        assert status_of(decide.farm_plan(rec(), QUIET_PASSES, DRY, [], insight, TODAY))["visible_change"] == "clear"
+
+
+class TestPerceptronBurnScar:
+    def test_perceptron_scar_confirms_and_dates_a_scar_the_index_missed(self):
+        burned = rec(stage="harvested", harvest_date="2026-10-04", predicted_harvest_start=None, predicted_harvest_end=None)
+        passes = [(D("2026-10-06"), 0.24, 0.08), (D("2026-10-11"), 0.23, 0.07), (D("2026-10-16"), 0.22, 0.06)]
+        insight = {"burn_scar": {"kind": "burn_scar", "observed": True, "date": "2026-10-16", "where": "south strip",
+                                 "detail": "dark burn scar along the southern bund", "confidence": 0.9}}
+        plan = decide.farm_plan(burned, passes, DRY, [], insight, TODAY)
+        assert status_of(plan)["burn_scar"] == "act_now"
+        assert check(plan, "burn_scar")["where"] == "south strip"
+        assert "perceptron" in check(plan, "burn_scar")["detail"].lower()
+
+
+class TestInsightsFile:
+    def test_run_reads_field_cues_from_insights_json(self, tmp_path):
+        data = ROOT / "data" / "mock"
+        for name in ("status.json", "timeseries.json", "weather.json", "fires.json", "fields.geojson"):
+            (tmp_path / name).write_bytes((data / name).read_bytes())
+        status = json.loads((data / "status.json").read_text())
+        standing = next(r["field_id"] for r in status["fields"] if r["stage"] == "maturing")
+        insights = json.loads((data / "insights.json").read_text())
+        insights["as_of"] = "2026-10-16"
+        insights["verdict"] = "perceptron"
+        insights["field_cues"] = [{"field_id": standing, "kind": "stress", "observed": True, "date": "2026-10-16",
+                                   "where": "east half", "detail": "browning on the eastern half", "confidence": 0.7},
+                                  {"field_id": "F0002", "kind": "flood", "observed": False, "date": "2026-10-16",
+                                   "where": "", "detail": "", "confidence": 0.9}]
+        (tmp_path / "insights.json").write_text(json.dumps(insights))
+        plans, _ = decide.run(tmp_path)
+        by_id = {p["farm_id"]: p for p in plans["plans"]}
+        assert by_id[standing]["source"] == "perceptron"
+        assert status_of(by_id[standing])["stress"] == "watch"
+        assert check(by_id[standing], "stress")["where"] == "east half"
+        assert by_id["F0002"]["source"] == "perceptron"
+        assert plans["vision_verdict"] == "perceptron"
+        assert sum(p["source"] == "perceptron" for p in plans["plans"]) == 2
 
 
 class TestTwoFailures:

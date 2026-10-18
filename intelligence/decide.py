@@ -20,8 +20,10 @@ Checks, in table order, and the rule each applies (numbers from the spec; index 
   visible_change       watch    Perceptron change dated since the previous pass, else a harvest, a new scar or an
                                 NDVI swing >= change_ndvi_min between the previous and the latest pass
 
-Per-field Perceptron cues (to agree with the vision workstream; absent today, so source = vegetation_index):
-insights.json items carrying "field_id" and any of "flood" / "stress" / "change", each {"date", "where", "detail"}.
+Per-field Perceptron cues come from insights.json `field_cues` (the vision workstream's additive schema change):
+  {field_id, kind: flood | stress | visible_change | burn_scar, observed: bool, date, where, detail, confidence}
+Vision reports what it observed; the status rules stay here. A field with no cue uses the index fallback; a field
+with any cue has source = "perceptron", also when observed is false (Perceptron looked and saw nothing).
 """
 import argparse
 from collections import defaultdict
@@ -68,6 +70,14 @@ def _win(a, b=None):
 
 def _span(a, b):
     return f"{s(a)} to {s(b)}"
+
+
+def _cue_text(cue, default):
+    """A Perceptron cue's own words (or a default), tagged with its confidence."""
+    text = cue.get("detail") or default
+    conf = cue.get("confidence")
+    tag = f"Perceptron, {conf:.0%} confidence" if isinstance(conf, (int, float)) else "Perceptron"
+    return f"{text} ({tag})"
 
 
 def farm_plan(rec, passes, forecast, hotspots, insight, today: date, th=None):
@@ -132,15 +142,22 @@ def farm_plan(rec, passes, forecast, hotspots, insight, today: date, th=None):
         checks.append(_check("establishment", "clear", f"Crop established: peak NDVI {peak:.2f} on {rec.get('peak_date')}"))
 
     # 4. burn scar
-    scar_date = None
+    scar_date, scar_where, scar_note = None, "", ""
     if "scar" in (rec.get("burn_evidence") or ""):
         after = [p for p in passes if p[2] is not None and (harvest is None or p[0] >= harvest) and p[2] <= th["burn_nbr_max"]]
         scar_date = after[0][0] if after else (d(rec["burn_date"]) if rec.get("burn_date") else None)
+    cue = insight.get("burn_scar")
+    if cue is not None and cue.get("observed", True) and cue.get("date"):
+        perceptron = True
+        cue_date = d(cue["date"])
+        scar_date = min(scar_date, cue_date) if scar_date else cue_date
+        scar_where, scar_note = cue.get("where", ""), "; " + _cue_text(cue, "confirmed by Perceptron")
     if scar_date and latest and scar_date == latest[0]:
-        checks.append(_check("burn_scar", "act_now", f"New burn scar: NBR dropped in the latest pass ({s(scar_date)})",
-                             window=_win(scar_date)))
+        checks.append(_check("burn_scar", "act_now", f"New burn scar seen in the latest pass ({s(scar_date)}){scar_note}",
+                             where=scar_where, window=_win(scar_date)))
     elif scar_date:
-        checks.append(_check("burn_scar", "watch", f"Burn scar on record since {s(scar_date)}", window=_win(scar_date)))
+        checks.append(_check("burn_scar", "watch", f"Burn scar on record since {s(scar_date)}{scar_note}",
+                             where=scar_where, window=_win(scar_date)))
     else:
         checks.append(_check("burn_scar", "clear", "No burn scar"))
 
@@ -157,10 +174,16 @@ def farm_plan(rec, passes, forecast, hotspots, insight, today: date, th=None):
 
     # 6. flood
     cue = insight.get("flood")
-    if cue and latest and (not cue.get("date") or d(cue["date"]) >= latest[0]):
+    if cue is not None:
         perceptron = True
-        checks.append(_check("flood", "act_now", cue.get("detail") or "Perceptron sees standing water in the latest pass",
-                             where=cue.get("where", ""), window=_win(latest[0])))
+        current = latest is not None and (not cue.get("date") or d(cue["date"]) >= latest[0])
+        if cue.get("observed", True) and current:
+            checks.append(_check("flood", "act_now", _cue_text(cue, "Perceptron sees standing water in the latest pass"),
+                                 where=cue.get("where", ""), window=_win(latest[0])))
+        elif cue.get("observed", True):
+            checks.append(_check("flood", "clear", f"Perceptron saw water on {cue.get('date')}, none in the latest pass"))
+        else:
+            checks.append(_check("flood", "clear", _cue_text(cue, "Perceptron saw no standing water in the latest pass")))
     elif latest and latest[1] <= th["flood_ndvi_max"]:
         checks.append(_check("flood", "act_now",
                              f"Standing-water signature in the latest pass (NDVI {latest[1]:.2f} on {s(latest[0])})",
@@ -172,10 +195,13 @@ def farm_plan(rec, passes, forecast, hotspots, insight, today: date, th=None):
 
     # 7. stress or browning
     cue = insight.get("stress")
-    if cue and standing:
+    if cue is not None and standing:
         perceptron = True
-        checks.append(_check("stress", "watch", cue.get("detail") or "Perceptron sees part of the field declining",
-                             where=cue.get("where", ""), window=_win(prev[0], latest[0]) if prev else {}))
+        if cue.get("observed", True):
+            checks.append(_check("stress", "watch", _cue_text(cue, "Perceptron sees part of the field declining"),
+                                 where=cue.get("where", ""), window=_win(prev[0], latest[0]) if prev and latest else {}))
+        else:
+            checks.append(_check("stress", "clear", _cue_text(cue, "Perceptron sees no browning")))
     elif (standing and prev and latest and prev[1] - latest[1] >= th["stress_ndvi_drop_min"]
           and latest[1] > th["harvest_ndvi_max"]):
         checks.append(_check("stress", "watch",
@@ -189,11 +215,15 @@ def farm_plan(rec, passes, forecast, hotspots, insight, today: date, th=None):
         checks.append(_check("stress", "clear", "Only one clear pass; nothing to compare"))
 
     # 8. visible change
-    cue = insight.get("change")
-    if cue and prev and (not cue.get("date") or d(cue["date"]) > prev[0]):
+    cue = insight.get("visible_change")
+    if cue is not None and prev and latest:
         perceptron = True
-        checks.append(_check("visible_change", "watch", cue.get("detail") or f"Perceptron dates a change to {cue.get('date')}",
-                             where=cue.get("where", ""), window=_win(prev[0], latest[0])))
+        recent = not cue.get("date") or d(cue["date"]) > prev[0]
+        if cue.get("observed", True) and recent:
+            checks.append(_check("visible_change", "watch", _cue_text(cue, f"Perceptron dates a change to {cue.get('date')}"),
+                                 where=cue.get("where", ""), window=_win(prev[0], latest[0])))
+        else:
+            checks.append(_check("visible_change", "clear", _cue_text(cue, f"Perceptron dates no change since {s(prev[0])}")))
     elif prev and latest:
         between = _span(prev[0], latest[0])
         if harvest and prev[0] < harvest <= latest[0]:
@@ -275,7 +305,10 @@ def run(data_dir: Path):
     for det in fires["detections"]:
         if det.get("field_id"):
             hotspots[det["field_id"]].append(det)
-    cues = {it["field_id"]: it for it in insights.get("items", []) if it.get("field_id")}
+    cues = defaultdict(dict)                       # field_id -> kind -> cue (one per kind; the last listed wins)
+    for c in insights.get("field_cues") or []:
+        if c.get("field_id") and c.get("kind"):
+            cues[c["field_id"]][c["kind"]] = c
     recs = {r["field_id"]: r for r in status["fields"]}
 
     plans = []
@@ -290,7 +323,7 @@ def run(data_dir: Path):
         plans.append(plan)
     route = build_route(plans, today)
     plans_doc = {"as_of": max((p["as_of"] for p in plans), default=s(today)), "source": "intelligence/decide.py",
-                 "plans": plans}
+                 "vision_verdict": insights.get("verdict"), "plans": plans}
 
     errs = _validate("plans", plans_doc) + _validate("route", route)
     if errs:
