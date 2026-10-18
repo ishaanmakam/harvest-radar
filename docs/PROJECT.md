@@ -1,179 +1,182 @@
 # Harvest Radar: the full story
 
-Everything the team (and every agent) should know about what we're building, why, and why each decision was made.
-Facts are sourced at the bottom. Anything marked **ASSUMPTION** is ours and must be presented as such.
+Background, rationale and pitch material for the team and every agent. **The product definition lives in the spec:
+`docs/superpowers/specs/2026-10-17-field-inspector-design.md`.** This document explains why it matters and how to talk
+about it. Facts are sourced at the bottom; anything marked **ASSUMPTION** is ours and must be presented as such.
 
 ---
 
 ## 1. One paragraph
 
-Every October, Punjab's farmers have about two weeks between cutting their rice and sowing wheat. The machines that clear rice straw without fire are scarce, rented from shared hiring centres, and routinely arrive late, so farmers who can't get one in time burn the field. The smoke is a major part of North India's autumn air-pollution crisis. Today's tools either wait for farmers to book a machine (and most centres don't even use the booking apps) or use satellites to catch fires after the fact and fine people. **Harvest Radar uses free satellite imagery to see every rice field in a district, tell which ones were just harvested and which will be next, and turn that into a dispatch plan that gets machines to the right villages before farmers give up and burn.** Perceptron reads the season's satellite time-lapse to confirm when fields were cut and where burn scars appeared.
+Small family farms make their biggest decisions with almost no information: when to harvest, whether rain is coming,
+whether a corner of the field is failing, and the extension officer who could help covers far more farms than they can
+ever visit. **Harvest Radar is an autonomous field inspector. Every few days the satellite season "visits" every farm.
+Each morning, every farmer gets a phone call and a text with their farm's plan: eight checks (harvest readiness, harvest
+versus rain, establishment, burn scar, fire, flood, stress, visible change), including the ones that came back fine.
+The extension officer gets a route: which farms to visit or call today, and why.** Perceptron reads the season's
+satellite time-lapse to date and place what changed, and a map shows every farm's flag, plan and delivery status.
 
 ---
 
 ## 2. The story
 
-Picture a rice farmer in central Punjab in late October (an illustrative composite, not a real person). The combine harvester has just gone through. It takes the grain and leaves the stubble standing. Wheat has to go in within about two weeks or yields drop, and the field has to be cleared first. The subsidised machine that would chop the straw into the soil is at the hiring centre in the next village, and so is everyone else's request. He calls. It's booked. He calls again two days later. Still booked. On day ten he strikes a match, because that's the only option that fits inside the window.
+Picture a rice farmer in central Punjab in mid-October (an illustrative composite, not a real person). The crop looks
+about ready. Heavy rain might be coming, or might not; harvesting wet grain risks spoilage, and waiting too long squeezes
+the short window before wheat has to go in. The extension officer for the area is responsible for hundreds of farms and
+can't come by. So the farmer guesses.
 
-That isn't a hypothetical complaint. During one baler shortage, a farmer told reporters he had messaged farm officials and the district office for help, there were no balers, and he couldn't wait any longer to sow. Surveys keep finding the same thing: farmers are willing to stop burning if they have a real alternative, and the alternative fails on **timing and access**, not awareness.
+Overhead, satellites already see the answer to most of those questions: which fields peaked and are browning toward harvest,
+which corner has gone pale while the rest stayed green, which field shows a fresh burn scar, which one has standing water.
+Weather models know whether 15 mm of rain is coming this week. None of that reaches the farmer, and almost none of it
+reaches the officer in a usable form.
 
-Meanwhile, the satellites overhead already see everything that matters. They see which fields turned from green to bare this week, which are about to, and which have fresh burn scars. Right now that information is mainly used to count fires and penalise farmers. We use the same orbit to **prevent** the fire instead of punishing it.
+Harvest Radar closes that gap. The farmer's phone rings in the morning: "Your rice looks ready, and heavy rain is forecast
+on Thursday. Harvest by Wednesday. Everything else checked out: no fire, no flooding, no stress." The officer's phone rings
+too, with the three farms that actually need a visit today and why. Quiet farms still hear that everything was checked,
+which is how trust gets built for the day something does go wrong.
 
 ---
 
-## 3. Background: why Punjab grows so much rice in the first place
+## 3. Background: why Punjab is the demo landscape
 
-- **Rice dominates the summer season.** In the 2022–23 kharif (monsoon) season, paddy covered 3.13 million ha out of 3.59 million ha under kharif crops, over 87%. Rice and wheat together make up about 84% of Punjab's gross cropped area. This season Punjab sowed about **30 lakh hectares** (3 million ha) of paddy.
-- **The economics push farmers to rice.** Nearly all paddy is procured by the government at the minimum support price (MSP). The state agriculture director has put rice income at about Rs 45,000–50,000 per acre versus Rs 30,000–35,000 for pulses or maize. Free electricity for irrigation since 1997 makes pumping groundwater nearly costless for farmers.
-- **It's draining the aquifer.** Punjab extracts about 34 billion cubic metres of groundwater a year against roughly 20 BCM of recharge, and 119 of 138 blocks are classed as over-exploited. Sangrur, our demo district, is among the worst-hit areas.
-- **A water law shrank the window.** The Punjab Preservation of Subsoil Water Act, 2009 pushed paddy transplanting later (by about 10 days on average versus 2002–2008) to save groundwater. Later transplanting means later harvesting, which squeezes the gap before wheat sowing, and farmers commonly sow wheat within 7–10 days of harvesting.
-- **Mechanised harvesting leaves the straw.** Combine harvesters take the grain and leave large amounts of stubble standing in the field. This season Punjab expects about **18.81 million tonnes** of paddy straw.
+The product is for small family farms in general; Sangrur, Punjab is the default demo landscape because it is one of the
+best-documented, most intense harvest seasons on Earth, happening right now.
 
-So the structural drivers (MSP, free power, a late-shifted calendar, combine harvesting) aren't going away soon. That makes the **window** a fixed constraint, and the fight is over what happens inside it.
+- **Rice dominates the season.** In 2022–23, paddy covered 3.13 million ha of Punjab's 3.59 million ha of kharif crops,
+  and this season Punjab sowed about **30 lakh hectares** (3 million ha) of paddy.
+- **The economics lock it in.** Nearly all paddy is procured at the minimum support price; rice pays roughly
+  Rs 45,000–50,000/acre versus Rs 30,000–35,000 for pulses or maize; free farm electricity since 1997 makes groundwater cheap.
+- **The aquifer is paying for it.** About 34 BCM extracted per year against ~20 BCM recharge; 119 of 138 blocks over-exploited.
+  Sangrur is among the worst-hit areas.
+- **The calendar is tight.** The 2009 subsoil-water law pushed transplanting about 10 days later; farmers commonly sow wheat
+  within 7–10 days of harvest, and CEEW reports a 15–18 day harvest-to-sowing window.
+- **Fire is part of the season.** Combines leave standing stubble; when time runs out, some farmers burn it. Punjab expects
+  **18.81 million tonnes** of straw this season, and 84 burning incidents were recorded by Oct 5, 2026.
+
+Why it suits a satellite product: one dominant crop with a sharp harvest wave, mostly clear post-monsoon skies in October,
+and real stakes on every check (harvest timing, rain, fire, burn scars).
 
 ---
 
 ## 4. The problem in numbers
 
-**The window is short.** CEEW reports a 15–18 day window between harvest and sowing. Uncertainty over machine availability, delivery timelines and paperwork, combined with that window, often pushes farmers to burn. (CEEW survey of about 1,500 farmers across 11 districts.)
+**Information doesn't reach farmers in a usable form.** Across smallholder surveys, weather is the risk farmers name most
+(about 64% in CGAP's Mozambique survey), and research on satellite advisories finds that raw data alone doesn't drive
+uptake: farmers need an interpreter such as an agronomist, producer group or extension worker. Our answer is a plain-language
+plan delivered by call and text, plus a route that puts the officer where they're needed.
 
-**Why farmers say they burn.** A 2015 survey in Patiala district found 41% of farmers blamed the short window between paddy and wheat, and 48% said burning is quicker and more economical. Another multi-district study listed: too little time between harvest and sowing, labour shortages, no access to suitable machinery, and no local industry that uses straw.
+**The harvest window is unforgiving.** Uncertainty about timing, machines and paperwork inside a 15–18 day window pushes
+farmers toward bad options (CEEW, ~1,500 farmers across 11 districts). A 2015 Patiala survey found 41% of burners blamed the
+short window.
 
-**Machines exist but don't arrive in time.** Punjab has distributed about **1,48,000** crop-residue-management (CRM) machines since 2018–19, and the state is targeting 1,500 new custom hiring centres in 2025–26. CEEW found the hiring-centre model has struggled with **delays in machine availability and inefficient logistics**. A full CRM package (machine plus fuelled tractor and driver) rents for roughly Rs 2,000 per acre, and private centres own about 75% of the CRM machines deployed under the hiring-centre model.
+**The harms are real.**
+- *Air:* stubble burning's share of Delhi's PM2.5 is modest averaged over the year (~14% in one study) but very large in
+  peak episodes (nearly 40% of near-surface PM2.5 in a 2016 modelling study).
+- *Health:* living in districts with intense crop burning carries a **three-fold** higher risk of acute respiratory infection
+  (IFPRI), especially for children under five.
+- *Economy:* IFPRI's current release puts losses at about USD 1.5 billion over five years for Punjab, Haryana and Delhi
+  (older "$30B a year" coverage has been revised; don't quote it).
 
-**The harm.**
-- *Air:* estimates of stubble burning's share of Delhi's PM2.5 vary widely with method and period: about 14% on average in one recent study, and nearly 40% of near-surface PM2.5 during the 2016 episode in a modelling study. The honest framing: a modest share across the year, a very large share during the October–November peak.
-- *Health:* IFPRI researchers found that living in districts with intense crop burning carries a **three-fold** higher risk of acute respiratory infection, with children under five especially affected.
-- *Economy:* IFPRI's current release puts the economic loss at about USD 1.5 billion over five years for Punjab, Haryana and Delhi. (Earlier press coverage quoted ~$30B a year; IFPRI has since revised its figures, so don't quote the old number.)
-
-**It's happening right now.** The 2026 burning season has started: Punjab recorded 84 stubble-burning incidents by October 5 (CAQM), led by Amritsar.
+**Satellites are already watching, but only to punish.** Satellite fire counts fell from 36,663 (2023) to 10,909 (2024) to
+about 5,100 (2025), yet the burned area measured from orbit in 2024 was almost unchanged from 2023 (~19.2 lakh ha), consistent
+with farmers burning smaller patches to avoid detection. Monitoring today is retrospective and punitive; nobody turns the same
+imagery into a daily, farm-level plan for the farmer and the officer.
 
 ---
 
-## 5. What already exists, and why it isn't enough
+## 5. What exists, and the gap
 
-| Tool | What it does | Why it falls short |
+| Today | What it does | Gap |
 |---|---|---|
-| **Unnat Kisan** app (Punjab) | Farmers book CRM machines from nearby hiring centres; over 1.3 lakh machines mapped; village nodal officers pre-assign machines based on farmers' preferences | Reactive: demand is only visible once farmers ask, by which point the window is already closing |
-| **i-Khet** (Punjab), **CHC Farm Machinery / FARMS** (central) | Online machine rental marketplaces | Only ~15% of surveyed hiring centres had heard of i-Khet and Unnat Kisan, and fewer than half of those used them |
-| **Satellite fire monitoring** (IARI, Punjab Remote Sensing Centre) | Counts active fires from orbit; used for enforcement ("red entries" in land records) | After the fact, punitive, and gamed: fire *counts* fell from 36,663 (2023) to 10,909 (2024), but satellite-measured **burned area stayed almost the same** (~19.2 lakh ha both years), consistent with farmers burning smaller patches to avoid detection. Counts fell further to about 5,100 in 2025 |
-| **Research** (NeurIPS 2024 proposal, CERP study in Pakistan's Punjab) | Better burn detection from imagery | Detection, not prevention |
+| Satellite fire monitoring (IARI, Punjab Remote Sensing Centre) | Counts fires from orbit; used for enforcement | After the fact, punitive, and gamed by small burns |
+| Machine-booking apps (Unnat Kisan, i-Khet, CHC Farm Machinery) | Farmers request residue machines | Reactive; few hiring centres even use them (~15% had heard of the apps) |
+| Satellite advisory platforms | Dashboards and maps | Built for people who read dashboards; data alone doesn't get used |
+| Extension officers | Human advice and visits | Far more farms than visits; no daily triage |
 
-**The gap:** every existing tool is either reactive (waits for a request) or retrospective (detects the fire). We found nothing public that uses satellite harvest progress to **forecast machine demand by village before it arrives**. (Verify this one more time before saying "first" on stage.)
-
----
-
-## 6. Our solution, and the reason behind every piece
-
-### 6.1 Who it's for
-**Primary users: hiring-centre operators and village nodal officers**, the people whose job is already to allocate machines. Not farmers.
-*Why:* farmer-facing apps already exist and aren't used, and satellite-advisory research consistently finds that data alone doesn't drive uptake without someone to act on it. Officials are also under real legal and political pressure to cut burning, so the motivation exists. Farmers benefit with zero effort: a machine shows up on time.
-
-### 6.2 Why satellites
-Satellites are the only practical way to see **every field, every few days, for free**. Sentinel-2 (ESA) images at 10 m resolution roughly every 5 days; NASA's Harmonized Landsat Sentinel-2 (HLS) merges Landsat 8/9 with Sentinel-2 at 30 m for more frequent looks. October skies over Punjab are mostly clear after the monsoon, so the data is good exactly when we need it.
-
-### 6.3 What we measure
-- **NDVI** (vegetation index from red and near-infrared light): high for green rice, drops sharply when a field is harvested. The shape of a field's NDVI curve through the season tells us when it peaked and when it was cut.
-- **NBR** (normalized burn ratio, near-infrared vs shortwave infrared): goes strongly negative on burned ground. A burn scar persists for days, unlike a fire that's only caught if it's burning during a satellite overpass, which is why we measure **burned area**, not just fire counts.
-- **NASA FIRMS** active-fire detections as a second burn signal.
-- **Weather** (NASA POWER observed, Open-Meteo forecast): rain blocks harvesting and sowing, so a forecast storm makes ready fields more urgent.
-
-### 6.4 How we predict harvest dates
-Each field's greenness peaks around flowering. We learn this season's **peak-to-harvest lag from fields already harvested** in the same district, then apply it to fields that haven't been cut yet. Neighbouring fields teach the model this year's timing, so we don't need a crop calendar or a field visit. It's simple enough to explain to a judge in one sentence, and it adapts to late or early seasons automatically.
-
-### 6.5 From fields to demand
-Fields are grouped into village-scale zones. For each zone and each of the next 14 days, we forecast how many hectares will be harvested and need a machine before their sowing deadline (harvest + window). Already-harvested fields that haven't burned or been sown are the **backlog** that needs a machine now.
-
-### 6.6 From demand to a dispatch plan
-We simulate machines moving from hiring centres to zones day by day and compare two policies:
-- **Baseline (today):** a job only appears after the farmer harvests and requests (plus a booking delay), each zone is served only by its nearest centre, first come first served.
-- **Ours:** jobs are known in advance from satellites, machines are pooled across centres within a service radius, and zones are served earliest sowing-deadline first.
-Area whose deadline passes before a machine arrives counts as **burn risk**. The hero metric is how much more area gets served inside the window. Person B is upgrading this from a greedy heuristic to a proper optimization model.
-
-### 6.7 Why Perceptron
-Perceptron's models are built for image and video understanding, including timestamped events and spatial annotations. We stack each zone's satellite passes into a time-lapse and ask it **when and where fields were cut and burn scars appeared**, and we use it to double-check fields our index math flags as burned. That speaks directly to the gap between falling fire counts and unchanged burned area.
-
-### 6.8 Engineering choices
-- **Data contracts first, mock data for everything**, so three people build in parallel without waiting on each other.
-- **Static outputs, no live API calls in the demo**, so nothing breaks on stage.
-- **Simulated hiring centres, labelled as simulated**: real centre locations live in Unnat Kisan and aren't public.
+**The gap:** a daily, farm-level, plain-language plan that reaches the farmer by phone (no app, no literacy needed) and a
+route that tells the officer where to go, both generated automatically from free satellite data.
 
 ---
 
-## 7. Why Punjab (and why Sangrur)
+## 6. How it works, and why each piece
 
-- **It's the epicentre.** Punjab's rice-wheat system, straw volume and burning season are the core of the North India problem, and the most studied, so every claim we make can be sourced.
-- **The signal is clean.** A single dominant crop (rice) with a sharp harvest wave in October, under mostly clear post-monsoon skies, is close to the ideal case for satellite monitoring.
-- **It's happening this week.** The 2026 season is underway, so our time-lapse shows a real harvest wave in progress, not a historical replay.
-- **Sangrur specifically** sits in the central/southern rice belt that's hit hardest by paddy-driven groundwater depletion. It's also a name judges may have read in the news. The demo area is a ~10 × 10 km box defined in `config/region.json`, so switching districts is a config change.
-- **Why not the US:** large US farms mostly own their machines, so "the machine didn't arrive in time" rarely causes burning there, and US farm monitoring is a crowded market. The US is useful to us for *validation* (USDA publishes weekly harvest progress we can check our method against), not as the product.
+The spec has the full rules; this is the reasoning to give judges.
 
----
-
-## 8. How this scales
-
-**Geographically, the same pipeline runs anywhere a satellite passes over, and Sentinel-2 covers all land every few days.**
-1. **All of Punjab:** ~30 lakh ha of paddy. Imagery is free and computation is modest; the work is mostly onboarding hiring centres and nodal officers.
-2. **Haryana, Uttar Pradesh, Madhya Pradesh:** the same rice-to-wheat squeeze. In 2024, Madhya Pradesh topped the national stubble-burning list, with Sheopur district alone recording 2,504 fires.
-3. **Pakistan's Punjab:** home to about 110 million people, where an estimated 20% of air pollution comes from crop burning during the same narrow two-week window between rice harvest and wheat sowing.
-4. **Other residue-burning systems:** the method (detect harvest progress, forecast service demand, allocate shared equipment) transfers to other crops and regions where shared machinery and tight windows collide, such as sugarcane burning in Florida or custom-harvest crews routing across the US Great Plains.
-
-**As a product:**
-- **A forecasting layer for existing booking systems.** Unnat Kisan already has the machine inventory and the nodal officers; what it lacks is knowing where and when to pre-assign. Integrating is a far easier adoption path than another app.
-- **Verification for incentives.** Farmers have told researchers that direct incentives for *not* burning might work better than machine subsidies. Paying for non-burning requires verifying it field by field, which satellite burned-area monitoring can do at scale.
-- **Straw supply chains.** Punjab is rapidly growing ex-situ straw use (industrial boilers, pellet plants). Knowing which fields were harvested this week tells balers and biomass buyers where to collect straw before it gets burned.
-- **Who pays:** state agriculture departments (they already fund machines and monitoring), private hiring-centre operators (higher machine utilisation means more revenue), and biomass buyers (feedstock logistics). Farmers pay nothing.
-
----
-
-## 9. Assumptions and honest limits
-
-**Assumptions in `config/region.json`** (present them as adjustable scenarios, not facts):
-- Machine throughput ~3.2 ha/day (~8 acres) per seeder plus tractor.
-- 35% of rice area depends on rented hiring-centre machines rather than owned ones.
-- Reactive booking adds ~2 days between harvest and a machine being dispatched.
-- 15-day sowing window (conservative end of CEEW's 15–18).
-- Hiring-centre locations and machine counts are simulated.
-
-**Limits to say before a judge does:**
-- Some burning is purely economic; better allocation helps the "no time / no machine" farmers, not the ones who simply find burning cheaper.
-- Some farmers distrust the machines: in CEEW's survey, 20% of in-situ users linked lower wheat yields and pest attacks to them.
-- We don't create machines; we get more use out of the ones that exist.
-- 10–30 m pixels struggle with very small fields, and clouds can hide individual passes.
-- Harvest-date predictions are probabilistic; we show a window, not a day.
-- The narrower, defensible claim: **more machine-hours delivered inside the sowing window per machine owned.**
+- **Satellites as the inspector.** Sentinel-2 images every field at 10 m every few days for free (NASA's HLS adds Landsat for
+  more clear looks). "Current" means the latest clear pass plus today's forecast.
+- **Indices that read the crop.** NDVI (greenness) peaks around flowering and collapses at harvest; NBR goes strongly negative
+  on burned ground, and a scar persists for days, unlike a fire that's only caught during an overpass. NASA FIRMS adds active
+  fire points; rainfall and the forecast drive the harvest-versus-rain check (act now when the crop looks ready and any of the
+  next 3 days forecasts ≥ 15 mm).
+- **Perceptron reads the season like a video.** Mk1.5 watches the time-lapse, draws field polygons, and dates and places what
+  changed: flooding, stress, visible change. If its polygons are weak, index math locates the change and Perceptron still
+  describes and timestamps it; each plan records which path (`source`) produced it.
+- **Eight checks, every morning, including the clear ones.** A quiet farm still hears that harvest, rain, fire, flood and
+  stress were looked at. The farm's flag is its worst check (`fine` / `watch` / `act_now`).
+- **A route for the officer.** Fires, floods, harvest-before-rain and fresh burn scars first; then stress, visible change,
+  readiness, establishment and older scars. Fine farms aren't stops but still get their plan.
+- **Delivered where people already are.** A Grok Voice call and a Photon SMS every morning, in the roster's language; the
+  officer can ask follow-ups by voice or iMessage; a farmer can call in about their own farm only. Sends go only to numbers in
+  the roster, and every attempt is logged in `deliveries.json`.
+- **Safe failure.** A cloudy pass keeps the last good plan up with its date; a failed call still sends the SMS; a restarted
+  queue never sends the same channel twice in one morning.
 
 ---
 
-## 10. Pitch spine (2 minutes)
+## 7. Why it scales
 
-1. **Hook (15 s):** "Every October, Punjab farmers have about two weeks to clear their fields. When the machine doesn't come, they burn, and North India chokes."
-2. **Why it persists (20 s):** machines exist but arrive late; booking apps are reactive and barely used; satellites are used to fine farmers after the fire.
-3. **Insight (15 s):** the satellites already see which fields were just cut and which are next. That's a demand forecast nobody is using.
-4. **Demo (60 s):** time-lapse of the real 2026 harvest wave in Sangrur → fields coloured by stage → Perceptron confirming harvest and burn timing → tomorrow's dispatch plan → optimized vs first-come-first-served.
-5. **Scale + ask (10 s):** a forecasting layer for Unnat Kisan; same pipeline for Haryana, UP, MP and Pakistan's Punjab.
-
-## 11. Likely judge questions
-
-- **"How accurate is the harvest prediction?"** Show `evaluate.py` results on mock ground truth, plus the US validation against USDA Crop Progress if we get to it.
-- **"Isn't this just a booking app?"** No: booking apps react to requests; we forecast demand before requests exist, and we work with their existing inventory.
-- **"Who uses it?"** Hiring-centre operators and village nodal officers, whose job is already allocation.
-- **"Why would farmers trust it?"** They don't need to interact with it; a machine just shows up on time.
-- **"Where's the real data vs simulated?"** Imagery, harvest stages, fires and weather are real. Hiring-centre locations and the rented-machine share are simulated or assumed, and labelled as such.
-- **"What does Perceptron add over index math?"** It reads the season as a video (when and where change happened) and verifies burn scars, which is exactly where fire-count monitoring has been failing.
+- **The data is global and free.** Sentinel-2 covers all land every few days; the pipeline and checks don't depend on Punjab.
+  The spec already allows switching to a clearer smallholder landscape if Sangrur's season has too few clear frames.
+- **Delivery needs only a basic phone.** Voice calls and SMS work without smartphones, apps or literacy, which is what lets
+  this reach small family farms rather than tech-forward ones.
+- **One officer, many farms.** The route turns an officer's day from guesswork into triage across every farm in their area.
+- **Next regions with the same squeeze:** Haryana, Uttar Pradesh and Madhya Pradesh (MP topped the 2024 burning list; Sheopur
+  alone recorded 2,504 fires) and Pakistan's Punjab (~110 million people, ~20% of air pollution from crop burning in the same
+  two-week window).
+- **Who pays later** (out of scope for this build, but the commercial story): agriculture departments and extension services
+  first; cooperatives, buyers, insurers and microlenders later. Farmers never pay.
 
 ---
 
-## 12. Glossary
+## 8. Honest limits
 
-- **Kharif / rabi:** monsoon (summer) and winter cropping seasons. Rice is kharif, wheat is rabi.
-- **Lakh / crore:** 1 lakh = 100,000; 1 crore = 10 million.
-- **MSP:** minimum support price, the government's guaranteed procurement price.
-- **CRM machines:** crop-residue-management machines (Happy Seeder, Super Seeder, balers, mulchers). *In-situ* = straw stays in the field; *ex-situ* = straw is removed and used elsewhere.
-- **CHC:** custom hiring centre, which rents out farm machinery.
-- **Nodal officer:** village-level official who coordinates machine allocation.
-- **NDVI / NBR:** satellite indices for vegetation greenness and burn severity.
-- **Sentinel-2 / HLS / FIRMS:** ESA's 10 m imaging satellites / NASA's harmonized Landsat + Sentinel-2 product / NASA's active-fire detection system.
+- 10–30 m pixels struggle with very small or intercropped plots; clouds can hide passes (the plan always carries its pass date).
+- Checks are observations and timing, not agronomic prescriptions: "this area changed", "ready", "rain coming".
+- Some burning is purely economic; the plan can warn and inform, not force a choice.
+- Phone delivery depends on the roster: numbers the team supplies, sends only to those numbers.
+- **ASSUMPTION:** the 15 mm / 3-day rain threshold and 5-day fire window come from the spec and should be presented as tunable.
+
+---
+
+## 9. Pitch spine (2 minutes)
+
+1. **Hook (15 s):** "A small farmer's biggest decisions, when to harvest, whether rain is coming, whether something's wrong,
+   get made blind. The officer who could help covers hundreds of farms."
+2. **Insight (15 s):** satellites already see every field every few days. Nobody turns that into a phone call.
+3. **Demo (60 s):** the real Sangrur season time-lapse → every farm's flag on the map → click a farm, eight checks → a real
+   phone rings with that plan → the officer's route.
+4. **Why it's trustworthy (15 s):** every check every morning, clear ones included; Perceptron dates and places changes; sends
+   only to the roster; nothing invented.
+5. **Scale (15 s):** free global imagery, basic phones, one officer covering many farms; same pipeline for Haryana, UP, MP,
+   Pakistan's Punjab.
+
+## 10. Likely judge questions
+
+- **"How do you know a field is ready / burned / flooded?"** Index rules plus Perceptron on the time-lapse; each plan records its source.
+- **"What if it's cloudy?"** The last clear pass stays up and every plan states its date.
+- **"Why calls and texts instead of an app?"** Small farmers have basic phones; voice needs no literacy.
+- **"What's real vs simulated?"** Imagery, indices, fires and weather are real; the roster is team-supplied numbers.
+- **"Why Perceptron over plain index math?"** It reads the season as a video, dating and placing changes (flood, stress,
+  visible change) that a single index snapshot can't explain.
+
+---
+
+## 11. Glossary
+
+- **Kharif / rabi:** monsoon and winter seasons (rice is kharif, wheat is rabi). **Lakh:** 100,000.
+- **MSP:** minimum support price. **Extension officer:** government agronomist who advises and visits farmers.
+- **NDVI / NBR:** satellite indices for greenness and burn severity. **FIRMS:** NASA's active-fire detection.
+- **Sentinel-2 / HLS:** ESA's 10 m imaging satellites / NASA's harmonized Landsat + Sentinel-2 product.
 
 ---
 
@@ -185,7 +188,6 @@ Perceptron's models are built for image and video understanding, including times
 - Scroll.in (reasons for burning, willingness to stop): https://scroll.in/article/900152/punjab-farmers-want-to-stop-burning-stubble-that-causes-delhi-pollution-but-they-have-few-options
 - Scroll.in (2015 Patiala survey 41% / 48%, 7–10 day sowing, 2009 Act): https://scroll.in/article/1011927/as-farmers-continue-to-burn-stubble-crores-of-rupees-in-subsidies-have-gone-up-in-smoke
 - Tribune, baler shortage (farmer messaging officials): https://www.tribuneindia.com/news/punjab/baler-shortage-makes-farmers-burn-crop-residue-across-state-561504/amp
-- Tribune, Unnat Kisan (1.3 lakh machines mapped, nodal officers): https://www.tribuneindia.com/news/punjab/punjab-sees-52-drop-in-farm-fire-incidents-since-2020-21/amp
 - Tribune, 2025 season (5,085 cases vs 10,443; 1,48,000 CRM machines; 1,500 CHC target; straw use): https://www.tribuneindia.com/news/punjab/farm-fires-down-to-50-as-season-nears-end
 - News On AIR, Sept 2, 2026 (30 lakh ha paddy, 18.81 Mt straw, fire counts 2023–2025): https://newsonair.gov.in/punjab-govt-calls-for-intensified-awareness-campaign-to-reduce-paddy-straw-burning/
 - New Kerala / CAQM, Oct 6, 2026 (84 incidents this season): https://www.newkerala.com/news/a/punjab-records-84-stubble-burning-fires-amritsar-accounts-49-203.htm
@@ -198,4 +200,5 @@ Perceptron's models are built for image and video understanding, including times
 - ETV Bharat (MP topped 2024 list; Sheopur 2,504 fires; IARI satellite monitoring): https://www.etvbharat.com/en/!bharat/special-force-to-monitor-sheopur-stubble-burning-using-satellite-images-enn25100502890
 - CERP (Pakistan's Punjab: ~110M people, ~20% of air pollution from crop burning, two-week window): https://www.cerp.org.pk/?p=38603
 - Climate Change AI / NeurIPS 2024 (burn detection with geospatial foundation model): https://www.climatechange.ai/papers/neurips2024/97
-- OpenGov Asia (CHC Farm Machinery app, 50 km): https://opengovasia.com/?p=34045
+- CGAP Smallholder Household Survey, Mozambique (weather as top risk): https://microdata.fao.org/index.php/catalog/1476/variable/F3/V830?name=A60
+- Satellite pasture biomass pilot (data alone doesn't drive uptake): https://core.ac.uk/works/38561630

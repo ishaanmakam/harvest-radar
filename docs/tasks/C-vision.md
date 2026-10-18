@@ -1,6 +1,8 @@
-# Person C — Perceptron vision (`vision/`)
+# Srikar — Perceptron reader (`vision/`); also owns the map (`docs/tasks/D-web.md`)
 
-Paste into your agent: "Read AGENTS.md and docs/tasks/C-vision.md. Start with the Perceptron validation test."
+Paste into your agent: "Read AGENTS.md, the spec in docs/superpowers/specs/2026-10-17-field-inspector-design.md, and docs/tasks/C-vision.md. Start with the Perceptron validation test."
+
+Per the spec, Perceptron feeds three of the eight checks: `flood` (water on the field in the latest clear pass), `stress` (part of a field declining that is not a harvest) and `visible_change` (a change dated since the previous clear pass, with a timestamp and place). Make `insights.json` carry those per zone or per field so the decision layer can use them; if polygons are weak, index math locates the change and Perceptron still describes and timestamps it. Agree any `insights.json` shape change with Ishaan in `#bot-channel` first.
 
 You own the Perceptron sponsor track. Helpers already written (untested against the live API):
 `vision/perceptron_client.py` (budget cap, spend log, annotation parser, 0–1000 coords → lon/lat),
