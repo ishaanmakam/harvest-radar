@@ -343,6 +343,10 @@ def main():
                 path.write_text(text)
                 time.sleep(1)
             rows = parse_csv(text, source, keep_box, seen, header_printed)
+            later = [row for row in rows if parse_day(row["date"]) > as_of]
+            if later:
+                log(STEP, f"{source} {chunk_start.isoformat()}: dropped {len(later)} detections after {as_of.isoformat()}")
+            rows = [row for row in rows if parse_day(row["date"]) <= as_of]
             chunk_end = chunk_start + timedelta(days=day_count - 1)
             outside = sorted({row["date"] for row in rows if not (chunk_start.isoformat() <= row["date"] <= chunk_end.isoformat())})
             if outside:

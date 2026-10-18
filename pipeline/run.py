@@ -83,10 +83,10 @@ def prepare_staging():
     say(f"staging {STAGING}")
 
 
-def child_env(as_of):
+def child_env(as_of, out_dir=None):
     env = os.environ.copy()
     env["HR_AS_OF"] = as_of
-    env["HR_OUT"] = str(STAGING)
+    env["HR_OUT"] = str(out_dir or STAGING)
     env["PYTHONUNBUFFERED"] = "1"
     env.pop("HR_FAIL_STEP", None)
     return env
@@ -184,9 +184,10 @@ def latest_overpass(pass_date):
     return when, published, field, item_id
 
 
-def source_lines(summary):
-    weather = json.loads((STAGING / "weather.json").read_text())
-    fires = json.loads((STAGING / "fires.json").read_text())
+def source_lines(summary, folder=None):
+    folder = folder or STAGING
+    weather = json.loads((folder / "weather.json").read_text())
+    fires = json.loads((folder / "fires.json").read_text())
     observed = weather["observed"]["source"].split(";")[0].strip()
     forecast = weather["forecast"]["source"]
     return {
@@ -208,8 +209,8 @@ def validate_run(doc):
     return not errors
 
 
-def validate_staging():
-    cmd = [str(PYTHON), str(ROOT / "scripts" / "validate_contracts.py"), str(STAGING)]
+def validate_folder(folder):
+    cmd = [str(PYTHON), str(ROOT / "scripts" / "validate_contracts.py"), str(folder)]
     say(f"validate {' '.join(cmd)}")
     proc = subprocess.Popen(
         cmd,
@@ -223,6 +224,10 @@ def validate_staging():
     for line in proc.stdout:
         print(f"[validate] {line.rstrip()}", flush=True)
     return proc.wait() == 0
+
+
+def validate_staging():
+    return validate_folder(STAGING)
 
 
 def swap_files():
@@ -258,13 +263,206 @@ def swap_frames():
     say(f"replaced {dest}")
 
 
+def replay_fail(as_of, step, durations, started_at):
+    say(f"FAILED {step}")
+    append_log({
+        "as_of": as_of,
+        "mode": "replay",
+        "offline": False,
+        "failed_step": step,
+        "durations_s": durations,
+        "generated_at": utc_stamp(datetime.now(timezone.utc)),
+        "elapsed_s": round(time.perf_counter() - started_at, 3),
+    })
+    say("data/out was not written")
+    sys.exit(1)
+
+
+def copy_replay_frames(staging, as_of):
+    src = DATA_OUT / "frames"
+    dest = staging / "frames"
+    if dest.exists():
+        shutil.rmtree(dest)
+    dest.mkdir(parents=True)
+    doc = json.loads((src / "frames.json").read_text())
+    kept = [frame for frame in doc["frames"] if frame["date"] <= as_of]
+    if not kept:
+        raise FileNotFoundError(f"no frames on or before {as_of}")
+    for frame in kept:
+        image = src / Path(frame["rgb"]).name
+        if not image.exists():
+            raise FileNotFoundError(image)
+        shutil.copy2(image, dest / image.name)
+    doc["frames"] = kept
+    (dest / "frames.json").write_text(json.dumps(doc, separators=(",", ":")))
+    say(f"frames {len(kept)} on or before {as_of}")
+
+
+def hindsight_outcome(staging, as_of):
+    from datetime import date, timedelta
+
+    weather = json.loads((DATA_OUT / "weather.json").read_text())
+    observed = dict(zip(weather["observed"]["dates"], weather["observed"]["precip_mm"]))
+    forecast = json.loads((staging / "weather.json").read_text())["forecast"]
+    issued = dict(zip(forecast["dates"], forecast["precip_mm"]))
+    day = date.fromisoformat(as_of)
+    rain = []
+    for offset in range(7):
+        text = (day + timedelta(days=offset)).isoformat()
+        rain.append({
+            "date": text,
+            "forecast_mm": issued.get(text),
+            "actual_mm": observed.get(text),
+        })
+    summary = json.loads((CACHE / "s01_summary.json").read_text())
+    later = [text for text in summary["dates"] if text > as_of]
+    return {
+        "note": f"HINDSIGHT: what actually happened after {as_of}; not used by any decision",
+        "as_of": as_of,
+        "rain": rain,
+        "next_clear_pass": later[0] if later else None,
+    }
+
+
+def no_hindsight(staging, as_of):
+    from s06_weather import archive_source
+    from datetime import date
+
+    errors = []
+    timeseries = json.loads((staging / "timeseries.json").read_text())
+    late_series = [day for day in timeseries["dates"] if day > as_of]
+    if late_series:
+        errors.append(f"timeseries dates after as_of: {late_series[:3]}")
+    frames = json.loads((staging / "frames" / "frames.json").read_text())
+    late_frames = [frame["date"] for frame in frames["frames"] if frame["date"] > as_of]
+    if late_frames:
+        errors.append(f"frame dates after as_of: {late_frames[:3]}")
+    fires = json.loads((staging / "fires.json").read_text())
+    late_fires = [item["date"] for item in fires["detections"] if item["date"] > as_of]
+    if late_fires:
+        errors.append(f"fire dates after as_of: {late_fires[:3]}")
+    weather = json.loads((staging / "weather.json").read_text())
+    late_observed = [day for day in weather["observed"]["dates"] if day >= as_of]
+    if late_observed:
+        errors.append(f"observed weather on or after as_of: {late_observed[:3]}")
+    forecast_dates = weather["forecast"]["dates"]
+    if not forecast_dates or forecast_dates[0] != as_of:
+        errors.append(f"forecast does not start at {as_of}")
+    expected = archive_source(date.fromisoformat(as_of))
+    if weather["forecast"]["source"] != expected:
+        errors.append(f"forecast source is {weather['forecast']['source']!r}")
+    if errors:
+        for error in errors:
+            say(f"NO HINDSIGHT: FAIL {error}")
+        return False
+    say("NO HINDSIGHT: PASS")
+    return True
+
+
+def swap_replay(staging, as_of):
+    dest = ROOT / "data" / "replay" / as_of
+    dest.parent.mkdir(parents=True, exist_ok=True)
+    backup = CACHE / "replay_backup"
+    if backup.exists():
+        shutil.rmtree(backup)
+    moved = False
+    if dest.exists():
+        dest.rename(backup)
+        moved = True
+    try:
+        staging.rename(dest)
+    except Exception:
+        if moved and not dest.exists():
+            backup.rename(dest)
+        raise
+    if backup.exists():
+        shutil.rmtree(backup)
+    say(f"wrote {dest}")
+
+
+def run_replay(as_of):
+    from datetime import date
+
+    try:
+        day = date.fromisoformat(as_of)
+    except ValueError:
+        say(f"ERROR as_of {as_of} is not YYYY-MM-DD")
+        sys.exit(1)
+    today = datetime.now(ZoneInfo("America/Chicago")).date()
+    if day >= today:
+        say(f"replay as_of must be before today ({today.isoformat()}, America/Chicago)")
+        sys.exit(1)
+    as_of = day.isoformat()
+    say(f"as_of {as_of} mode replay")
+    started_at = time.perf_counter()
+    staging = CACHE / "replay_staging" / as_of
+    if staging.exists():
+        shutil.rmtree(staging)
+    staging.mkdir(parents=True)
+    for name in ("zones.geojson", "fields.geojson"):
+        shutil.copy2(DATA_OUT / name, staging / name)
+    try:
+        copy_replay_frames(staging, as_of)
+    except FileNotFoundError as exc:
+        say(f"ERROR {exc}")
+        replay_fail(as_of, "frames", {}, started_at)
+    env = child_env(as_of, staging)
+    durations = {}
+    for name, script, step_args in (
+        ("s04", "s04_timeseries.py", []),
+        ("s06", "s06_weather.py", ["--replay"]),
+        ("s07", "s07_fires.py", ["--from-cache"]),
+    ):
+        code, elapsed = run_step(name, script, step_args, env)
+        durations[name] = round(elapsed, 3)
+        if code != 0:
+            replay_fail(as_of, name, durations, started_at)
+    durations["total"] = round(sum(durations.values()), 3)
+    summary, latest, count = summary_passes(as_of)
+    if latest is None:
+        say("FAILED no pass date on or before as_of in s01_summary.json")
+        replay_fail(as_of, "run.json", durations, started_at)
+    completed = datetime.now(timezone.utc)
+    doc = {
+        "as_of": as_of,
+        "mode": "replay",
+        "generated_at": utc_stamp(completed),
+        "latest_pass": latest,
+        "pass_count": count,
+        "offline": False,
+        "durations_s": durations,
+        "sources": source_lines(summary, staging),
+    }
+    if not validate_run(doc):
+        replay_fail(as_of, "run.json", durations, started_at)
+    (staging / "run.json").write_text(json.dumps(doc, separators=(",", ":")))
+    outcome = hindsight_outcome(staging, as_of)
+    (staging / "outcome.json").write_text(json.dumps(outcome, separators=(",", ":")))
+    if not no_hindsight(staging, as_of):
+        replay_fail(as_of, "hindsight", durations, started_at)
+    if not validate_folder(staging):
+        say("FAILED validation; data/out and data/replay left untouched")
+        replay_fail(as_of, "validate", durations, started_at)
+    swap_replay(staging, as_of)
+    say(f"total {durations['total']:.1f}s")
+    for name in ("s04", "s06", "s07"):
+        say(f"{name} {durations[name]:.1f}s")
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Refresh pipeline outputs for today")
+    parser = argparse.ArgumentParser(description="Refresh pipeline outputs for today, or replay a past morning")
     parser.add_argument("--offline", action="store_true")
+    parser.add_argument("--as-of", dest="as_of", default=None)
     args = parser.parse_args()
     if not PYTHON.exists():
         say(f"ERROR missing {PYTHON}")
         sys.exit(1)
+    if args.as_of:
+        if args.offline:
+            say("ERROR a replay does not take --offline")
+            sys.exit(1)
+        run_replay(args.as_of)
+        return
 
     as_of = datetime.now(ZoneInfo("America/Chicago")).date().isoformat()
     offline = args.offline
