@@ -398,6 +398,9 @@ export function createGlobe(container, { bounds, onEnter, onToast }) {
     viewWidth = Math.max(1, container.clientWidth);
     viewHeight = Math.max(1, container.clientHeight);
     camera.aspect = viewWidth / viewHeight;
+    // Portrait screens: keep the horizontal field of view, so the whole globe stays in frame on a phone.
+    const baseFov = 42;
+    camera.fov = camera.aspect < 1 ? (2 * Math.atan(Math.tan((baseFov * Math.PI) / 360) / camera.aspect) * 180) / Math.PI : baseFov;
     camera.updateProjectionMatrix();
     renderer.setSize(viewWidth, viewHeight, false);
     const scale = viewHeight * 0.5 * pixelRatio;

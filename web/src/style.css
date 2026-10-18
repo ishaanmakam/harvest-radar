@@ -2106,7 +2106,8 @@ select {
 
   #globe {
     left: 0;
-    opacity: 0.4;
+    bottom: 34%;
+    opacity: 0.85;
   }
 
   .sat-legend {
@@ -2612,4 +2613,22 @@ body.has-page {
   .bar-row {
     grid-template-columns: 64px 1fr 40px;
   }
+}
+
+/* Pages on narrow screens: wide tables scroll inside their wrapper instead of widening the page. */
+.page-content,
+.page-content > *,
+.page-content .section {
+  min-width: 0;
+}
+
+.page-content .table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.page-content .lede,
+.page-content p {
+  overflow-wrap: anywhere;
 }

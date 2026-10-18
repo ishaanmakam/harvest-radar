@@ -60,6 +60,8 @@ function setBadge(data, mapApi) {
   badge.textContent = standIn ? `Imagery: ${imagery} · Farms & plans: ${farms}` : "Live season";
   badge.className = standIn ? "badge badge-standin" : "badge badge-live";
   badge.title = standIn ? "Stand-in season: at least one file came from data/mock" : "Every file came from data/out";
+  // run.json already says "Live · date" in its own badge; a second "Live season" pill next to it says nothing new.
+  badge.hidden = !standIn && Boolean(data.run?.mode);
 }
 
 /** run.json says whether the farm files came from a live run or a replay, and for which day. */
