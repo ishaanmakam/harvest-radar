@@ -31,21 +31,29 @@ def normalize_phone(phone: str) -> str:
 def load_roster(path=None):
     """Rows of the roster CSV, validated. path defaults to ROSTER_PATH from the environment / .env."""
     load_env()
-    path = Path(path or os.environ.get("ROSTER_PATH") or "")
-    if not str(path) or not path.exists():
-        raise FileNotFoundError(f"roster not found at {path or '<ROSTER_PATH unset>'}; see intelligence/roster.example.csv")
+    raw = str(path) if path else (os.environ.get("ROSTER_PATH") or "")
+    if not raw:
+        raise FileNotFoundError("ROSTER_PATH is not set in .env and no roster path was given; see intelligence/roster.example.csv")
+    path = Path(raw)
+    if not path.is_file():
+        raise FileNotFoundError(f"roster not found at {path}; see intelligence/roster.example.csv")
     with open(path, newline="", encoding="utf-8-sig") as fh:
         reader = csv.DictReader(fh)
         missing = [c for c in ROSTER_COLUMNS if c not in (reader.fieldnames or [])]
         if missing:
             raise ValueError(f"roster is missing columns {missing}")
         rows = [{k: (v or "").strip() for k, v in r.items()} for r in reader]
-    seen = set()
+    seen, phones = set(), set()
     for i, r in enumerate(rows, start=2):
         where = f"roster line {i} ({r.get('roster_id') or '?'})"
         if not r["roster_id"] or r["roster_id"] in seen:
             raise ValueError(f"{where}: roster_id missing or duplicated")
         seen.add(r["roster_id"])
+        phone = normalize_phone(r["phone"])
+        if phone:
+            if phone in phones:
+                raise ValueError(f"{where}: phone {phone} is already used by another row (a caller must map to one row)")
+            phones.add(phone)
         if r["role"] not in ROLES:
             raise ValueError(f"{where}: role must be one of {ROLES}, got {r['role']!r}")
         if not r["language"]:
@@ -57,16 +65,26 @@ def load_roster(path=None):
 
 
 def resolve_caller(handle: str, roster):
-    """Roster row for a caller ID / iMessage handle, or None (the handler then says UNKNOWN_CALLER_MESSAGE)."""
-    h = normalize_phone(handle)
+    """Roster row for a caller ID / iMessage handle, or None (the handler then says UNKNOWN_CALLER_MESSAGE).
+    A number given with a country code (+..., or more than ten digits) must equal a roster phone exactly; a
+    national-format number (ten digits or fewer, no +) matches on its ten-digit tail, and only if exactly one row
+    matches. Email-style handles never match a phone number."""
+    raw = (handle or "").strip()
+    if not raw or "@" in raw or re.search(r"[A-Za-z]", raw):
+        return None
+    h = normalize_phone(raw)
     if not h:
         return None
-    tail = h.lstrip("+")[-10:]
-    for r in roster:
-        p = r["phone"]
-        if p and (p == h or p.lstrip("+")[-10:] == tail):
-            return r
-    return None
+    if h.startswith("+"):
+        matches = [r for r in roster if r["phone"] == h]
+    else:
+        tail = h[-10:]
+        matches = [r for r in roster if r["phone"] and r["phone"].lstrip("+")[-10:] == tail]
+    return matches[0] if len(matches) == 1 else None
+
+
+def _norm_farm(fid):
+    return fid.strip().upper() if isinstance(fid, str) else fid
 
 
 class Tools:
@@ -84,6 +102,7 @@ class Tools:
         return self.caller["role"] if self.caller else None
 
     def _farm(self, farm_id):
+        farm_id = _norm_farm(farm_id)
         if self.caller is None:
             raise PermissionError(UNKNOWN_CALLER_MESSAGE)
         if self.role == "farmer":

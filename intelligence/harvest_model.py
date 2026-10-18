@@ -70,7 +70,7 @@ def analyze_field(fid, zone_id, dates, ndvi, nbr, fires_by_field, th):
     sm = median_smooth([v for _, v, _ in obs])
     pk = max(range(len(sm)), key=lambda i: sm[i])
     peak_date = plateau_centre([o[0] for o in obs], sm, pk, th.get("peak_plateau_drop", 0.04))
-    peak_ndvi = obs[pk][1]
+    peak_ndvi = sm[pk]   # the smoothed value the crop-level gate below uses (a raw spike would overstate it)
     rec["peak_date"], rec["peak_ndvi"] = s(peak_date), round(peak_ndvi, 3)
     if sm[pk] < th["peak_ndvi_min"]:
         rec["notes"] = "never reached crop-level greenness (not paddy?)"

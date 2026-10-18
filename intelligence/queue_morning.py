@@ -15,6 +15,7 @@ Rules
 - the roster language is applied when the words are rendered, so both channels say the same thing
 """
 import argparse
+import os
 from collections import Counter
 from datetime import date
 from pathlib import Path
@@ -28,6 +29,51 @@ LABELS = {"harvest_ready": "Harvest readiness", "harvest_before_rain": "Harvest 
           "burn_scar": "Burn scar", "fire": "Fire", "flood": "Flood", "stress": "Stress or browning",
           "visible_change": "Visible change"}
 STATUS_WORDS = {"clear": "clear", "watch": "watch", "act_now": "act now"}
+
+# Language packs for the fixed structure of the words (labels, status words, headings). The free text (details,
+# today line, route reasons) is English unless a `translate(text, language)` hook is given, e.g. a Grok call.
+# pa / hi strings were drafted by the team's agent: have a native speaker read them before the first real send.
+PACKS = {
+    "en": {
+        "head": "Harvest Radar morning plan for farm {farm}, from the satellite pass of {date}.",
+        "flag": "Flag", "today": "Today", "checks": "Checks", "risks": "Risks", "all_clear": "All eight checks are clear.",
+        "status": STATUS_WORDS, "flags": {"fine": "fine", "watch": "watch", "act_now": "act now"}, "labels": LABELS,
+        "route_head": "Harvest Radar officer route for {date}: {n} stops.", "no_stops": "No stops today: every farm is fine.",
+        "farm": "Farm", "actions": {"visit": "visit", "call": "call"},
+    },
+    "hi": {
+        "head": "हार्वेस्ट रडार की सुबह की योजना, खेत {farm}, {date} के सैटेलाइट पास से।",
+        "flag": "स्थिति", "today": "आज", "checks": "जाँचें", "risks": "जोखिम", "all_clear": "सभी आठ जाँचें ठीक हैं।",
+        "status": {"clear": "ठीक", "watch": "ध्यान दें", "act_now": "अभी कार्रवाई करें"},
+        "flags": {"fine": "ठीक", "watch": "ध्यान दें", "act_now": "अभी कार्रवाई करें"},
+        "labels": {"harvest_ready": "कटाई की तैयारी", "harvest_before_rain": "बारिश से पहले कटाई", "establishment": "फसल का जमाव",
+                   "burn_scar": "जलने का निशान", "fire": "आग", "flood": "खड़ा पानी", "stress": "तनाव या पीलापन",
+                   "visible_change": "दिखने वाला बदलाव"},
+        "route_head": "हार्वेस्ट रडार अधिकारी रूट, {date}: {n} स्टॉप।", "no_stops": "आज कोई स्टॉप नहीं: हर खेत ठीक है।",
+        "farm": "खेत", "actions": {"visit": "जाएँ", "call": "फ़ोन करें"},
+    },
+    "pa": {
+        "head": "ਹਾਰਵੈਸਟ ਰਾਡਾਰ ਸਵੇਰ ਦੀ ਯੋਜਨਾ, ਖੇਤ {farm}, {date} ਦੇ ਸੈਟੇਲਾਈਟ ਪਾਸ ਤੋਂ।",
+        "flag": "ਸਥਿਤੀ", "today": "ਅੱਜ", "checks": "ਜਾਂਚਾਂ", "risks": "ਖ਼ਤਰੇ", "all_clear": "ਸਾਰੀਆਂ ਅੱਠ ਜਾਂਚਾਂ ਠੀਕ ਹਨ।",
+        "status": {"clear": "ਠੀਕ", "watch": "ਧਿਆਨ ਦਿਓ", "act_now": "ਹੁਣੇ ਕਾਰਵਾਈ ਕਰੋ"},
+        "flags": {"fine": "ਠੀਕ", "watch": "ਧਿਆਨ ਦਿਓ", "act_now": "ਹੁਣੇ ਕਾਰਵਾਈ ਕਰੋ"},
+        "labels": {"harvest_ready": "ਵਾਢੀ ਦੀ ਤਿਆਰੀ", "harvest_before_rain": "ਮੀਂਹ ਤੋਂ ਪਹਿਲਾਂ ਵਾਢੀ", "establishment": "ਫ਼ਸਲ ਦਾ ਜੰਮਣਾ",
+                   "burn_scar": "ਸੜਨ ਦਾ ਨਿਸ਼ਾਨ", "fire": "ਅੱਗ", "flood": "ਖੜ੍ਹਾ ਪਾਣੀ", "stress": "ਤਣਾਅ ਜਾਂ ਪੀਲਾਪਣ",
+                   "visible_change": "ਦਿਖਾਈ ਦੇਣ ਵਾਲੀ ਤਬਦੀਲੀ"},
+        "route_head": "ਹਾਰਵੈਸਟ ਰਾਡਾਰ ਅਫ਼ਸਰ ਰੂਟ, {date}: {n} ਸਟਾਪ।", "no_stops": "ਅੱਜ ਕੋਈ ਸਟਾਪ ਨਹੀਂ: ਹਰ ਖੇਤ ਠੀਕ ਹੈ।",
+        "farm": "ਖੇਤ", "actions": {"visit": "ਜਾਓ", "call": "ਫ਼ੋਨ ਕਰੋ"},
+    },
+}
+
+
+def pack(language):
+    return PACKS.get((language or "en").strip().lower()[:2], PACKS["en"])
+
+
+def _translator(translate, language, P):
+    if translate and P is not PACKS["en"]:
+        return lambda text: translate(text, language)
+    return lambda text: text
 
 
 class UnverifiedProvider:
@@ -43,26 +89,31 @@ class UnverifiedProvider:
 
 
 # ---------------- words ----------------
-def render_plan(plan, language):
-    """The farmer's morning plan, every check included (clear ones too). Language is a tag for the voice/SMS layer."""
-    lines = [f"[{language}] Harvest Radar morning plan for farm {plan['farm_id']}, from the satellite pass of {plan['as_of']}. "
-             f"Flag: {STATUS_WORDS.get(plan['flag'], plan['flag'])}.",
-             f"Today: {plan['today']}",
-             "Checks:"]
+def render_plan(plan, language, translate=None):
+    """The farmer's morning plan in the roster language, every check included (clear ones too).
+    translate(text, language) -> text, when given, is applied to the free-text parts (details, today, risks)."""
+    P = pack(language)
+    tr = _translator(translate, language, P)
+    lines = [P["head"].format(farm=plan["farm_id"], date=plan["as_of"]) + f" {P['flag']}: {P['flags'].get(plan['flag'], plan['flag'])}.",
+             f"{P['today']}: {tr(plan['today'])}",
+             f"{P['checks']}:"]
     for c in plan["checks"]:
-        lines.append(f"- {LABELS.get(c['kind'], c['kind'])}: {STATUS_WORDS[c['status']]}. {c['detail']}"
-                     + (f" ({c['where']})" if c.get("where") else ""))
-    lines.append("Risks: " + "; ".join(plan["risks"]) if plan["risks"] else "All eight checks are clear.")
+        lines.append(f"- {P['labels'].get(c['kind'], c['kind'])}: {P['status'][c['status']]}. {tr(c['detail'])}"
+                     + (f" ({tr(c['where'])})" if c.get("where") else ""))
+    lines.append(f"{P['risks']}: " + "; ".join(tr(r) for r in plan["risks"]) if plan["risks"] else P["all_clear"])
     return "\n".join(lines)
 
 
-def render_route(route, language):
-    """The officer's route: which farms to visit or call today, in order, and why."""
+def render_route(route, language, translate=None):
+    """The officer's route in the roster language: which farms to visit or call today, in order, and why."""
+    P = pack(language)
+    tr = _translator(translate, language, P)
     stops = route.get("stops", [])
-    head = f"[{language}] Harvest Radar officer route for {route.get('as_of', '')}: {len(stops)} stops."
+    head = P["route_head"].format(date=route.get("as_of", ""), n=len(stops))
     if not stops:
-        return head + " No stops today: every farm is fine."
-    body = [f"{i}. Farm {st['farm_id']}: {st['action']}. {st['why']}" for i, st in enumerate(stops, start=1)]
+        return head + " " + P["no_stops"]
+    body = [f"{i}. {P['farm']} {st['farm_id']}: {P['actions'].get(st['action'], st['action'])}. {tr(st['why'])}"
+            for i, st in enumerate(stops, start=1)]
     return "\n".join([head] + body)
 
 
@@ -73,11 +124,14 @@ def load_deliveries(data_dir):
 
 
 def save_deliveries(data_dir, doc):
-    """Checkpoint write (quiet: it happens before and after every attempt)."""
+    """Checkpoint write: quiet (it happens before and after every attempt) and atomic (temp file + replace), so a
+    crash mid-write leaves the previous complete checkpoint, never a truncated one that would break the restart."""
     import json
     p = Path(data_dir) / "deliveries.json"
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(doc, separators=(",", ":")), encoding="utf-8")
+    tmp = p.with_name(p.name + ".tmp")
+    tmp.write_text(json.dumps(doc, separators=(",", ":")), encoding="utf-8")
+    os.replace(tmp, p)
 
 
 def _attempt(provider, phone, text, language):
@@ -94,7 +148,9 @@ def _attempt(provider, phone, text, language):
 
 
 # ---------------- the run ----------------
-def run(data_dir, roster_path=None, dry_run=True, today=None, providers=None, only=None):
+def run(data_dir, roster_path=None, dry_run=True, today=None, providers=None, only=None, translate=None):
+    """only = roster_ids to process (None = all; an empty list = nobody). translate = optional (text, language) hook
+    for the free-text parts of the words."""
     data_dir = Path(data_dir)
     today = today or date.today()
     dstr = s(today)
@@ -112,7 +168,7 @@ def run(data_dir, roster_path=None, dry_run=True, today=None, providers=None, on
     counts = Counter()
 
     for row in roster:
-        if only and row["roster_id"] not in only:
+        if only is not None and row["roster_id"] not in only:
             continue
         err, text = None, None
         if not row["phone"]:
@@ -120,8 +176,8 @@ def run(data_dir, roster_path=None, dry_run=True, today=None, providers=None, on
         elif row["role"] == "farmer" and row["farm_id"] not in plans:
             err = f"no plan for farm {row['farm_id']}"
         else:
-            text = render_route(route, row["language"]) if row["role"] == "officer" \
-                else render_plan(plans[row["farm_id"]], row["language"])
+            text = render_route(route, row["language"], translate) if row["role"] == "officer" \
+                else render_plan(plans[row["farm_id"]], row["language"], translate)
         for ch in CHANNELS:
             key = (dstr, row["roster_id"], ch)
             rec = index.get(key)
