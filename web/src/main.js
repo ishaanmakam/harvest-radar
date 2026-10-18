@@ -3,7 +3,6 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import "./style.css";
 import { loadData } from "./data.js";
 import { renderPlan, renderRoute } from "./panel.js";
-import { aoiCenter } from "./globe/geo.js";
 import { createGlobe } from "./globe/globe.js";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
@@ -52,9 +51,11 @@ function setStats(data) {
   }
   const stats = document.getElementById("stats");
   stats.textContent = `${data.plans.as_of} · ${data.fields.features.length} farms · ${counts.act_now} act now · ${counts.watch} watch · ${counts.fine} fine`;
+  const imagery = data.sources.frames === "out" ? "REAL" : "MOCK";
+  const farms = data.sources.fields === "out" && data.sources.plans === "out" ? "REAL" : "MOCK";
   const badge = document.getElementById("badge");
-  badge.textContent = data.isMock ? "MOCK" : "REAL";
-  badge.className = data.isMock ? "badge mock" : "badge real";
+  badge.textContent = `Imagery: ${imagery} · Farms & plans: ${farms}`;
+  badge.className = imagery === "REAL" && farms === "REAL" ? "badge real" : "badge mock";
 }
 
 function setupTimelapse(map, frames, base) {
@@ -193,7 +194,8 @@ async function start() {
   const [, month, day] = (pass || "2026-10-17").split("-");
   let actNow = 0;
   for (const plan of data.plans.plans) if (plan.flag === "act_now") actNow += 1;
-  document.getElementById("intro-stats").textContent = `Story County, Iowa · ${MONTHS[Number(month) - 1]} ${Number(day)} · ${data.plans.plans.length} farms · ${actNow} act now`;
+  const standIn = data.sources.plans === "out" ? "" : " (stand-in farms)";
+  document.getElementById("intro-stats").textContent = `Story County, Iowa · latest clear pass ${MONTHS[Number(month) - 1]} ${Number(day)} · ${data.plans.plans.length} farms · ${actNow} act now${standIn}`;
 
   const map = new maplibregl.Map({
     container: "map",
@@ -214,7 +216,7 @@ async function start() {
   map.on("load", () => {
     addFields(map, data.fields);
     if (selectedId) highlight(selectedId);
-    setupTimelapse(map, data.frames, data.base);
+    setupTimelapse(map, data.frames, data.framesBase);
     map.fitBounds(aoiBounds, { padding: 24 });
 
     map.on("mouseenter", "fields-fill", () => {
@@ -232,30 +234,128 @@ async function start() {
   const intro = document.getElementById("intro");
   const enterBtn = document.getElementById("enter");
   const orbitBtn = document.getElementById("orbit");
+  const panel = document.getElementById("panel");
+  const card = document.getElementById("place-card");
+  const toast = document.getElementById("toast");
   const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  const cardBody = "Sentinel-2 passes over this place every ~5 days, so Overfield can inspect farms here the same way. Our live demo landscape is Story County, Iowa: real imagery, real farm plans.";
   let globe = null;
+  let moveToken = 0;
+  let toastTimer = 0;
+  let revealTimer = 0;
 
-  function handoff() {
-    intro.classList.add("is-leaving");
-    globe.stop();
-    map.resize();
+  function showFarmChrome(show) {
+    panel.hidden = !show;
+    const visibility = show ? "visible" : "none";
+    for (const id of ["fields-fill", "fields-line", "fields-selected", "frame"]) {
+      if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", visibility);
+    }
+    const timelapse = document.getElementById("timelapse");
+    if (!show) timelapse.hidden = true;
+    else if (data.frames?.frames?.length) timelapse.hidden = false;
+  }
+
+  function showToast(message) {
+    toast.hidden = false;
+    toast.textContent = message;
+    window.clearTimeout(toastTimer);
+    toastTimer = window.setTimeout(() => {
+      toast.hidden = true;
+    }, 1600);
+  }
+
+  function atPoint(lng, lat) {
+    const center = map.getCenter();
+    return Math.abs(center.lng - lng) < 0.6 && Math.abs(center.lat - lat) < 0.6 && map.getZoom() >= 9;
+  }
+
+  function atAoi() {
+    const center = map.getCenter();
+    const west = aoiBounds[0][0];
+    const south = aoiBounds[0][1];
+    const east = aoiBounds[1][0];
+    const north = aoiBounds[1][1];
+    return center.lng >= west - 0.3 && center.lng <= east + 0.3 && center.lat >= south - 0.3 && center.lat <= north + 0.3;
+  }
+
+  function whenMoved(ready, cb) {
+    const token = ++moveToken;
+    const onEnd = () => {
+      if (token !== moveToken) {
+        map.off("moveend", onEnd);
+        return;
+      }
+      if (!ready()) return;
+      map.off("moveend", onEnd);
+      cb();
+    };
+    map.on("moveend", onEnd);
+  }
+
+  function openLive(duration) {
+    card.hidden = true;
     const west = aoiBounds[0][0];
     const south = aoiBounds[0][1];
     const east = aoiBounds[1][0];
     const north = aoiBounds[1][1];
     map.jumpTo({ center: [(west + east) / 2, (south + north) / 2], zoom: 9 });
-    map.fitBounds(aoiBounds, { padding: 24, duration: reducedMotion ? 0 : 1200 });
+    map.fitBounds(aoiBounds, { padding: 24, duration: reducedMotion ? 0 : duration });
+    whenMoved(atAoi, () => showFarmChrome(true));
+    if (reducedMotion) showFarmChrome(true);
+  }
+
+  function handoff(detail) {
+    intro.classList.add("is-leaving");
+    globe.stop();
+    map.resize();
+    card.hidden = true;
+    if (!detail || detail.live) {
+      showFarmChrome(true);
+      openLive(1200);
+    } else {
+      showFarmChrome(false);
+      map.jumpTo({ center: [detail.lng, detail.lat], zoom: 3 });
+      map.flyTo({
+        center: [detail.lng, detail.lat],
+        zoom: 11,
+        duration: reducedMotion ? 0 : 2200,
+        essential: true,
+      });
+      const title = detail.name || `${detail.lat.toFixed(2)}, ${detail.lng.toFixed(2)}`;
+      const reveal = () => {
+        window.clearTimeout(revealTimer);
+        document.getElementById("place-title").textContent = title;
+        document.getElementById("place-body").textContent = cardBody;
+        card.hidden = false;
+      };
+      if (reducedMotion) reveal();
+      else {
+        whenMoved(() => atPoint(detail.lng, detail.lat), reveal);
+        revealTimer = window.setTimeout(reveal, 2400);
+      }
+    }
     window.setTimeout(() => {
       intro.classList.add("is-hidden");
       enterBtn.disabled = false;
     }, 500);
   }
 
+  function backToOrbit() {
+    if (!globe) return;
+    card.hidden = true;
+    moveToken += 1;
+    window.clearTimeout(revealTimer);
+    enterBtn.disabled = false;
+    intro.classList.remove("is-hidden", "is-leaving");
+    globe.start();
+    globe.flyOut();
+  }
+
   try {
     globe = createGlobe(document.getElementById("globe"), {
-      aoi: aoiCenter(frameBounds),
-      stats: document.getElementById("intro-stats").textContent,
+      bounds: frameBounds,
       onEnter: handoff,
+      onToast: showToast,
     });
     globe.start();
   } catch (err) {
@@ -269,12 +369,14 @@ async function start() {
     enterBtn.disabled = true;
     globe.flyIn();
   });
-  orbitBtn.addEventListener("click", () => {
-    if (!globe) return;
-    enterBtn.disabled = false;
-    intro.classList.remove("is-hidden", "is-leaving");
-    globe.start();
-    globe.flyOut();
+  orbitBtn.addEventListener("click", backToOrbit);
+  document.getElementById("back-orbit").addEventListener("click", backToOrbit);
+  document.getElementById("see-live").addEventListener("click", () => {
+    card.hidden = true;
+    showFarmChrome(false);
+    map.fitBounds(aoiBounds, { padding: 24, duration: reducedMotion ? 0 : 2500 });
+    if (reducedMotion) showFarmChrome(true);
+    else whenMoved(atAoi, () => showFarmChrome(true));
   });
 }
 

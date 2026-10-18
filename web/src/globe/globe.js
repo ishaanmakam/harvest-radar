@@ -1,7 +1,8 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { makeAtmosphere } from "./atmosphere.js";
-import { latLngToVector3 } from "./geo.js";
+import { latLngFromVector3, latLngToVector3 } from "./geo.js";
+import { FEATURED } from "../places.js";
 import colorUrl from "../assets/earth/earth_atmos_2048.jpg";
 import normalUrl from "../assets/earth/earth_normal_2048.jpg";
 import specUrl from "../assets/earth/earth_specular_2048.jpg";
@@ -14,6 +15,29 @@ const ARC_ANGLE = THREE.MathUtils.degToRad(25);
 const ARC_REVEAL = 0.6;
 const ARC_FADE = 0.45;
 const HOME = new THREE.Vector3(0.22, 0.62, 3.12);
+const Y_AXIS = new THREE.Vector3(0, 1, 0);
+
+const lightsVertex = `
+  varying vec2 vUv;
+  varying vec3 vNormal;
+  void main() {
+    vUv = uv;
+    vNormal = normalize(mat3(modelMatrix) * normal);
+    gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+  }
+`;
+
+const lightsFragment = `
+  uniform sampler2D map;
+  uniform vec3 uSun;
+  varying vec2 vUv;
+  varying vec3 vNormal;
+  void main() {
+    float day = clamp(dot(normalize(vNormal), normalize(uSun)), 0.0, 1.0);
+    vec3 col = texture2D(map, vUv).rgb;
+    gl_FragColor = vec4(col * (1.0 - day), 1.0);
+  }
+`;
 
 function easeInOut(t) {
   return t < 0.5 ? 2 * t * t : 1 - ((-2 * t + 2) ** 2) / 2;
@@ -30,14 +54,26 @@ function shortestYaw(from, to) {
   return from + delta;
 }
 
-export function createGlobe(container, { aoi, stats, onEnter }) {
-  void stats;
+function insideBounds(lat, lng, bounds) {
+  if (!bounds || bounds.length !== 4) return false;
+  const [west, south, east, north] = bounds;
+  return lng >= west && lng <= east && lat >= south && lat <= north;
+}
+
+export function createGlobe(container, { bounds, onEnter, onToast }) {
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
   renderer.setClearColor(0x000000, 0);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.1;
   container.appendChild(renderer.domElement);
+
+  const label = document.createElement("div");
+  label.className = "place-label";
+  label.hidden = true;
+  container.appendChild(label);
 
   const scene = new THREE.Scene();
   const camera = new THREE.PerspectiveCamera(42, 1, 0.05, 100);
@@ -59,10 +95,9 @@ export function createGlobe(container, { aoi, stats, onEnter }) {
     dragging = false;
   });
 
-  const sun = new THREE.DirectionalLight(0xffffff, 2.1);
-  sun.position.set(-4, 2.2, 1.4);
+  const sun = new THREE.DirectionalLight(0xffffff, 2.2);
   scene.add(sun);
-  scene.add(new THREE.AmbientLight(0x8ea4c8, 0.28));
+  scene.add(new THREE.AmbientLight(0xffffff, 0.35));
 
   const earth = new THREE.Group();
   scene.add(earth);
@@ -83,13 +118,18 @@ export function createGlobe(container, { aoi, stats, onEnter }) {
     specularMap: specMap,
     shininess: 12,
   });
-  earth.add(new THREE.Mesh(earthGeo, earthMat));
+  const earthMesh = new THREE.Mesh(earthGeo, earthMat);
+  earth.add(earthMesh);
 
-  const lightsMat = new THREE.MeshBasicMaterial({
-    map: lightsMap,
+  const lightsMat = new THREE.ShaderMaterial({
+    uniforms: {
+      map: { value: lightsMap },
+      uSun: { value: new THREE.Vector3(1, 0.4, 0.6) },
+    },
+    vertexShader: lightsVertex,
+    fragmentShader: lightsFragment,
     blending: THREE.AdditiveBlending,
     transparent: true,
-    opacity: 0.35,
     depthWrite: false,
   });
   const lights = new THREE.Mesh(earthGeo, lightsMat);
@@ -99,27 +139,53 @@ export function createGlobe(container, { aoi, stats, onEnter }) {
   const atmosphere = makeAtmosphere(RADIUS);
   earth.add(atmosphere);
 
-  const aoiLocal = latLngToVector3(aoi.lat, aoi.lng, 1.002);
+  const story = FEATURED.find((place) => place.id === "story");
+  const aoiLocal = latLngToVector3(story.lat, story.lng, 1.002);
   const aoiDir = aoiLocal.clone().normalize();
-  const marker = new THREE.Group();
-  marker.position.copy(aoiLocal);
-  marker.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), aoiDir);
-  const core = new THREE.Mesh(
-    new THREE.SphereGeometry(0.012, 16, 16),
-    new THREE.MeshBasicMaterial({ color: 0xf4a259 }),
-  );
-  const ring = new THREE.Mesh(
-    new THREE.RingGeometry(0.016, 0.022, 48),
-    new THREE.MeshBasicMaterial({
-      color: 0x3bb273,
-      transparent: true,
-      opacity: 0.85,
-      side: THREE.DoubleSide,
-      depthWrite: false,
-    }),
-  );
-  marker.add(core, ring);
-  earth.add(marker);
+
+  const pickMeshes = [];
+  const pulses = [];
+  for (const place of FEATURED) {
+    const local = latLngToVector3(place.lat, place.lng, 1.012);
+    const group = new THREE.Group();
+    group.position.copy(local);
+    group.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), local.clone().normalize());
+    const live = place.live === true;
+    const featured = place.featured === true;
+    const color = live ? 0x3bb273 : featured ? 0xf4a259 : 0xffffff;
+    const radius = live ? 0.012 : featured ? 0.016 : 0.007;
+    const core = new THREE.Mesh(
+      new THREE.SphereGeometry(radius, 16, 16),
+      new THREE.MeshBasicMaterial({
+        color,
+        transparent: !live && !featured,
+        opacity: live || featured ? 1 : 0.9,
+      }),
+    );
+    group.add(core);
+    if (live || featured) {
+      const ring = new THREE.Mesh(
+        new THREE.RingGeometry(radius * 1.3, radius * 1.85, 48),
+        new THREE.MeshBasicMaterial({
+          color,
+          transparent: true,
+          opacity: 0.85,
+          side: THREE.DoubleSide,
+          depthWrite: false,
+        }),
+      );
+      group.add(ring);
+      pulses.push(ring);
+    }
+    const pick = new THREE.Mesh(
+      new THREE.SphereGeometry(live || featured ? 0.045 : 0.028, 10, 10),
+      new THREE.MeshBasicMaterial({ visible: false }),
+    );
+    pick.userData.place = place;
+    group.add(pick);
+    pickMeshes.push(pick);
+    earth.add(group);
+  }
 
   const north = new THREE.Vector3(0, 1, 0);
   const orbitNormal = new THREE.Vector3().crossVectors(north, aoiDir);
@@ -177,6 +243,96 @@ export function createGlobe(container, { aoi, stats, onEnter }) {
     sizeAttenuation: true,
   })));
 
+  let specCanvas = null;
+  let specCtx = null;
+  const specImage = new Image();
+  specImage.onload = () => {
+    specCanvas = document.createElement("canvas");
+    specCanvas.width = specImage.width;
+    specCanvas.height = specImage.height;
+    specCtx = specCanvas.getContext("2d", { willReadFrequently: true });
+    specCtx.drawImage(specImage, 0, 0);
+  };
+  specImage.src = specUrl;
+
+  function isWater(uv) {
+    if (!specCtx || !uv) return false;
+    const x = Math.min(specCanvas.width - 1, Math.max(0, Math.floor(uv.x * specCanvas.width)));
+    const y = Math.min(specCanvas.height - 1, Math.max(0, Math.floor((1 - uv.y) * specCanvas.height)));
+    const pixel = specCtx.getImageData(x, y, 1, 1).data;
+    return pixel[0] > 150;
+  }
+
+  const raycaster = new THREE.Raycaster();
+  const pointer = new THREE.Vector2();
+  let hovered = null;
+  let pointerDown = null;
+
+  function setRay(event) {
+    const rect = renderer.domElement.getBoundingClientRect();
+    pointer.x = ((event.clientX - rect.left) / rect.width) * 2 - 1;
+    pointer.y = -((event.clientY - rect.top) / rect.height) * 2 + 1;
+    raycaster.setFromCamera(pointer, camera);
+  }
+
+  function beginAim(dir, duration, done) {
+    controls.enabled = false;
+    fly.active = true;
+    fly.mode = "in";
+    fly.start = elapsed;
+    fly.dur = reduced ? 0 : duration;
+    fly.yaw0 = earth.rotation.y;
+    fly.cam0.copy(camera.position);
+    fly.onDone = done;
+    const targetYaw = shortestYaw(earth.rotation.y, yawFacing(dir));
+    fly.yaw1 = targetYaw;
+    const aimed = dir.clone().applyAxisAngle(Y_AXIS, targetYaw);
+    fly.cam1.copy(aimed.normalize()).multiplyScalar(1.25);
+    if (reduced) finishFly();
+  }
+
+  function facingCamera(object) {
+    const pos = object.getWorldPosition(new THREE.Vector3());
+    return pos.normalize().dot(camera.position.clone().normalize());
+  }
+
+  renderer.domElement.addEventListener("pointerdown", (event) => {
+    pointerDown = { x: event.clientX, y: event.clientY };
+  });
+  renderer.domElement.addEventListener("pointermove", (event) => {
+    if (fly.active) return;
+    setRay(event);
+    const hits = raycaster.intersectObjects(pickMeshes, false);
+    hovered = hits.find((hit) => facingCamera(hit.object) > 0.08)?.object || null;
+    renderer.domElement.style.cursor = hovered ? "pointer" : "";
+  });
+  renderer.domElement.addEventListener("click", (event) => {
+    if (fly.active || !pointerDown) return;
+    if (Math.hypot(event.clientX - pointerDown.x, event.clientY - pointerDown.y) > 5) return;
+    setRay(event);
+    const markerHit = raycaster.intersectObjects(pickMeshes, false).find((hit) => facingCamera(hit.object) > 0.08);
+    if (markerHit) {
+      const place = markerHit.object.userData.place;
+      const live = place.live === true || insideBounds(place.lat, place.lng, bounds);
+      beginAim(latLngToVector3(place.lat, place.lng, 1).normalize(), 1.6, () => {
+        if (onEnter) onEnter({ live, lat: place.lat, lng: place.lng, name: place.name });
+      });
+      return;
+    }
+    const earthHit = raycaster.intersectObject(earthMesh, false)[0];
+    if (!earthHit) return;
+    if (isWater(earthHit.uv)) {
+      if (onToast) onToast("Open water: no farms here");
+      return;
+    }
+    const local = earth.worldToLocal(earthHit.point.clone());
+    const { lat, lng } = latLngFromVector3(local);
+    const live = insideBounds(lat, lng, bounds);
+    beginAim(local.normalize(), 1.6, () => {
+      if (onEnter) onEnter({ live, lat, lng, name: null });
+    });
+  });
+
   const resize = () => {
     const width = Math.max(1, container.clientWidth);
     const height = Math.max(1, container.clientHeight);
@@ -203,27 +359,9 @@ export function createGlobe(container, { aoi, stats, onEnter }) {
     yaw1: 0,
     cam0: new THREE.Vector3(),
     cam1: new THREE.Vector3(),
+    onDone: null,
   };
-
-  function beginFly(mode) {
-    controls.enabled = false;
-    fly.active = true;
-    fly.mode = mode;
-    fly.start = elapsed;
-    fly.dur = reduced ? 0 : (mode === "in" ? 1.8 : 1.2);
-    fly.yaw0 = earth.rotation.y;
-    fly.cam0.copy(camera.position);
-    if (mode === "in") {
-      const targetYaw = shortestYaw(earth.rotation.y, yawFacing(aoiDir));
-      fly.yaw1 = targetYaw;
-      const aimed = aoiDir.clone().applyAxisAngle(new THREE.Vector3(0, 1, 0), targetYaw);
-      fly.cam1.copy(aimed.normalize()).multiplyScalar(1.25);
-    } else {
-      fly.yaw1 = shortestYaw(earth.rotation.y, 0);
-      fly.cam1.copy(HOME);
-    }
-    if (reduced) finishFly();
-  }
+  const labelPos = new THREE.Vector3();
 
   function finishFly() {
     earth.rotation.y = fly.yaw1;
@@ -233,7 +371,9 @@ export function createGlobe(container, { aoi, stats, onEnter }) {
     controls.update();
     fly.active = false;
     controls.enabled = fly.mode !== "in";
-    if (fly.mode === "in" && onEnter) onEnter();
+    const done = fly.onDone;
+    fly.onDone = null;
+    if (done) done();
   }
 
   function stepFly() {
@@ -289,6 +429,32 @@ export function createGlobe(container, { aoi, stats, onEnter }) {
     glow.visible = true;
   }
 
+  function placeSun() {
+    camera.updateMatrixWorld();
+    const up = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
+    const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
+    sun.position.copy(camera.position).addScaledVector(right, -1.1).addScaledVector(up, 0.85);
+    lightsMat.uniforms.uSun.value.copy(sun.position).normalize();
+  }
+
+  function updateLabel() {
+    if (!hovered) {
+      label.hidden = true;
+      return;
+    }
+    hovered.getWorldPosition(labelPos);
+    const facing = labelPos.clone().normalize().dot(camera.position.clone().normalize());
+    const ndc = labelPos.clone().project(camera);
+    if (facing < 0.05 || ndc.z > 1) {
+      label.hidden = true;
+      return;
+    }
+    label.hidden = false;
+    label.textContent = hovered.userData.place.name;
+    label.style.left = `${(ndc.x * 0.5 + 0.5) * container.clientWidth}px`;
+    label.style.top = `${(-ndc.y * 0.5 + 0.5) * container.clientHeight}px`;
+  }
+
   function frame(now) {
     if (!running) return;
     raf = requestAnimationFrame(frame);
@@ -302,9 +468,13 @@ export function createGlobe(container, { aoi, stats, onEnter }) {
     satellite.position.copy(satPos);
     updateArc(satPos);
     const pulse = (elapsed % 2) / 2;
-    ring.scale.setScalar(1 + pulse * 2.4);
-    ring.material.opacity = 0.85 * (1 - pulse);
+    for (const ring of pulses) {
+      ring.scale.setScalar(1 + pulse * 2.4);
+      ring.material.opacity = 0.85 * (1 - pulse);
+    }
     if (!fly.active) controls.update();
+    placeSun();
+    updateLabel();
     renderer.render(scene, camera);
   }
 
@@ -329,11 +499,22 @@ export function createGlobe(container, { aoi, stats, onEnter }) {
     start,
     stop,
     flyIn() {
-      beginFly("in");
+      beginAim(aoiDir, 1.8, () => {
+        if (onEnter) onEnter({ live: true, lat: story.lat, lng: story.lng, name: story.name });
+      });
     },
     flyOut() {
-      controls.enabled = true;
-      beginFly("out");
+      controls.enabled = false;
+      fly.active = true;
+      fly.mode = "out";
+      fly.start = elapsed;
+      fly.dur = reduced ? 0 : 1.2;
+      fly.yaw0 = earth.rotation.y;
+      fly.cam0.copy(camera.position);
+      fly.yaw1 = shortestYaw(earth.rotation.y, 0);
+      fly.cam1.copy(HOME);
+      fly.onDone = null;
+      if (reduced) finishFly();
     },
     dispose() {
       stop();
@@ -347,6 +528,7 @@ export function createGlobe(container, { aoi, stats, onEnter }) {
       textures.forEach((texture) => texture.dispose());
       renderer.dispose();
       renderer.domElement.remove();
+      label.remove();
     },
   };
 }

@@ -12,6 +12,14 @@ export function latLngToVector3(lat, lng, radius) {
   );
 }
 
+export function latLngFromVector3(vector) {
+  const radius = vector.length() || 1;
+  const phi = Math.acos(THREE.MathUtils.clamp(vector.y / radius, -1, 1));
+  const lat = 90 - (phi * 180) / Math.PI;
+  const lng = ((Math.atan2(vector.z, -vector.x) * 180) / Math.PI - 180 + 540) % 360 - 180;
+  return { lat, lng };
+}
+
 export function aoiCenter(bounds) {
   const box = bounds && bounds.length === 4 ? bounds : FALLBACK_BOUNDS;
   const [west, south, east, north] = box;
