@@ -33,13 +33,13 @@ class TestSession:
         assert "never invent" in ins.lower() and "only" in ins.lower()
         assert "F0001" not in ins                                            # no other farm's facts in a farmer session
         names = [t["name"] for t in s["tools"]]
-        assert names == ["get_plan", "get_change"]                           # a farmer session has no route tool
+        assert names == ["get_plan", "get_change", "get_outlook"]                           # a farmer session has no route tool
 
-    def test_officer_session_has_the_route_and_all_three_tools(self, world):
+    def test_officer_session_has_the_route_and_all_four_tools(self, world):
         data, roster = world
         s = va.session_config("+919876500001", data, roster)["session"]
         assert "Punjabi" in s["instructions"] and "F0002" in s["instructions"] and "route" in s["instructions"].lower()
-        assert [t["name"] for t in s["tools"]] == ["get_plan", "get_route", "get_change"]
+        assert [t["name"] for t in s["tools"]] == ["get_plan", "get_route", "get_change", "get_outlook"]
         assert all(t["type"] == "function" and "parameters" in t for t in s["tools"])
 
     def test_unknown_caller_session_says_so_and_has_no_tools(self, world):

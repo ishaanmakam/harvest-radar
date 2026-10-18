@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "analytics.schema.json",
+  "title": "analytics.json: optional analytics layer over the season (additive; nothing in plans/route/deliveries depends on it)",
+  "type": "object",
+  "required": ["as_of", "source", "modules", "fields", "landscape"],
+  "properties": {
+    "as_of": {"type": "string", "format": "date"},
+    "source": {"type": "string"},
+    "modules": {"type": "array", "items": {"type": "string"}, "description": "module keys that ran, in order"},
+    "failed": {"type": "object", "additionalProperties": {"type": "string"}, "description": "module key -> why it was skipped"},
+    "timings_s": {"type": "object", "additionalProperties": {"type": "number"}},
+    "method": {"type": "object", "additionalProperties": {"type": ["string", "null"]}, "description": "module key -> one plain paragraph"},
+    "assumptions": {"type": "object", "additionalProperties": {"type": ["object", "null"]}, "description": "module key -> {name: value and source}"},
+    "landscape": {"type": "object", "additionalProperties": {"type": ["object", "null"]}, "description": "module key -> landscape-level results"},
+    "zones": {"type": "object", "additionalProperties": {"type": "object", "additionalProperties": {"type": ["object", "null"]}}, "description": "zone_id -> module key -> results"},
+    "fields": {"type": "object", "additionalProperties": {"type": "object", "additionalProperties": {"type": ["object", "null"]}}, "description": "field_id -> module key -> results"}
+  },
+  "additionalProperties": true
+}

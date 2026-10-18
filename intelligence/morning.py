@@ -12,12 +12,14 @@ from collections import Counter
 from datetime import date
 from pathlib import Path
 
+import analytics
+from analytics import read_optional
 import queue_morning as q
 from common import read_json, s, write_json
 from tools import load_roster
 
 
-def preview_messages(plans, route, roster, only=None, translate=None):
+def preview_messages(plans, route, roster, only=None, translate=None, outlook_doc=None):
     """[{roster_id, farm_id, role, language, text}] for every row that can be sent (has a phone and a plan)."""
     out = []
     for row in roster:
@@ -28,7 +30,8 @@ def preview_messages(plans, route, roster, only=None, translate=None):
         if row["role"] == "officer":
             text = q.render_route(route, row["language"], translate)
         elif row["farm_id"] in plans:
-            text = q.render_plan(plans[row["farm_id"]], row["language"], translate)
+            text = q.render_plan(plans[row["farm_id"]], row["language"], translate,
+                                 analytics.farm_outlook(outlook_doc, row["farm_id"]) if outlook_doc else None)
         else:
             continue
         out.append({"roster_id": row["roster_id"], "farm_id": row["farm_id"], "role": row["role"],
@@ -42,11 +45,12 @@ def run(data_dir, roster_path=None, today=None, dry_run=True, preview=False, pro
     plans_doc = read_json(data_dir, "plans.json")
     route = read_json(data_dir, "route.json")
     plans = {p["farm_id"]: p for p in plans_doc["plans"]}
+    outlook_doc = read_optional(data_dir, "analytics.json")
     roster = load_roster(roster_path)
 
     messages = []
     if preview:
-        messages = preview_messages(plans, route, roster, only, translate)
+        messages = preview_messages(plans, route, roster, only, translate, outlook_doc)
         write_json(data_dir, "messages.json", {"date": s(today), "messages": messages})
 
     doc = q.run(data_dir, roster_path=roster_path, dry_run=dry_run, today=today, providers=providers, only=only,

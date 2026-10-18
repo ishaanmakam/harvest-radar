@@ -11,6 +11,7 @@ Nothing here places calls or sends texts; the provider layer wires these in once
 import re
 
 from queue_morning import render_plan, render_route
+from common import product_name
 from tools import UNKNOWN_CALLER_MESSAGE, Tools, resolve_caller
 
 FARM_RE = re.compile(r"\bF\d{4,}\b", re.IGNORECASE)
@@ -55,7 +56,7 @@ def answer(handle, text, data_dir, roster):
 
 
 def call_tool(name, args, handle, data_dir, roster):
-    """Dispatcher for the three shared tools. Returns the tool's JSON, or {"error": message}."""
+    """Dispatcher for the shared tools (get_plan, get_route, get_change, get_outlook). Returns the tool's JSON, or {"error": message}."""
     caller = resolve_caller(_strip_scheme(handle), roster)
     t = Tools(data_dir, caller)
     args = args or {}
@@ -66,6 +67,8 @@ def call_tool(name, args, handle, data_dir, roster):
             return t.get_route()
         if name == "get_change":
             return t.get_change(args.get("farm_id"))
+        if name == "get_outlook":
+            return t.get_outlook(args.get("farm_id"))
         return {"error": f"unknown tool {name}"}
     except PermissionError as e:
         return {"error": str(e)}
@@ -73,6 +76,21 @@ def call_tool(name, args, handle, data_dir, roster):
         return {"error": str(e).strip("'")}
     except ValueError as e:
         return {"error": str(e)}
+
+
+STOP_WORDS = {"STOP", "UNSUBSCRIBE", "QUIT", "CANCEL", "END"}
+
+
+def handle_stop(roster_path, handle, text):
+    """STOP by text removes the sender from the roster (the sign-up flow promises this). Returns the reply, or None
+    when the text is not a stop word so the normal answer applies."""
+    if (text or "").strip().upper() not in STOP_WORDS:
+        return None
+    import signup
+    sender = _strip_scheme(handle or "")
+    if signup.unsubscribe(roster_path, sender):
+        return f"Stopped: no more morning plans from {product_name()} to this number or address. Sign up again any time."
+    return f"This number or address is not on the {product_name()} list, so there is nothing to stop."
 
 
 def _strip_scheme(handle):

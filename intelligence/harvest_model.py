@@ -91,6 +91,19 @@ def predicted_stage(start, end, as_of):
     return ("ready" if days_out <= 3 else ("maturing" if days_out <= 14 else "growing")), days_out
 
 
+BURN_NBR_SEVERE = -0.30        # a second darkening after harvest to at least this NBR reads as a burn without a hotspot
+BURN_POST_DROP_MIN = 0.15      # ... when it is at least this much below the first post-harvest pass
+SYSTEM_DEFAULTS = {            # per crop_system in config/region.json; region thresholds override these
+    "corn_soy": {"burn_requires_hotspot": True},     # residue burning is rare in Iowa; dark soil after the combine is not a scar
+    "rice_wheat": {},                                 # Punjab: any post-harvest scar is burn evidence (the original rule)
+}
+
+
+def thresholds_for(region):
+    """The thresholds the season runs with: the crop system's defaults under the region's own values."""
+    return {**SYSTEM_DEFAULTS.get(region.get("crop_system") or "", {}), **(region.get("thresholds") or {})}
+
+
 def analyze_field(fid, zone_id, dates, ndvi, nbr, fires_by_field, th):
     obs = [(d(dt), v, b) for dt, v, b in zip(dates, ndvi, nbr) if v is not None]
     rec = {"field_id": fid, "zone_id": zone_id, "stage": "unknown", "peak_date": None, "peak_ndvi": None,
@@ -135,6 +148,19 @@ def analyze_field(fid, zone_id, dates, ndvi, nbr, fires_by_field, th):
     post = [o for o in obs[harvest_idx:] if o[2] is not None]
     scar = next((o for o in post if o[2] <= th["burn_nbr_max"]), None)
     hot = [f for f in fires_by_field.get(fid, []) if d(f["date"]) >= add_days(harvest, -3)]
+    if scar and not hot and th.get("burn_requires_hotspot"):
+        # corn-and-soy country: freshly harvested ground reads dark (wet soil, residue, a tillage pass) for a week or
+        # two and then brightens, so a scar alone is not a burn. A burn darkens the field AGAIN after harvest, to a
+        # severe value; anything else is read as residue or tillage and the plan stays quiet.
+        first_nbr = post[0][2]
+        severe = next((o for o in post[1:] if o[2] <= th.get("burn_nbr_severe", BURN_NBR_SEVERE)
+                       and first_nbr - o[2] >= th.get("burn_post_drop_min", BURN_POST_DROP_MIN)), None)
+        if severe:
+            scar = severe
+        else:
+            rec["notes"] += (f"; dark residue after harvest (NBR {min(o[2] for o in post):.2f}), no hotspot: read as "
+                             f"residue or tillage, not a burn")
+            scar = None
     if scar or hot:
         rec["stage"] = "burned"
         rec["burn_evidence"] = "scar+hotspot" if (scar and hot) else ("scar" if scar else "hotspot")
@@ -150,7 +176,7 @@ def analyze_field(fid, zone_id, dates, ndvi, nbr, fires_by_field, th):
 
 def run(data_dir: Path):
     region = load_region()
-    th = region["thresholds"]
+    th = thresholds_for(region)
     as_of = d(region["as_of"])
     window = region["sowing_window_days"]
     fields = read_json(data_dir, "fields.geojson")

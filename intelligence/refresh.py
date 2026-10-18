@@ -14,11 +14,14 @@ import shutil
 import sys
 from pathlib import Path
 
+import analytics
 import decide
 import harvest_model
 from common import ROOT, read_json
 
-INPUTS = ("fields.geojson", "zones.geojson", "timeseries.json", "weather.json", "fires.json", "insights.json")
+INPUTS = ("fields.geojson", "zones.geojson", "timeseries.json", "weather.json", "fires.json", "insights.json",
+          "truth.json", "usda_crop_progress.json")
+EXTRAS = ("analytics.json",)        # additive outputs: replaced when produced, never block the plans
 OUTPUTS = ("status.json", "plans.json", "route.json")
 SCHEMAS = {"status.json": "status.schema.json", "plans.json": "plans.schema.json", "route.json": "route.schema.json"}
 
@@ -52,8 +55,16 @@ def run(data_dir):
         errs = _validate(stage)
         if errs:
             raise ValueError("; ".join(errs))
+        try:
+            print("  refresh: analytics")
+            analytics.run(stage)
+        except Exception as e:  # additive layer: a failure here never blocks the plans
+            print(f"  refresh: analytics skipped ({e})")
         for name in OUTPUTS:
             os.replace(stage / name, data_dir / name)
+        for name in EXTRAS:
+            if (stage / name).exists():
+                os.replace(stage / name, data_dir / name)
         plans = read_json(data_dir, "plans.json")
         result = {"replaced": True, "as_of": plans.get("as_of"), "plans": len(plans["plans"]), "error": None}
         print(f"  refresh: replaced {', '.join(OUTPUTS)} (plans from pass {result['as_of']}, {result['plans']} farms)")

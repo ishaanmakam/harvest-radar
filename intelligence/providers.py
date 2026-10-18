@@ -23,6 +23,7 @@ import hashlib
 import hmac
 import json
 import os
+import smtplib
 import urllib.error
 import urllib.request
 import uuid
@@ -30,7 +31,7 @@ from pathlib import Path
 from urllib.parse import urlencode
 from xml.sax.saxutils import escape
 
-from common import load_env
+from common import load_env, product_name
 
 SAY_LANGUAGE = {"pa": "pa-IN", "hi": "hi-IN", "en": "en-IN"}
 VOICE_VARS = ("TWILIO_ACCOUNT_SID", "TWILIO_AUTH_TOKEN", "TWILIO_FROM")
@@ -150,6 +151,36 @@ class PhotonSMS:
 
     def send(self, phone, text, language):
         return self.send_to_space(self.space_id(phone), text)
+
+
+EMAIL_VARS = ("SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD", "SMTP_FROM")
+
+
+class SmtpEmail:
+    """The email channel: one plain-text message per person over SMTP with STARTTLS (any mailbox provider's app
+    password works: Gmail, Outlook, Fastmail). `smtp` is the smtplib.SMTP class, injectable for tests."""
+
+    def __init__(self, host, port=587, user=None, password=None, from_addr=None, smtp=None, subject=None):
+        self.host, self.port, self.user, self.password = host, int(port or 587), user, password
+        self.from_addr = from_addr or user
+        self.smtp = smtp or smtplib.SMTP
+        self.subject = subject
+
+    def send(self, to, text, language):
+        from email.message import EmailMessage
+        msg = EmailMessage()
+        msg["To"], msg["From"] = to, self.from_addr
+        msg["Subject"] = self.subject or f"{product_name()} morning plan"
+        msg.set_content(text)
+        try:
+            with self.smtp(self.host, self.port, timeout=30) as conn:
+                conn.starttls()
+                if self.user:
+                    conn.login(self.user, self.password or "")
+                conn.send_message(msg)
+        except Exception as e:
+            raise ProviderError(f"email to {to} failed: {e}") from e
+        return f"email sent to {to}"
 
 
 def parse_photon_webhook(doc):
@@ -303,4 +334,7 @@ def from_env(env=None, http=None):
         missing = [v for v in PHOTON_VARS if not env.get(v)]
         out["photon_sms"] = UnverifiedProvider("photon_sms", f"set {', '.join(missing)} in .env "
                                                f"(or {' + '.join(SMS_VARS)} for the Node bridge)")
+    missing = [v for v in EMAIL_VARS if not env.get(v)]
+    out["email"] = (SmtpEmail(env["SMTP_HOST"], env.get("SMTP_PORT") or 587, env["SMTP_USER"], env["SMTP_PASSWORD"], env["SMTP_FROM"])
+                    if not missing else UnverifiedProvider("email", f"set {', '.join(missing)} in .env (optional channel)"))
     return out

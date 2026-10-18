@@ -27,6 +27,7 @@ useful: they feed several checks.
 - Roster CSV outside git (path in `.env` as `ROSTER_PATH`), columns `roster_id, farm_id, name, phone, language, role`.
   One officer row and one farmer row per demo farm; teammates supply the numbers.
 - `intelligence/tools.py`: `get_plan(farm_id)`, `get_route()`, `get_change(farm_id)`. Farmer sessions only for their own farm.
+  Additive: `get_outlook(farm_id)` reads `analytics.json` (the optional analytics layer) with the same scope rules.
 
 ## 3. Morning queue (spec build step 2)
 - `intelligence/queue.py --dry-run`: joins roster to plans/route, writes a `pending` delivery row per channel before each

@@ -23,6 +23,8 @@ Then run the preflight; it sends nothing and tells you exactly what is still mis
 python intelligence/check_providers.py
 ```
 
+The product name in every call and text is Overfield (matching the map); `PRODUCT_NAME=...` in `.env` overrides it.
+
 ## 2. Services to run (two terminals, plus ngrok)
 
 ```bash
@@ -75,3 +77,37 @@ twice on the same morning, failed rows are retried next run.
 
 Rotate anything that was pasted in chat or shown on a screen: the Twilio auth token and API key, the Photon
 project key and webhook secret.
+
+## 7. Analytics outlook (optional, additive)
+
+`python intelligence/analytics.py --data data/out` (also the last step of `run_all.py` and of `refresh.py`) writes
+`analytics.json`: yield index, phenology and a second-opinion harvest date, water balance, anomalies versus the zone,
+harvest-now-or-wait economics, the chance to finish before the rain, burn severity and flood duration, observation
+quality, and the landscape table with a harvest-progress projection. When the file is present the morning words gain one
+`Outlook:` line per farm and the voice and text tools answer `get_outlook(farm_id)` (same scope rules as `get_plan`). The
+spec's plans, route and deliveries do not depend on it; delete the file to switch the outlook off.
+
+## 8. Sign-up, each person's own morning time, and email
+
+- `GET /signup` on the inbound service is a page anyone can open on a phone: name, field address (or "lat, lon"),
+  phone and/or email, language, morning time, timezone. `POST /signup` takes the same fields as JSON or a form. The
+  address is geocoded with OpenStreetMap Nominatim and matched to the field it falls in (or the nearest within 5 km);
+  the row is appended to the roster CSV (new optional columns: email, send_time, timezone, address, lon, lat, created)
+  and the service re-reads the roster at once, so the new person can call or text right away. Texting STOP removes them.
+- `python intelligence/scheduler.py --data data/out --roster <csv> --real --forever` sends each row at its own
+  send_time in its timezone (defaults 06:30 America/Chicago, up to 90 minutes late if the machine was asleep); the
+  deliveries checkpoint keeps anyone from getting the same morning twice. `morning.py` still works for a one-shot send.
+- Email is a third channel beside the call and the text: set SMTP_HOST, SMTP_USER, SMTP_PASSWORD (an app password)
+  and SMTP_FROM in `.env`; rows with an email get it, rows with a phone get the call and the text, rows with both get
+  all three. `deliveries.json` gained the channel value `email` (CONTRACT IMPACT: additive).
+- Command-line sign-up: `python intelligence/signup.py --data data/out --roster <csv> --name "Ana" --address "..." --phone +1...`.
+
+## 9. The latest weather models (optional, additive)
+
+`python intelligence/forecast_models.py --data data/out` pulls the current runs of ECMWF IFS, NOAA GFS (with HRRR), DWD
+ICON, Canadian GEM, Meteo-France, the UK Met Office, JMA and NOAA's National Blend from Open-Meteo (free, no key) for the
+box centre and writes `weather_ensemble.json`: per day the median and range of rain, the share of models that put a
+shower, a blocking rain, the act-now rain or a soaking on that day, frost and hard-freeze agreement, gusts. When the file
+is present the plans say how many models agree ("16 mm of rain forecast on 2026-10-19 (6 of 8 weather models agree)")
+and the analytics use the ensemble median and shares instead of the single feed. The act-now rule itself stays on the
+pipeline's `weather.json`. Run it before the morning queue, or on a schedule; it takes one request.

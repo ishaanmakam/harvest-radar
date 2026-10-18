@@ -24,6 +24,7 @@ import json
 import inbound
 import queue_morning as q
 from providers import LANGUAGE_NAMES
+from common import product_name
 from tools import UNKNOWN_CALLER_MESSAGE, Tools, resolve_caller
 
 VOICES = ("ara", "rex", "sal", "eve", "leo")
@@ -41,6 +42,10 @@ TOOL_SCHEMAS = {
     "get_change": {"type": "function", "name": "get_change",
                    "description": "What changed on a farm since the previous satellite pass.",
                    "parameters": {"type": "object", "properties": {"farm_id": {"type": "string"}}, "required": []}},
+    "get_outlook": {"type": "function", "name": "get_outlook",
+                    "description": "The outlook for a farm beyond today's plan: yield band from the greenness curve, harvest now "
+                                   "or wait and why, the chance to finish before the rain, soil water, anything unusual versus the neighbours.",
+                    "parameters": {"type": "object", "properties": {"farm_id": {"type": "string"}}, "required": []}},
 }
 RULES = ("Rules: speak in {language}; keep answers short, they are spoken aloud. Never invent a measurement, a date or "
          "a status: say only what the plan or the tools return. You may only talk about {scope}; if asked about "
@@ -53,14 +58,20 @@ def _instructions(row, data_dir, roster):
     if row["role"] == "officer":
         words = q.render_route(t.get_route(), "en")
         scope = "the morning route and the farms in today's plans"
-        who = f"You are Harvest Radar's voice assistant speaking with the extension officer {row['name']}."
+        who = f"You are {product_name()}'s voice assistant speaking with the extension officer {row['name']}."
     else:
         try:
             words = q.render_plan(t.get_plan(), "en")
         except KeyError:
             words = f"There is no plan for farm {row['farm_id']} this morning."
+        try:
+            outlook = t.get_outlook()["lines"]
+            if outlook:
+                words += "\nOutlook: " + " ".join(outlook)
+        except Exception:  # the outlook is additive; a missing or odd analytics file never breaks the call
+            pass
         scope = f"this caller's own farm, {row['farm_id']}"
-        who = f"You are Harvest Radar's voice assistant speaking with farmer {row['name']} about farm {row['farm_id']}."
+        who = f"You are {product_name()}'s voice assistant speaking with farmer {row['name']} about farm {row['farm_id']}."
     return "\n".join([who, RULES.format(language=language, scope=scope), "Today's facts (English; translate as you speak):", words])
 
 
@@ -72,7 +83,8 @@ def session_config(handle, data_dir, roster, voice=DEFAULT_VOICE):
         tools = []
     else:
         instructions = _instructions(row, data_dir, roster)
-        names = ["get_plan", "get_route", "get_change"] if row["role"] == "officer" else ["get_plan", "get_change"]
+        names = (["get_plan", "get_route", "get_change", "get_outlook"] if row["role"] == "officer"
+                 else ["get_plan", "get_change", "get_outlook"])
         tools = [TOOL_SCHEMAS[n] for n in names]
     return {"type": "session.update",
             "session": {"voice": voice if voice in VOICES else DEFAULT_VOICE, "instructions": instructions,
