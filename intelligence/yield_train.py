@@ -55,7 +55,7 @@ FEATURES = ["gdd", "heat32", "heat35", "p_may", "p_jun", "p_jul", "p_aug", "p_se
 LAMBDAS = (0.01, 0.1, 1.0, 10.0, 100.0)
 Z90 = 1.64                                         # 90% band under a normal error
 METHOD = ("Ridge regression of county yield on growing-season weather (degree days, heat-stress days, rain by month, dry "
-          "spell, first frost) plus a year trend, trained on measured USDA county yields for every county in the state and "
+          "spell, first frost), a year trend and the county baseline (its mean yield in the other years), trained on measured USDA county yields for every county in the state and "
           "validated leave-one-year-out; the band is 1.64 times the held-out error. A county estimate, not a field measurement.")
 
 
@@ -311,9 +311,44 @@ def predict(model, row):
     return float(model["intercept"] + sum(model["coef"][f] * (float(row[f]) - model["mean"][f]) / model["std"][f] for f in model["features"]))
 
 
-def loyo(rows, feats, lams=LAMBDAS):
+def county_means(rows):
+    """Mean yield per county over the given rows."""
+    acc = {}
+    for r in rows:
+        s = acc.setdefault(r["fips"], [0.0, 0])
+        s[0] += float(r["y"])
+        s[1] += 1
+    return {f: s[0] / s[1] for f, s in acc.items() if s[1]}
+
+
+def with_county_baseline(train, apply, fallback=None):
+    """Copies of `apply` rows carrying county_mean: the county's mean yield over `train` rows, leaving a row's own
+    year out when it is itself in train (so the baseline never contains the answer). Counties absent from train get
+    the overall mean."""
+    sums = {}
+    for r in train:
+        s = sums.setdefault(r["fips"], [0.0, 0])
+        s[0] += float(r["y"])
+        s[1] += 1
+    overall = (sum(s[0] for s in sums.values()) / sum(s[1] for s in sums.values())) if sums else (fallback or 0.0)
+    train_ids = {(r["fips"], r["year"]) for r in train}
+    out = []
+    for r in apply:
+        s = sums.get(r["fips"])
+        if s and (r["fips"], r["year"]) in train_ids and s[1] > 1:
+            cm = (s[0] - float(r["y"])) / (s[1] - 1)
+        elif s and (r["fips"], r["year"]) not in train_ids:
+            cm = s[0] / s[1]
+        else:
+            cm = overall
+        out.append({**r, "county_mean": cm})
+    return out
+
+
+def loyo(rows, feats, lams=LAMBDAS, county_baseline=True):
     years = sorted({r["year"] for r in rows})
     best = None
+    feats = list(feats) + (["county_mean"] if county_baseline and "county_mean" not in feats else [])
     for lam in lams:
         preds = {}
         for yr in years:
@@ -321,6 +356,9 @@ def loyo(rows, feats, lams=LAMBDAS):
             test = [r for r in rows if r["year"] == yr]
             if len(train) < len(feats) + 2 or not test:
                 continue
+            if county_baseline:
+                test = with_county_baseline(train, test)
+                train = with_county_baseline(train, train)
             m = fit_ridge(train, feats, lam)
             for r in test:
                 preds[(r["fips"], r["year"])] = (predict(m, r), float(r["y"]))
@@ -342,7 +380,7 @@ def loyo(rows, feats, lams=LAMBDAS):
         if e:
             per_year.append({"year": yr, "n": len(e), "rmse": round(float(math.sqrt(np.mean(np.square(e)))), 2), "bias": round(float(np.mean(e)), 2)})
     return {"lambda": lam, "years": per_year, "rmse": round(rmse, 2), "bias": round(float(err.mean()), 2),
-            "r2": round(1 - float(np.sum(err ** 2)) / sst, 3) if sst > 0 else None,
+            "r2": round(1 - float(np.sum(err ** 2)) / sst, 3) if sst > 0 else None, "features": feats,
             "predictions": {f"{f}:{y}": round(p, 2) for (f, y), (p, a) in preds.items()}}
 
 
@@ -410,7 +448,10 @@ def run(data_dir, cache_dir=None, http=None, years=None, target_year=None, targe
             out["crops"][crop] = {"county": counties[target_fips]["name"], "county_fips": target_fips, "error": f"only {len(rows)} county-seasons with yields and weather; no model"}
             continue
         cv = loyo(rows, feats)
-        model = fit_ridge(rows, feats, cv["lambda"])
+        feats = cv.get("features", feats)
+        fit_rows = with_county_baseline(rows, rows)
+        model = fit_ridge(fit_rows, feats, cv["lambda"])
+        target_means = county_means(rows)
         # the target season: observed to date, then the county's own climatology
         clim = climatology([weather(target_fips, y) for y in years if (target_fips, y, None) in weather_cache or True][:0] or
                            [weather(target_fips, y) for y in years])
@@ -419,6 +460,7 @@ def run(data_dir, cache_dir=None, http=None, years=None, target_year=None, targe
         tf = season_features(filled, target_year)
         if tf["frost_doy"] is None:
             tf["frost_doy"] = frost_med
+        tf["county_mean"] = target_means.get(target_fips, sum(target_means.values()) / len(target_means) if target_means else 0.0)
         est = predict(model, tf)
         lo, hi = interval(est, cv["rmse"] or 0.0)
         hind = []

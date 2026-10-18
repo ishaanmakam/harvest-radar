@@ -103,6 +103,19 @@ class TestModel:
         assert [r["year"] for r in cv["years"]] == list(range(2016, 2023)) and cv["rmse"] < 1.0 and cv["r2"] > 0.95
         assert cv["lambda"] in (0.01, 1.0, 10.0)
 
+    def test_county_baseline_feature_captures_fixed_county_differences_without_leaking(self):
+        rows = []
+        for year in range(2016, 2023):
+            for k, fips in enumerate(("19169", "19015", "19099", "19127", "19001")):
+                gdd = 1400 + 30 * (year - 2016) + 10 * (year % 2)
+                rows.append({"fips": fips, "year": year, "y": 150 + 25 * k + 0.02 * gdd, "gdd": gdd})      # counties differ by 25 bu
+        without = yt.loyo(rows, ["gdd"], lams=(0.1,), county_baseline=False)
+        with_cm = yt.loyo(rows, ["gdd"], lams=(0.1,), county_baseline=True)
+        assert with_cm["rmse"] < without["rmse"] / 3 and with_cm["r2"] > 0.9
+        model = yt.fit_ridge(yt.with_county_baseline(rows, rows), ["gdd", "county_mean"], 0.1)
+        target = {"gdd": 1500, "county_mean": yt.county_means(rows)["19127"]}
+        assert yt.predict(model, target) == pytest.approx(150 + 75 + 0.02 * 1500, abs=3.0)
+
     def test_interval_widens_with_the_hindcast_error(self):
         lo, hi = yt.interval(200.0, rmse=8.0)
         assert lo == pytest.approx(200 - 1.64 * 8, abs=0.06) and hi == pytest.approx(200 + 1.64 * 8, abs=0.06)   # rounded to 0.1
