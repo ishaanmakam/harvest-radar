@@ -1,0 +1,43 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "yield_model.schema.json",
+  "title": "yield_model.json: county yield model trained on measured county yields and growing-season weather (optional, additive)",
+  "type": "object",
+  "required": ["as_of", "fetched_at", "sources", "target_fips", "crops"],
+  "properties": {
+    "as_of": {"type": "string"},
+    "fetched_at": {"type": "string"},
+    "sources": {"type": "array", "items": {"type": "string"}},
+    "state": {"type": "string"},
+    "target_fips": {"type": "string"},
+    "crops": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["county", "county_fips", "years", "n_train", "features", "coefficients", "intercept", "rmse_bu_per_acre",
+                     "estimate_bu_per_acre", "interval_bu_per_acre", "hindcast", "target", "method"],
+        "properties": {
+          "county": {"type": "string"},
+          "county_fips": {"type": "string"},
+          "years": {"type": "array", "items": {"type": "integer"}},
+          "n_train": {"type": "integer"},
+          "n_counties": {"type": "integer"},
+          "features": {"type": "array", "items": {"type": "string"}},
+          "lambda": {"type": "number"},
+          "coefficients": {"type": "object", "additionalProperties": {"type": "number"}},
+          "intercept": {"type": "number"},
+          "rmse_bu_per_acre": {"type": "number", "description": "leave-one-year-out root mean square error across counties"},
+          "bias_bu_per_acre": {"type": "number"},
+          "r2": {"type": ["number", "null"]},
+          "loyo_years": {"type": "array", "items": {"type": "object"}},
+          "hindcast": {"type": "array", "items": {"type": "object", "required": ["year", "actual", "predicted"]}},
+          "estimate_bu_per_acre": {"type": "number"},
+          "interval_bu_per_acre": {"type": "array", "items": {"type": "number"}, "minItems": 2, "maxItems": 2},
+          "target": {"type": "object"},
+          "method": {"type": "string"}
+        }
+      }
+    }
+  },
+  "additionalProperties": true
+}
