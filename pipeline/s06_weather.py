@@ -108,28 +108,55 @@ def require_power(raw):
     return fill, parameter
 
 
-def require_meteo(raw):
+DAILY_KEYS = (
+    "time",
+    "precipitation_sum",
+    "precipitation_probability_max",
+    "temperature_2m_max",
+    "temperature_2m_min",
+    "relative_humidity_2m_mean",
+    "wind_gusts_10m_max",
+)
+FORECAST_KEYS = (
+    "source",
+    "dates",
+    "precip_mm",
+    "precip_prob",
+    "tmin_c",
+    "tmax_c",
+    "rh_mean_pct",
+    "wind_gust_ms",
+)
+
+
+def require_meteo(raw, from_cache=False):
+    daily = raw.get("daily") if isinstance(raw, dict) else None
+    if not isinstance(daily, dict):
+        log(STEP, "ERROR Open-Meteo response has no daily object")
+        sys.exit(1)
+    missing = [key for key in DAILY_KEYS if not isinstance(daily.get(key), list)]
+    if missing and from_cache:
+        log(STEP, f"ERROR cached Open-Meteo response lacks {', '.join(missing)}. Run once without --from-cache.")
+        sys.exit(1)
     try:
-        daily = raw["daily"]
         hourly = raw["hourly"]
-        for key in (
-            "time",
-            "precipitation_sum",
-            "precipitation_probability_max",
-            "temperature_2m_max",
-            "temperature_2m_min",
-        ):
-            if not isinstance(daily[key], list):
-                raise TypeError(f"daily.{key}")
+        for key in missing:
+            raise TypeError(f"daily.{key}")
         for key in ("time", "precipitation", "wind_gusts_10m", "weather_code"):
             if not isinstance(hourly[key], list):
                 raise TypeError(f"hourly.{key}")
-        if len(daily["time"]) != len(daily["precipitation_sum"]):
-            raise ValueError("daily precipitation_sum length")
+        count = len(daily["time"])
+        for key in DAILY_KEYS:
+            if len(daily[key]) != count:
+                raise ValueError(f"daily {key} length")
         if len(hourly["time"]) != len(hourly["wind_gusts_10m"]):
             raise ValueError("hourly wind_gusts_10m length")
     except (KeyError, TypeError, ValueError) as exc:
         log(STEP, f"ERROR Open-Meteo response shape is not the documented one: {exc}")
+        sys.exit(1)
+    gust_unit = (raw.get("daily_units") or {}).get("wind_gusts_10m_max")
+    if gust_unit != "m/s":
+        log(STEP, f"ERROR wind_gusts_10m_max unit is {gust_unit!r}, expected m/s")
         sys.exit(1)
     return daily, hourly
 
@@ -141,9 +168,9 @@ def series_by_day(dates, values):
     return out
 
 
-def build_weather(region, power, meteo):
+def build_weather(region, power, meteo, from_cache=False):
     fill, parameter = require_power(power)
-    daily, hourly = require_meteo(meteo)
+    daily, hourly = require_meteo(meteo, from_cache=from_cache)
     season_start = parse_day(region["season_start"])
     as_of = parse_day(region["as_of"])
     observed_days = days_inclusive(season_start, as_of - timedelta(days=1))
@@ -190,11 +217,15 @@ def build_weather(region, power, meteo):
     if len(forecast_days) != horizon:
         log(STEP, f"ERROR Open-Meteo has {len(forecast_days)} days on or after {iso(as_of)}, need {horizon}")
         sys.exit(1)
-    fc_precip, fc_prob = [], []
+    fc_precip, fc_prob, fc_tmin, fc_tmax, fc_rh, fc_gust = [], [], [], [], [], []
     for day in forecast_days:
         index = meteo_days[day]
         fc_precip.append(clean_meteo_amount(daily["precipitation_sum"][index]))
         fc_prob.append(clean_prob(daily["precipitation_probability_max"][index]))
+        fc_tmin.append(clean_meteo_amount(daily["temperature_2m_min"][index]))
+        fc_tmax.append(clean_meteo_amount(daily["temperature_2m_max"][index]))
+        fc_rh.append(clean_meteo_amount(daily["relative_humidity_2m_mean"][index]))
+        fc_gust.append(clean_meteo_amount(daily["wind_gusts_10m_max"][index]))
 
     doc = {
         "observed": {
@@ -209,6 +240,10 @@ def build_weather(region, power, meteo):
             "dates": forecast_days,
             "precip_mm": fc_precip,
             "precip_prob": fc_prob,
+            "tmin_c": fc_tmin,
+            "tmax_c": fc_tmax,
+            "rh_mean_pct": fc_rh,
+            "wind_gust_ms": fc_gust,
         },
     }
     return doc, filled_days, hourly
@@ -280,7 +315,7 @@ def validate(doc):
     if list(observed) != ["source", "dates", "precip_mm", "tmax_c", "tmin_c"]:
         log(STEP, f"ERROR observed keys {list(observed)}")
         errors.append("keys")
-    if list(forecast) != ["source", "dates", "precip_mm", "precip_prob"]:
+    if list(forecast) != list(FORECAST_KEYS):
         log(STEP, f"ERROR forecast keys {list(forecast)}")
         errors.append("keys")
     if errors:
@@ -313,6 +348,24 @@ def report(doc, filled_days, raw_meteo):
     log(STEP, f"max hourly wind gust in the next 72 h: {shown}")
     trigger = any(value is not None and value >= 15 for value in forecast["precip_mm"][:3])
     print(f"RAIN TRIGGER (any day >= 15 mm in next 3): {'YES' if trigger else 'NO'}", flush=True)
+    region = json.loads((ROOT / "config" / "region.json").read_text())
+    try:
+        frost_c = float(region["thresholds"]["frost_tmin_c"])
+        lookahead = int(region["thresholds"]["rain_lookahead_days"])
+    except (KeyError, TypeError, ValueError) as exc:
+        log(STEP, f"ERROR region thresholds missing frost_tmin_c or rain_lookahead_days: {exc}")
+        sys.exit(1)
+    lows = forecast["tmin_c"][:lookahead]
+    frost = any(value is not None and value <= frost_c for value in lows)
+    print(
+        f"FROST TRIGGER (any tmin <= {frost_c:g} C in next {lookahead}): {'YES' if frost else 'NO'} {lows}",
+        flush=True,
+    )
+    gusts = [value for value in forecast["wind_gust_ms"][:3] if value is not None]
+    humidity = [value for value in forecast["rh_mean_pct"][:3] if value is not None]
+    gust_text = "none" if not gusts else f"{max(gusts):g}"
+    rh_text = "none" if not humidity else f"{min(humidity):g}"
+    log(STEP, f"next 3 days max wind_gust_ms {gust_text}; min rh_mean_pct {rh_text}")
 
 
 def load_cached():
@@ -363,8 +416,9 @@ def main():
                 "timezone": "auto",
                 "past_days": 14,
                 "forecast_days": 16,
-                "daily": "precipitation_sum,precipitation_probability_max,temperature_2m_max,temperature_2m_min",
+                "daily": "precipitation_sum,precipitation_probability_max,temperature_2m_max,temperature_2m_min,relative_humidity_2m_mean,wind_gusts_10m_max",
                 "hourly": "precipitation,wind_gusts_10m,weather_code",
+                "wind_speed_unit": "ms",
             },
             timeout=30,
         )
@@ -372,7 +426,7 @@ def main():
         write_json(CACHE / "openmeteo_raw.json", meteo)
         log(STEP, f"cached {CACHE / 'power_raw.json'} and {CACHE / 'openmeteo_raw.json'}")
 
-    doc, filled_days, _hourly = build_weather(region, power, meteo)
+    doc, filled_days, _hourly = build_weather(region, power, meteo, from_cache=args.from_cache)
     validate(doc)
     publish(doc)
     report(doc, filled_days, meteo)
