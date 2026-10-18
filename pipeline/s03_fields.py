@@ -19,8 +19,9 @@ from common import CACHE, OUT, ROOT, load_region, log, write_json
 from geo import region_geobox
 
 STEP = "s03"
-SCALES = (50, 100, 200, 400)
-MIN_SIZES = (100, 200)
+SCALES = (400, 800, 1600, 3200)
+MIN_SIZES = (400, 800)
+STACK_WINDOWS = ("W1", "W2", "W3", "W4")
 GEOD = Geod(ellps="WGS84")
 COLORS = {"corn": (255, 255, 0), "soybean": (0, 255, 255), "unknown": (255, 0, 255)}
 
@@ -108,7 +109,8 @@ def choose_windows(dates, clear, as_of):
 
 
 def feature_stack(dates, ndvi, chosen):
-    order = [name for name in ("W1", "W2", "W3", "W4", "W5", "W6") if name in chosen]
+    # Pre-harvest only. W5 and W6 split fields along the harvest line.
+    order = [name for name in STACK_WINDOWS if name in chosen]
     index = {day: i for i, day in enumerate(dates)}
     planes = [np.asarray(ndvi[index[chosen[name]["date"]]], dtype=np.float32) for name in order]
     stack = np.clip(np.stack(planes, axis=-1), 0, 1)
@@ -225,30 +227,61 @@ def kmeans_1d(values):
     return centres
 
 
-def label_crops(fields, names):
-    if "W2" not in names:
-        for field in fields:
-            field["crop"] = "unknown"
-        log(STEP, "W2 missing; every field labelled unknown")
-        return None, None
-    w2_index = names.index("W2")
-    samples = [field["series"]["W2"] for field in fields if field["series"]["W2"] is not None]
+def class_means(fields):
+    means = {}
+    for window in ("W2", "W4", "W5"):
+        means[window] = {}
+        for crop in ("corn", "soybean"):
+            vals = [
+                field["series"].get(window)
+                for field in fields
+                if field["crop"] == crop and field["series"].get(window) is not None
+            ]
+            means[window][crop] = None if not vals else float(np.mean(vals))
+        corn = means[window]["corn"]
+        soy = means[window]["soybean"]
+        corn_txt = "none" if corn is None else f"{corn:.3f}"
+        soy_txt = "none" if soy is None else f"{soy:.3f}"
+        log(STEP, f"mean {window} corn {corn_txt} soybean {soy_txt}")
+    return means
+
+
+def expectations_hold(means):
+    corn_w2 = means["W2"]["corn"]
+    soy_w2 = means["W2"]["soybean"]
+    corn_w4 = means["W4"]["corn"]
+    soy_w4 = means["W4"]["soybean"]
+    if None in (corn_w2, soy_w2, corn_w4, soy_w4):
+        return False
+    return corn_w2 > soy_w2 and corn_w4 < soy_w4
+
+
+def label_crops(fields):
+    samples = []
+    for field in fields:
+        w2 = field["series"].get("W2")
+        w4 = field["series"].get("W4")
+        if w2 is None or w4 is None:
+            field["d"] = None
+        else:
+            field["d"] = w2 - w4
+            samples.append(field["d"])
     if len(samples) < 2:
         for field in fields:
             field["crop"] = "unknown"
-        log(STEP, "fewer than 2 W2 values; every field labelled unknown")
-        return None, None
+        log(STEP, "fewer than 2 fields with both W2 and W4; every field labelled unknown")
+        return None, None, class_means(fields)
     centres = kmeans_1d(samples)
     if centres is None or abs(centres[1] - centres[0]) < 0.15:
         for field in fields:
             field["crop"] = "unknown"
         gap = None if centres is None else centres[1] - centres[0]
         log(STEP, f"crop centres {centres} gap {gap}; every field labelled unknown")
-        return centres, None
+        return centres, None, class_means(fields)
     threshold = (centres[0] + centres[1]) / 2
     counts = {"corn": 0, "soybean": 0, "unknown": 0}
     for field in fields:
-        value = field["series"]["W2"]
+        value = field["d"]
         if value is None or abs(value - threshold) <= 0.05:
             field["crop"] = "unknown"
         elif value > threshold:
@@ -257,12 +290,7 @@ def label_crops(fields, names):
             field["crop"] = "soybean"
         counts[field["crop"]] += 1
     log(STEP, f"crop centres {[round(c, 3) for c in centres]} threshold {threshold:.3f} counts {counts}")
-    if "W5" in names:
-        for crop in ("corn", "soybean"):
-            vals = [field["series"]["W5"] for field in fields if field["crop"] == crop and field["series"]["W5"] is not None]
-            if vals:
-                log(STEP, f"mean W5 {crop} {float(np.mean(vals)):.3f} (n={len(vals)})")
-    return centres, threshold
+    return centres, threshold, class_means(fields)
 
 
 def round_polygon(geom):
@@ -435,7 +463,7 @@ def search(stack, planes, masks, names, affine):
             }
             rows.append(row)
             shown = "none" if median is None else f"{median:.1f}"
-            log(STEP, f"scale={scale:<4} min_size={min_size:<4} fields={len(fields):<5} median_ha={shown:<6} over_150={over}")
+            log(STEP, f"scale={scale:<5} min_size={min_size:<4} fields={len(fields):<5} median_ha={shown:<6} over_150={over}")
     qualified = [row for row in rows if row["median_ha"] is not None and 15 <= row["median_ha"] <= 65]
     fallback = False
     if qualified:
@@ -473,14 +501,19 @@ def main():
     frame_box = region_geobox(region)
     dates, ndvi, clear = load_cube(region, frame_box)
     chosen = choose_windows(dates, clear, parse_day(region["as_of"]))
-    stack, names = feature_stack(dates, ndvi, chosen)
+    if "W4" not in chosen:
+        fail("W4 has no date")
+    stack, _stack_names = feature_stack(dates, ndvi, chosen)
+    names = [name for name in ("W1", "W2", "W3", "W4", "W5", "W6") if name in chosen]
     date_index = {day: index for index, day in enumerate(dates)}
     planes = [np.asarray(ndvi[date_index[chosen[name]["date"]]], dtype=np.float32) for name in names]
     masks = [np.asarray(clear[date_index[chosen[name]["date"]]]) for name in names]
     rows, params, fields = search(stack, planes, masks, names, frame_box.affine)
     if len(fields) < 1:
         fail("chosen run produced no fields")
-    centres, threshold = label_crops(fields, names)
+    centres, threshold, means = label_crops(fields)
+    if not expectations_hold(means):
+        fail("class-mean check failed (corn W2 > soybean W2 and corn W4 < soybean W4); data/out left untouched")
     features = assign_ids(fields, region)
     doc = {"type": "FeatureCollection", "features": features}
     validate(doc, region)
@@ -488,7 +521,8 @@ def main():
         "windows": chosen,
         "runs": rows,
         "chosen": params,
-        "crop": {"centres": centres, "threshold": threshold},
+        "stack_windows": list(STACK_WINDOWS),
+        "crop": {"signal": "W2-W4", "centres": centres, "threshold": threshold, "means": means},
         "fields": {
             field["field_id"]: {name: field["series"].get(name) for name in ("W1", "W2", "W3", "W4", "W5", "W6")}
             for field in fields
