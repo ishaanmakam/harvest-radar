@@ -2,7 +2,8 @@
 -- Run once in the Supabase SQL editor (or `supabase db push`). Every table has row-level security.
 -- Design: docs/superpowers/specs/2026-10-18-product-accounts-api-design.md
 
-create extension if not exists pgcrypto;
+create schema if not exists extensions;
+create extension if not exists pgcrypto with schema extensions;   -- Supabase keeps pgcrypto here
 
 -- ---------------------------------------------------------------- profiles (the roster)
 create sequence if not exists public.roster_seq start 1;
@@ -34,12 +35,12 @@ create index if not exists profiles_role_idx on public.profiles (role);
 
 -- ---------------------------------------------------------------- helpers
 create or replace function public.is_staff() returns boolean
-language sql stable security definer set search_path = public as $$
+language sql stable security definer set search_path = public, extensions as $$
   select exists (select 1 from public.profiles where id = auth.uid() and role in ('officer', 'admin'));
 $$;
 
 create or replace function public.is_admin() returns boolean
-language sql stable security definer set search_path = public as $$
+language sql stable security definer set search_path = public, extensions as $$
   select exists (select 1 from public.profiles where id = auth.uid() and role = 'admin');
 $$;
 
@@ -48,7 +49,7 @@ language sql immutable as $$ select 'developer-v1'::text $$;
 
 -- Create the profile row when a user signs up (email or phone from auth.users).
 create or replace function public.handle_new_user() returns trigger
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public, extensions as $$
 begin
   insert into public.profiles (id, email, phone, name)
   values (new.id, new.email, new.phone, coalesce(new.raw_user_meta_data ->> 'name', ''))
@@ -62,7 +63,7 @@ create trigger on_auth_user_created after insert on auth.users
 
 -- Nobody promotes themselves: role and roster_id change only through an admin.
 create or replace function public.protect_profile_fields() returns trigger
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public, extensions as $$
 begin
   if (new.role is distinct from old.role or new.roster_id is distinct from old.roster_id) and not public.is_admin() then
     raise exception 'role and roster_id can only be changed by an admin';
@@ -90,7 +91,7 @@ create table if not exists public.terms_acceptances (
 create index if not exists terms_user_idx on public.terms_acceptances (user_id, kind, version);
 
 create or replace function public.accept_terms(p_version text, p_kind text default 'developer', p_user_agent text default null)
-returns timestamptz language plpgsql security definer set search_path = public as $$
+returns timestamptz language plpgsql security definer set search_path = public, extensions as $$
 declare t timestamptz;
 begin
   if auth.uid() is null then raise exception 'sign in first'; end if;
@@ -126,7 +127,7 @@ create index if not exists api_usage_key_at_idx on public.api_usage (key_id, at 
 
 -- Returns the new key once. Needs a sign-in and an acceptance of the current developer terms; at most 5 live keys.
 create or replace function public.issue_api_key(p_name text default 'default')
-returns text language plpgsql security definer set search_path = public as $$
+returns text language plpgsql security definer set search_path = public, extensions as $$
 declare k text; live integer;
 begin
   if auth.uid() is null then raise exception 'sign in first'; end if;
@@ -136,15 +137,15 @@ begin
   end if;
   select count(*) into live from public.api_keys where user_id = auth.uid() and revoked_at is null;
   if live >= 5 then raise exception 'at most 5 live keys; revoke one first'; end if;
-  k := 'ovf_' || encode(gen_random_bytes(20), 'hex');
+  k := 'ovf_' || encode(extensions.gen_random_bytes(20), 'hex');
   insert into public.api_keys (user_id, name, key_prefix, key_hash)
-  values (auth.uid(), left(coalesce(nullif(trim(p_name), ''), 'default'), 60), left(k, 12), encode(digest(k, 'sha256'), 'hex'));
+  values (auth.uid(), left(coalesce(nullif(trim(p_name), ''), 'default'), 60), left(k, 12), encode(extensions.digest(k, 'sha256'), 'hex'));
   return k;
 end;
 $$;
 
 create or replace function public.revoke_api_key(p_id uuid) returns boolean
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public, extensions as $$
 begin
   update public.api_keys set revoked_at = now()
   where id = p_id and revoked_at is null and (user_id = auth.uid() or public.is_admin());
@@ -155,15 +156,15 @@ $$;
 -- For the edge function (service role): who owns this key and how much has it used today.
 create or replace function public.verify_api_key(p_key text)
 returns table (key_id uuid, user_id uuid, daily_limit integer, used_today bigint)
-language sql stable security definer set search_path = public as $$
+language sql stable security definer set search_path = public, extensions as $$
   select k.id, k.user_id, k.daily_limit,
          (select count(*) from public.api_usage u where u.key_id = k.id and u.at > now() - interval '24 hours')
   from public.api_keys k
-  where k.key_hash = encode(digest(p_key, 'sha256'), 'hex') and k.revoked_at is null;
+  where k.key_hash = encode(extensions.digest(p_key, 'sha256'), 'hex') and k.revoked_at is null;
 $$;
 
 create or replace function public.log_api_use(p_key_id uuid, p_path text, p_status integer) returns void
-language sql security definer set search_path = public as $$
+language sql security definer set search_path = public, extensions as $$
   insert into public.api_usage (key_id, path, status) values (p_key_id, left(p_path, 200), p_status);
   update public.api_keys set last_used_at = now() where id = p_key_id;
 $$;
@@ -186,7 +187,7 @@ create index if not exists deliveries_run_idx on public.deliveries (run_date des
 
 -- ---------------------------------------------------------------- account removal
 create or replace function public.delete_my_account() returns void
-language plpgsql security definer set search_path = public as $$
+language plpgsql security definer set search_path = public, extensions as $$
 begin
   if auth.uid() is null then raise exception 'sign in first'; end if;
   delete from auth.users where id = auth.uid();         -- profiles, keys, terms and usage go by cascade
