@@ -2,10 +2,13 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <meta name="color-scheme" content="dark" />
+    <meta name="description" content="Overfield: the satellite visits every farm and every farmer gets a morning plan." />
     <title>Overfield</title>
   </head>
   <body>
+    <a class="skip-link" href="#dock-body">Skip to the farm list</a>
     <section id="intro">
       <div id="globe"></div>
       <p id="toast" hidden></p>
@@ -17,27 +20,61 @@
       </div>
     </section>
     <div id="app">
-    <header>
-      <h1>Overfield</h1>
-      <p id="stats"></p>
-      <button id="orbit" type="button">Orbit</button>
-      <span id="badge" class="badge"></span>
-    </header>
-    <p id="error" hidden></p>
-    <main>
-      <div class="map-wrap">
-        <div id="map"></div>
-        <div id="timelapse" hidden>
-          <button id="play" type="button">Play</button>
-          <input id="frame-slider" type="range" min="0" value="0" aria-label="Season date" />
-          <span id="frame-date"></span>
+      <header class="topbar">
+        <a class="wordmark" href="./" aria-label="Overfield">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <rect x="3" y="3" width="18" height="18" rx="5" fill="none" stroke="currentColor" stroke-width="1.6" />
+            <path d="M7 9.5h10M7 13.5h10M7 17.5h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
+            <circle cx="17.5" cy="6.5" r="1.7" fill="#8fe0a8" />
+          </svg>
+          <span>Overfield</span>
+        </a>
+        <nav class="tabs" aria-label="Views">
+          <button class="tab" type="button" data-view="fields" aria-current="page">Fields</button>
+          <button class="tab" type="button" data-view="timelapse">Time-lapse</button>
+          <button class="tab" type="button" data-view="route">Route</button>
+          <button class="tab" type="button" data-view="deliveries">Deliveries</button>
+          <button class="tab" type="button" data-view="season">Season</button>
+        </nav>
+        <div class="topbar-right">
+          <span id="badge" class="badge"></span>
+          <button id="orbit" type="button" class="btn btn-ghost">Orbit</button>
+          <a id="signup" class="signup" href="http://localhost:8788/signup" target="_blank" rel="noopener">Get your farm's morning plan</a>
         </div>
-      </div>
-      <aside id="panel">
-        <section id="route"></section>
-        <section id="plan"></section>
-      </aside>
-    </main>
+      </header>
+      <p id="error" class="error-banner" role="alert" hidden></p>
+      <main class="stage">
+        <div id="map" class="map" aria-label="Farm map"></div>
+        <section id="headline" class="headline" aria-label="Today at a glance" hidden></section>
+        <aside id="dock" class="dock" aria-label="View panel" data-view="fields" hidden>
+          <button id="dock-handle" class="sheet-handle" type="button" aria-label="Expand panel" aria-expanded="false"><span></span></button>
+          <div id="dock-body" class="dock-body" tabindex="-1"></div>
+        </aside>
+        <aside id="panel" class="drawer" aria-label="Farm plan" hidden></aside>
+        <div id="timelapse" class="timelapse" hidden>
+          <button id="play" type="button" class="btn btn-primary">Play</button>
+          <button id="frame-prev" type="button" class="btn btn-icon" aria-label="Previous pass">‹</button>
+          <button id="frame-next" type="button" class="btn btn-icon" aria-label="Next pass">›</button>
+          <div class="tl-track">
+            <input id="frame-slider" type="range" min="0" value="0" aria-label="Season date" />
+            <div class="tl-readout"><strong id="frame-date"></strong><span id="frame-clear" class="muted"></span></div>
+          </div>
+          <label class="tl-field">
+            <span>Speed</span>
+            <select id="frame-speed" class="select" aria-label="Playback speed">
+              <option value="0.5">0.5×</option>
+              <option value="1" selected>1×</option>
+              <option value="2">2×</option>
+              <option value="4">4×</option>
+            </select>
+          </label>
+          <label class="tl-field">
+            <span>Opacity</span>
+            <input id="frame-opacity" type="range" min="0" max="1" step="0.05" value="1" aria-label="Imagery opacity" />
+          </label>
+        </div>
+        <div id="tooltip" class="map-tooltip" role="tooltip" hidden></div>
+      </main>
     </div>
     <div id="place-card" hidden>
       <h2 id="place-title"></h2>
