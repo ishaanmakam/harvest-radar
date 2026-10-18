@@ -289,17 +289,21 @@ def validate(doc):
     for err in errors:
         loc = "/".join(str(part) for part in err.path) or "<root>"
         log(STEP, f"ERROR weather.json @ {loc}: {err.message}")
+    region = load_region()
+    as_of = parse_day(region["as_of"])
+    expected_observed = [iso(day) for day in days_inclusive(parse_day(region["season_start"]), as_of - timedelta(days=1))]
+    horizon = int(region["forecast_horizon_days"])
+    expected_forecast = [iso(as_of + timedelta(days=offset)) for offset in range(horizon)]
     mock = json.loads((ROOT / "data" / "mock" / "weather.json").read_text())
     observed, forecast = doc["observed"], doc["forecast"]
-    if observed["dates"] != mock["observed"]["dates"]:
-        log(STEP, "ERROR observed.dates do not match data/mock/weather.json")
-        log(STEP, f"got {observed['dates'][0]}..{observed['dates'][-1]} n={len(observed['dates'])}")
-        log(STEP, f"mock {mock['observed']['dates'][0]}..{mock['observed']['dates'][-1]} n={len(mock['observed']['dates'])}")
+    if observed["dates"] != expected_observed:
+        log(STEP, f"ERROR observed.dates must run {expected_observed[0]}..{expected_observed[-1]} ({len(expected_observed)} days)")
+        if observed["dates"]:
+            log(STEP, f"got {observed['dates'][0]}..{observed['dates'][-1]} n={len(observed['dates'])}")
         errors.append("dates")
-    if forecast["dates"] != mock["forecast"]["dates"]:
-        log(STEP, "ERROR forecast.dates do not match data/mock/weather.json")
+    if forecast["dates"] != expected_forecast:
+        log(STEP, f"ERROR forecast.dates must start {iso(as_of)} and have {horizon} days")
         log(STEP, f"got {forecast['dates']}")
-        log(STEP, f"mock {mock['forecast']['dates']}")
         errors.append("dates")
     for block, name in ((observed, "observed"), (forecast, "forecast")):
         count = len(block["dates"])
@@ -317,6 +321,9 @@ def validate(doc):
         errors.append("keys")
     if list(forecast) != list(FORECAST_KEYS):
         log(STEP, f"ERROR forecast keys {list(forecast)}")
+        errors.append("keys")
+    if list(mock) != ["observed", "forecast"] or list(mock["observed"]) != list(observed):
+        log(STEP, "ERROR mock weather.json key order does not match the observed block")
         errors.append("keys")
     if errors:
         log(STEP, "ERROR validation failed; data/out/weather.json left untouched")
@@ -342,13 +349,13 @@ def report(doc, filled_days, raw_meteo):
     log(STEP, f"season rain {rain_total(observed['precip_mm'])} mm; last 7 observed days {rain_total(last7)} mm")
     log(STEP, f"forecast {forecast['dates'][0]} .. {forecast['dates'][-1]}")
     log(STEP, f"next 3 days precip_mm {forecast['precip_mm'][:3]} precip_prob {forecast['precip_prob'][:3]}")
-    as_of = parse_day(json.loads((ROOT / "config" / "region.json").read_text())["as_of"])
+    region = load_region()
+    as_of = parse_day(region["as_of"])
     best, unit = gust_from_raw(raw_meteo, as_of)
     shown = "none" if best is None else f"{best:g} {unit}"
     log(STEP, f"max hourly wind gust in the next 72 h: {shown}")
     trigger = any(value is not None and value >= 15 for value in forecast["precip_mm"][:3])
     print(f"RAIN TRIGGER (any day >= 15 mm in next 3): {'YES' if trigger else 'NO'}", flush=True)
-    region = json.loads((ROOT / "config" / "region.json").read_text())
     try:
         frost_c = float(region["thresholds"]["frost_tmin_c"])
         lookahead = int(region["thresholds"]["rain_lookahead_days"])

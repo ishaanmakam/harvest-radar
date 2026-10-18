@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "run.schema.json",
+  "title": "run.json — the day and mode this data/out refresh describes",
+  "type": "object",
+  "required": ["as_of", "mode", "generated_at"],
+  "properties": {
+    "as_of": {"type": "string", "format": "date"},
+    "mode": {"type": "string", "enum": ["live", "replay"]},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "latest_pass": {"type": "string", "format": "date"},
+    "pass_count": {"type": "integer"},
+    "offline": {"type": "boolean"},
+    "durations_s": {
+      "type": "object",
+      "additionalProperties": {"type": "number"}
+    },
+    "sources": {
+      "type": "object",
+      "additionalProperties": {"type": "string"}
+    }
+  }
+}
