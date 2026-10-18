@@ -300,6 +300,7 @@ def copy_replay_frames(staging, as_of):
 
 def hindsight_outcome(staging, as_of):
     from datetime import date, timedelta
+    from s06_weather import archive_source
 
     weather = json.loads((DATA_OUT / "weather.json").read_text())
     observed = dict(zip(weather["observed"]["dates"], weather["observed"]["precip_mm"]))
@@ -315,18 +316,21 @@ def hindsight_outcome(staging, as_of):
             "actual_mm": observed.get(text),
         })
     summary = json.loads((CACHE / "s01_summary.json").read_text())
-    later = [text for text in summary["dates"] if text > as_of]
+    later_pass = [text for text in summary["dates"] if text > as_of]
+    later_clear = [text for text in summary.get("likely_clear_dates", []) if text > as_of]
     return {
         "note": f"HINDSIGHT: what actually happened after {as_of}; not used by any decision",
         "as_of": as_of,
+        "forecast_issued": archive_source(day),
         "rain": rain,
-        "next_clear_pass": later[0] if later else None,
+        "next_pass": later_pass[0] if later_pass else None,
+        "next_clear_pass": later_clear[0] if later_clear else None,
     }
 
 
 def no_hindsight(staging, as_of):
     from s06_weather import archive_source
-    from datetime import date
+    from datetime import date, timedelta
 
     errors = []
     timeseries = json.loads((staging / "timeseries.json").read_text())
@@ -351,6 +355,13 @@ def no_hindsight(staging, as_of):
     expected = archive_source(date.fromisoformat(as_of))
     if weather["forecast"]["source"] != expected:
         errors.append(f"forecast source is {weather['forecast']['source']!r}")
+    cutoff = (date.fromisoformat(as_of) + timedelta(days=6)).isoformat()
+    late_precip = [
+        day for day, mm in zip(weather["forecast"]["dates"], weather["forecast"]["precip_mm"])
+        if day > cutoff and mm is not None
+    ]
+    if late_precip:
+        errors.append(f"forecast precip after as_of+6: {late_precip[:3]}")
     if errors:
         for error in errors:
             say(f"NO HINDSIGHT: FAIL {error}")

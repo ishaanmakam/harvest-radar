@@ -384,13 +384,6 @@ def report(doc, filled_days, raw_meteo):
     log(STEP, f"next 3 days max wind_gust_ms {gust_text}; min rh_mean_pct {rh_text}")
 
 
-def archive_key(base, lead):
-    """The previous-runs API returns lead 0 under the plain name, not _previous_day0."""
-    if lead == 0:
-        return base
-    return f"{base}_previous_day{lead}"
-
-
 def load_previous_runs(lat, lon, start, end):
     path = CACHE / f"openmeteo_prevruns_{start.isoformat()}_{end.isoformat()}.json"
     if path.exists():
@@ -450,7 +443,14 @@ def _reduce(values, indexes, how):
 
 
 def issued_day(raw, issue, target):
-    """One local day of the forecast that was issued on the morning of issue."""
+    """Forecast for target that was already published before 6 am Central on issue.
+
+    `_previous_dayN` is the run made 24*N hours before that hour. Lead 0, the unsuffixed
+    series, is the current run, and for a past date that is close to what actually fell.
+    Reading archive lead (lead + 1) puts every hour on a run from the day before issue,
+    including the evening hours, so none of it was published on the morning itself.
+    The archive keeps only 7 days, so a target more than 6 days after issue is null.
+    """
     empty = {
         "precip_mm": None,
         "precip_prob": None,
@@ -460,28 +460,34 @@ def issued_day(raw, issue, target):
         "wind_gust_ms": None,
     }
     lead = (target - issue).days
-    if lead < 0 or lead > 7:
+    if lead < 0 or lead > 6:
         return empty
+    series_lead = lead + 1
     hourly = raw["hourly"]
     indexes = _hours_on(hourly["time"], target)
     if not indexes:
         return empty
     return {
-        "precip_mm": _reduce(hourly.get(archive_key("precipitation", lead)), indexes, "sum"),
-        "precip_prob": _reduce(hourly.get(archive_key("precipitation_probability", lead)), indexes, "prob"),
-        "tmin_c": _reduce(hourly.get(archive_key("temperature_2m", lead)), indexes, "min"),
-        "tmax_c": _reduce(hourly.get(archive_key("temperature_2m", lead)), indexes, "max"),
-        "rh_mean_pct": _reduce(hourly.get(archive_key("relative_humidity_2m", lead)), indexes, "mean"),
-        "wind_gust_ms": _reduce(hourly.get(archive_key("wind_gusts_10m", lead)), indexes, "max"),
+        "precip_mm": _reduce(hourly.get(f"precipitation_previous_day{series_lead}"), indexes, "sum"),
+        "precip_prob": _reduce(hourly.get(f"precipitation_probability_previous_day{series_lead}"), indexes, "prob"),
+        "tmin_c": _reduce(hourly.get(f"temperature_2m_previous_day{series_lead}"), indexes, "min"),
+        "tmax_c": _reduce(hourly.get(f"temperature_2m_previous_day{series_lead}"), indexes, "max"),
+        "rh_mean_pct": _reduce(hourly.get(f"relative_humidity_2m_previous_day{series_lead}"), indexes, "mean"),
+        "wind_gust_ms": _reduce(hourly.get(f"wind_gusts_10m_previous_day{series_lead}"), indexes, "max"),
     }
 
 
 def archive_source(as_of):
-    return f"Open-Meteo previous-runs archive: forecast as issued on {iso(as_of)}"
+    """Name the run that was published before 6 am Central on as_of, which is the previous day's run."""
+    issued = as_of - timedelta(days=1)
+    return (
+        f"Open-Meteo previous-runs archive: forecast issued {issued.isoformat()}, "
+        f"published before 6 am Central on {as_of.isoformat()}"
+    )
 
 
 def build_replay_weather(region, power, archive):
-    """Observed days from NASA POWER only. Forecast is the archive issued on as_of; lead time past 7 days is null."""
+    """Observed days from NASA POWER only. Forecast is the run published before that morning; days after as_of+6 are null."""
     fill, parameter = require_power(power)
     season_start = parse_day(region["season_start"])
     as_of = parse_day(region["as_of"])
