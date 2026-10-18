@@ -38,6 +38,7 @@ export function createMap({ container, data, onSelect, onHover }) {
   const frameUrl = (index) => `${data.framesBase}/${frames[index].rgb}`;
   let dimmed = false;
   let chromeVisible = false;
+  let realOutlines = Boolean(data.realFields);
 
   function fieldOpacity() {
     return dimmed ? ["case", IS_MATCH, 0.22, 0.03] : ["case", IS_MATCH, 0.48, 0.06];
@@ -83,8 +84,20 @@ export function createMap({ container, data, onSelect, onHover }) {
       }
     }
 
-    map.addSource("fields", { type: "geojson", data: data.fields });
     const hidden = { visibility: "none" };
+    if (data.realFields) {
+      // Real field outlines (plans pending): under the mock farms, no fill, no click.
+      map.addSource("real-fields", { type: "geojson", data: data.realFields });
+      map.addLayer({
+        id: "real-outlines",
+        type: "line",
+        source: "real-fields",
+        layout: hidden,
+        paint: { "line-color": "#ffffff", "line-width": 1, "line-opacity": 0.5 },
+      });
+    }
+
+    map.addSource("fields", { type: "geojson", data: data.fields });
     map.addLayer({ id: "fields-fill", type: "fill", source: "fields", layout: hidden, paint: { "fill-color": FLAG_COLOR, "fill-opacity": fieldOpacity() } });
     map.addLayer({
       id: "fields-line",
@@ -209,6 +222,17 @@ export function createMap({ container, data, onSelect, onHover }) {
     });
   }
 
+  function syncRealOutlines() {
+    if (!map.getLayer("real-outlines")) return;
+    map.setLayoutProperty("real-outlines", "visibility", chromeVisible && realOutlines ? "visible" : "none");
+  }
+
+  function setRealOutlines(on) {
+    realOutlines = Boolean(on);
+    syncRealOutlines();
+    return realOutlines;
+  }
+
   /** The farm layers, zone labels and route markers only show once the intro has flown in. */
   function setChrome(visible) {
     chromeVisible = visible;
@@ -216,9 +240,10 @@ export function createMap({ container, data, onSelect, onHover }) {
     for (const id of FIELD_LAYERS) {
       if (map.getLayer(id)) map.setLayoutProperty(id, "visibility", visibility);
     }
+    syncRealOutlines();
     for (const marker of markers.zones) marker.getElement().hidden = !visible;
     for (const marker of markers.route) marker.getElement().hidden = !visible;
   }
 
-  return { map, ready, frames, fitAll, flyTo, select, setVisible, setDimmed, setFrame, setRouteMarkers, setChrome };
+  return { map, ready, frames, fitAll, flyTo, select, setVisible, setDimmed, setFrame, setRouteMarkers, setChrome, setRealOutlines, realOutlinesOn: () => realOutlines };
 }

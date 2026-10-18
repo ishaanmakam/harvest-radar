@@ -228,6 +228,19 @@ select {
   border-color: rgba(67, 179, 107, 0.5);
 }
 
+.badge-toggle {
+  cursor: pointer;
+  background: transparent;
+}
+
+.badge-toggle:hover {
+  background: var(--raised);
+}
+
+.badge-toggle[aria-pressed="true"] {
+  background: rgba(242, 169, 59, 0.14);
+}
+
 .signup {
   display: inline-flex;
   align-items: center;
@@ -1554,6 +1567,21 @@ select {
 #enter:disabled {
   opacity: 0.6;
   cursor: default;
+}
+
+/* ---------- Narrow desktop: the badge and sign-up link drop to a second row ---------- */
+
+@media (max-width: 1180px) {
+  .topbar {
+    flex-wrap: wrap;
+    padding: 8px 16px;
+    row-gap: 6px;
+  }
+
+  .topbar-right {
+    width: 100%;
+    justify-content: flex-end;
+  }
 }
 
 /* ---------- Phone ---------- */

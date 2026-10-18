@@ -91,6 +91,17 @@ export function renderFields(el, ctx) {
       ),
     );
   }
+  if (data.realFields) {
+    legendRows.push(
+      h(
+        "div",
+        { class: "legend-row legend-static" },
+        h("span", { class: "swatch swatch-outline" }),
+        h("span", {}, "Real field outlines (plans pending)"),
+        h("span", { class: "count" }, String(data.realFields.features?.length ?? "")),
+      ),
+    );
+  }
 
   const crops = [...new Set(data.fields.features.map((f) => f.properties.crop || "unknown"))].sort();
   const cropSelect = h(

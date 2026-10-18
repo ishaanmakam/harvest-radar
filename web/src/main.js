@@ -24,12 +24,32 @@ function showError(message) {
   error.replaceChildren(h("strong", {}, "Nothing to show."), message);
 }
 
-function setBadge(data) {
+/** The badge says where the imagery and the farm group came from; with real outlines pending it toggles them. */
+function setBadge(data, mapApi) {
   const imagery = data.sources.frames === "out" ? "REAL" : "MOCK";
   const farms = data.sources.fields === "out" && data.sources.plans === "out" ? "REAL" : "MOCK";
-  const badge = $("badge");
   const standIn = imagery !== "REAL" || farms !== "REAL";
-  badge.textContent = standIn ? `Imagery ${imagery} · Farms & plans ${farms}` : "Live season";
+  let badge = $("badge");
+
+  if (data.realFields) {
+    const button = h("button", { id: "badge", type: "button", class: "badge badge-standin badge-toggle" });
+    badge.replaceWith(button);
+    badge = button;
+    const render = () => {
+      const on = mapApi.realOutlinesOn();
+      badge.textContent = `Imagery: ${imagery} · Farms & plans: ${farms} · Real field outlines: ${on ? "shown" : "hidden"}`;
+      badge.setAttribute("aria-pressed", String(on));
+      badge.title = on ? "Hide the real field outlines (plans pending)" : "Show the real field outlines (plans pending)";
+    };
+    badge.addEventListener("click", () => {
+      mapApi.setRealOutlines(!mapApi.realOutlinesOn());
+      render();
+    });
+    render();
+    return;
+  }
+
+  badge.textContent = standIn ? `Imagery: ${imagery} · Farms & plans: ${farms}` : "Live season";
   badge.className = standIn ? "badge badge-standin" : "badge badge-live";
   badge.title = standIn ? "Stand-in season: at least one file came from data/mock" : "Every file came from data/out";
 }
@@ -81,11 +101,11 @@ async function start() {
     return;
   }
   renderHeadline(headline, data);
-  setBadge(data);
   setIntroStats(data);
 
   const mapApi = createMap({ container: "map", data, onSelect: selectFarm, onHover: showTooltip });
   const { map } = mapApi;
+  setBadge(data, mapApi);
   const timelapse = createTimelapse({
     data,
     store,

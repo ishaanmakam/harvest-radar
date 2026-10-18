@@ -1,14 +1,21 @@
 import { SEVERITY } from "./format.js";
 
-// Every file is tried in data/out first and falls back to data/mock on its own, so a half-finished
-// real season still renders. `?base=/mock` (or any folder under data/) pins every file to one base
-// with no fallback, which is how the missing-optional-files path gets exercised.
-const FILES = [
+// The four farm files are one group: real fields joined to mock plans would show the wrong flags,
+// because real and mock farm ids overlap (F0001...) but are different farms. The group comes from
+// data/out only when BOTH fields.geojson and plans.json are real JSON there; otherwise all four come
+// from data/mock, and a missing route or deliveries file inside a real group simply means "none yet".
+// Every other file is tried in data/out first and falls back to data/mock on its own, so a
+// half-finished real season still renders. `?base=/mock` (or any folder under data/) pins every file
+// to one base with no fallback, which is how the missing-optional-files path gets exercised.
+const GROUP = [
   ["fields", "fields.geojson"],
   ["plans", "plans.json"],
-  ["zones", "zones.geojson"],
   ["route", "route.json"],
   ["deliveries", "deliveries.json"],
+];
+
+const PER_FILE = [
+  ["zones", "zones.geojson"],
   ["frames", "frames/frames.json"],
   ["timeseries", "timeseries.json"],
   ["status", "status.json"],
@@ -18,7 +25,7 @@ const FILES = [
   ["evaluation", "evaluation.json"],
 ];
 
-const OPTIONAL = FILES.map(([key]) => key).filter((key) => key !== "fields" && key !== "plans");
+const FILES = [...GROUP, ...PER_FILE];
 
 async function fetchJson(url) {
   try {
@@ -48,6 +55,23 @@ async function loadFile(path, pinned) {
   const mock = await fetchJson(`/mock/${path}`);
   if (mock) return { data: mock, source: "mock", base: "/mock" };
   return { data: null, source: null, base: null };
+}
+
+async function loadGroup(pinned) {
+  const fromBase = async (base, known = {}) => {
+    const entries = await Promise.all(
+      GROUP.map(async ([key, path]) => {
+        const data = key in known ? known[key] : await fetchJson(`${base}/${path}`);
+        return [key, { data, source: data ? base.slice(1) : null, base }];
+      }),
+    );
+    return Object.fromEntries(entries);
+  };
+  if (pinned) return { files: await fromBase(pinned), realFields: null };
+
+  const [outFields, outPlans] = await Promise.all([fetchJson("/out/fields.geojson"), fetchJson("/out/plans.json")]);
+  if (outFields && outPlans) return { files: await fromBase("/out", { fields: outFields, plans: outPlans }), realFields: null };
+  return { files: await fromBase("/mock"), realFields: outFields || null };
 }
 
 function walkCoords(coords, visit) {
@@ -100,9 +124,12 @@ function harvestFromAnalytics(analytics) {
 
 export async function loadData() {
   const pinned = pinnedBase();
-  const loaded = await Promise.all(FILES.map(async ([key, path]) => [key, await loadFile(path, pinned)]));
-  const byKey = Object.fromEntries(loaded);
-  const sources = Object.fromEntries(loaded.map(([key, file]) => [key, file.source]));
+  const [group, perFile] = await Promise.all([
+    loadGroup(pinned),
+    Promise.all(PER_FILE.map(async ([key, path]) => [key, await loadFile(path, pinned)])),
+  ]);
+  const byKey = { ...group.files, ...Object.fromEntries(perFile) };
+  const sources = Object.fromEntries(FILES.map(([key]) => [key, byKey[key].source]));
   const get = (key) => byKey[key].data;
 
   const fields = get("fields");
@@ -111,8 +138,9 @@ export async function loadData() {
     const missing = [!fields && "fields.geojson", !plans && "plans.json"].filter(Boolean).join(" and ");
     throw new Error(`Could not load ${missing}${pinned ? ` from ${pinned}` : " from data/out or data/mock"}.`);
   }
-  const missingOptional = OPTIONAL.filter((key) => !get(key)).map((key) => FILES.find(([k]) => k === key)[1]);
+  const missingOptional = FILES.filter(([key]) => key !== "fields" && key !== "plans" && !get(key)).map(([, path]) => path);
   if (missingOptional.length) console.info(`Optional files not found: ${missingOptional.join(", ")}`);
+  if (group.realFields) console.info("Real fields.geojson found in data/out without real plans: drawn as outlines only.");
 
   const plansById = new Map((plans.plans || []).map((plan) => [plan.farm_id, plan]));
   const featuresById = new Map();
@@ -158,14 +186,15 @@ export async function loadData() {
 
   const analytics = get("analytics");
   const frames = get("frames");
-  const framesBase = byKey.frames.base || "/mock";
 
   return {
     sources,
     pinned,
+    farmBase: byKey.fields.base,
     isMock: sources.plans !== "out",
-    framesBase,
+    framesBase: byKey.frames.base || "/mock",
     fields,
+    realFields: group.realFields,
     plans,
     plansById,
     featuresById,
