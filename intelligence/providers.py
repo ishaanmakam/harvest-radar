@@ -23,6 +23,7 @@ import json
 import os
 import urllib.error
 import urllib.request
+from pathlib import Path
 from urllib.parse import urlencode
 from xml.sax.saxutils import escape
 
@@ -98,6 +99,72 @@ class PhotonBridgeSMS:
         payload = _payload(raw)
         _ok(status, payload, "photon bridge")
         return f"photon {payload.get('id', '?')} ({payload.get('status', 'queued')})"
+
+
+LANGUAGE_NAMES = {"pa": "Punjabi (Gurmukhi script)", "hi": "Hindi", "en": "English"}
+TRANSLATE_SYSTEM = ("You translate short agricultural advisory messages into {language}. Keep farm ids (like F0012), "
+                    "dates written as YYYY-MM-DD, numbers and units exactly as written. Plain text only, no notes. "
+                    "Reply with the translation and nothing else.")
+CACHE_SEP = "␟"
+
+
+class GrokTranslator:
+    """translate(text, language) through xAI chat completions, cached on disk so the same sentence is never paid
+    for twice; on any failure the English text is returned (a morning never waits on a translation)."""
+
+    def __init__(self, api_key, model="grok-4.7", cache_path=None, http=None, timeout=30):
+        self.api_key, self.model, self.http, self.timeout = api_key, model, http or _urllib_http, timeout
+        self.cache_path = Path(cache_path) if cache_path else None
+        self.cache = {}
+        if self.cache_path and self.cache_path.exists():
+            try:
+                self.cache = json.loads(self.cache_path.read_text(encoding="utf-8"))
+            except Exception:
+                self.cache = {}
+
+    def _save(self):
+        if not self.cache_path:
+            return
+        tmp = self.cache_path.with_name(self.cache_path.name + ".tmp")
+        self.cache_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp.write_text(json.dumps(self.cache, ensure_ascii=False, indent=0), encoding="utf-8")
+        os.replace(tmp, self.cache_path)
+
+    def __call__(self, text, language):
+        lang = (language or "en").strip().lower()[:2]
+        if not text or lang == "en":
+            return text
+        key = f"{lang}{CACHE_SEP}{text}"
+        if key in self.cache:
+            return self.cache[key]
+        body = json.dumps({"model": self.model, "temperature": 0,
+                           "messages": [{"role": "system", "content": TRANSLATE_SYSTEM.format(language=LANGUAGE_NAMES.get(lang, lang))},
+                                        {"role": "user", "content": text}]}).encode()
+        headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
+        try:
+            status, raw = self.http("POST", "https://api.x.ai/v1/chat/completions", headers, body, self.timeout)
+            payload = _payload(raw)
+            _ok(status, payload, "grok translate")
+            out = (payload["choices"][0]["message"]["content"] or "").strip()
+        except Exception as e:
+            print(f"  translate: falling back to English ({e})")
+            return text
+        if not out:
+            return text
+        self.cache[key] = out
+        self._save()
+        return out
+
+
+def translator_from_env(env=None, cache_path=None, http=None):
+    """A GrokTranslator when XAI_API_KEY is set, else None (English words)."""
+    if env is None:
+        load_env()
+        env = os.environ
+    key = env.get("XAI_API_KEY")
+    if not key:
+        return None
+    return GrokTranslator(key, model=env.get("XAI_MODEL") or "grok-4.7", cache_path=cache_path, http=http)
 
 
 def from_env(env=None, http=None):
