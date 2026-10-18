@@ -11,7 +11,7 @@ import numpy as np
 from jsonschema import Draft202012Validator
 from PIL import Image, ImageDraw
 from pyproj import Geod, Transformer
-from rasterio.features import shapes
+from rasterio.features import rasterize, shapes
 from shapely import transform
 from shapely.geometry import Polygon, shape
 from shapely.ops import unary_union
@@ -30,12 +30,18 @@ STACK_WINDOWS = ("W1", "W2", "W3", "W4")
 GEOD = Geod(ellps="WGS84")
 TO_METRES = Transformer.from_crs("EPSG:4326", "EPSG:32615", always_xy=True)
 TO_DEGREES = Transformer.from_crs("EPSG:32615", "EPSG:4326", always_xy=True)
-COLORS = {"corn": (255, 255, 0), "soybean": (0, 255, 255), "unknown": (255, 0, 255)}
+RECTANGULARITY_MIN = 0.75
+CONVEXITY_MIN = 0.85
 
 
 def fail(msg):
     log(STEP, f"ERROR {msg}")
     sys.exit(1)
+
+
+def note(counts, key):
+    if counts is not None:
+        counts[key] = counts.get(key, 0) + 1
 
 
 def parse_day(text):
@@ -177,7 +183,7 @@ def polygons_of(geom):
     return []
 
 
-def vectorize(labels, kept, medians, names, affine):
+def vectorize(labels, kept, medians, names, affine, counts=None):
     remap = np.zeros(int(labels.max()) + 1, dtype=np.int32)
     for new_id, old in enumerate(kept, start=1):
         remap[old] = new_id
@@ -198,6 +204,7 @@ def vectorize(labels, kept, medians, names, affine):
             largest = max(parts, key=lambda part: part.area)
             total = sum(part.area for part in parts)
             if total <= 0 or largest.area < 0.8 * total:
+                note(counts, "multipolygon")
                 continue
             geom = largest
         else:
@@ -287,7 +294,7 @@ def largest_piece(geom):
     return largest
 
 
-def clean_metres(fields):
+def clean_metres(fields, counts=None):
     """Square up outlines in UTM metres, drop slivers, then give overlaps to the larger field."""
     prepared = []
     holes_filled = 0
@@ -296,6 +303,7 @@ def clean_metres(fields):
     for field in fields:
         metric = largest_piece(project(field["geom"], TO_METRES))
         if metric is None or metric.area <= 0:
+            note(counts, "multipolygon")
             continue
         metric, removed = drop_small_holes(metric)
         holes_filled += removed
@@ -304,20 +312,24 @@ def clean_metres(fields):
             metric = metric.buffer(0)
         metric = largest_piece(metric)
         if metric is None or metric.area <= 0:
+            note(counts, "multipolygon")
             continue
         try:
             rectangle = metric.minimum_rotated_rectangle
         except Exception:
             slivers += 1
+            note(counts, "sliver")
             continue
         if rectangle.is_empty or rectangle.area <= 0:
             slivers += 1
+            note(counts, "sliver")
             continue
         is_rect = metric.area / rectangle.area >= 0.85
         if is_rect:
             metric = rectangle
         if polsby_popper(metric) < 0.2 or short_side(metric.minimum_rotated_rectangle) < 80:
             slivers += 1
+            note(counts, "sliver")
             continue
         prepared.append({**field, "geom": metric, "rectangular": is_rect})
         if is_rect:
@@ -327,20 +339,24 @@ def clean_metres(fields):
     taken = None
     for field in prepared:
         geom = field["geom"]
+        subtracted = taken is not None and not taken.is_empty and geom.intersects(taken)
         if taken is not None and not taken.is_empty:
             geom = geom.difference(taken).buffer(0)
         geom = largest_piece(geom)
         if geom is None or geom.area < 20000:
+            note(counts, "overlap" if subtracted else "area")
             continue
         lonlat = project(geom, TO_DEGREES)
         if not lonlat.is_valid:
             lonlat = lonlat.buffer(0)
         lonlat = largest_piece(lonlat)
         if lonlat is None:
+            note(counts, "overlap" if subtracted else "multipolygon")
             continue
         area_m2, _perim = GEOD.geometry_area_perimeter(lonlat)
         area_ha = abs(area_m2) / 10000.0
         if area_ha < 2 or area_ha > 300:
+            note(counts, "overlap" if subtracted else "area")
             continue
         accepted.append({**field, "geom": lonlat, "area_ha": area_ha})
         taken = geom if taken is None else unary_union([taken, geom])
@@ -530,28 +546,50 @@ def publish(doc):
     log(STEP, f"wrote {OUT / 'fields.geojson'}")
 
 
-def draw_overlay(features, region):
+def outline_rings(geometry):
+    coords = geometry["coordinates"]
+    if geometry["type"] == "Polygon":
+        return coords
+    if geometry["type"] == "MultiPolygon":
+        rings = []
+        for polygon in coords:
+            rings.extend(polygon)
+        return rings
+    return []
+
+
+def draw_overlay(features, region, new_from=None):
+    del region
     frames = json.loads((OUT / "frames" / "frames.json").read_text())
     latest = max(frames["frames"], key=lambda frame: frame["date"])
     image = Image.open(OUT / latest["rgb"]).convert("RGB")
-    if image.size != (1000, 900):
-        fail(f"latest frame is {image.size}, expected 1000x900")
-    west, south, east, north = region["bbox"]
-    width, height = image.size
+    west, south, east, north = frames["bounds"]
+    pixel_width = frames["width"]
+    pixel_height = frames["height"]
+    if image.size != (pixel_width, pixel_height):
+        fail(f"latest frame is {image.size}, expected {pixel_width}x{pixel_height}")
 
     def pixel(lon, lat):
-        return ((lon - west) / (east - west) * width, (north - lat) / (north - south) * height)
+        x = (lon - west) / (east - west) * pixel_width
+        y = (north - lat) / (north - south) * pixel_height
+        return (x, y)
 
     draw = ImageDraw.Draw(image)
-    for feature in features:
-        color = COLORS[feature["properties"]["crop"]]
-        rings = feature["geometry"]["coordinates"]
-        for ring in rings:
-            draw.line([pixel(lon, lat) for lon, lat in ring], fill=color, width=2)
+    for index, feature in enumerate(features):
+        appended = new_from is not None and index >= new_from
+        color = (255, 255, 255) if appended else (255, 255, 0)
+        stroke = 3 if appended else 2
+        for ring in outline_rings(feature["geometry"]):
+            if len(ring) < 2:
+                continue
+            draw.line([pixel(lon, lat) for lon, lat in ring], fill=color, width=stroke)
     path = CACHE / "quicklook" / "fields_overlay.png"
     path.parent.mkdir(parents=True, exist_ok=True)
     image.save(path)
+    desktop = os.path.expanduser("~/Desktop/fields_overlay.png")
+    image.save(desktop)
     log(STEP, f"overlay {path}")
+    log(STEP, f"overlay {desktop}")
 
 
 def box_area_ha(region):
@@ -655,11 +693,269 @@ def search(stack, planes, masks, names, affine):
     return table, params, chosen["fields"]
 
 
+def segment_once(stack, planes, masks, names, affine, thresh, counts=None):
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message="Got image with third dimension")
+        labels = felzenszwalb(stack, scale=SCALE, sigma=0.5, min_size=MIN_SIZE, channel_axis=-1)
+    labels = np.asarray(labels, dtype=np.int32)
+    merged = cut_threshold(labels, rag_distance(stack, labels), thresh, in_place=False)
+    medians = segment_medians(merged, planes, masks)
+    if counts is not None:
+        counts["segments"] = len(medians)
+        counts["crop_filter"] = sum(1 for values in medians.values() if not keep_label(values, names))
+    kept = [label for label, values in medians.items() if keep_label(values, names)]
+    raw = vectorize(merged, kept, medians, names, affine, counts) if kept else []
+    fields, stats = clean_metres(raw, counts)
+    return fields, stats
+
+
+def crop_pixels(planes, names):
+    early = planes[names.index("W1")]
+    peak = planes[names.index("W3")]
+    return np.isfinite(early) & np.isfinite(peak) & (early <= 0.5) & (peak >= 0.65) & ((peak - early) >= 0.25)
+
+
+def mask_coverage(mask, features, frame_box):
+    total = int(mask.sum())
+    if total == 0 or not features:
+        return 0.0
+    painted = rasterize(
+        [(shape(feature["geometry"]), 1) for feature in features],
+        out_shape=(frame_box.height, frame_box.width),
+        transform=frame_box.affine,
+        fill=0,
+        dtype="uint8",
+    )
+    return float((mask & (painted > 0)).sum() / total)
+
+
+def is_sliver(metric):
+    try:
+        rectangle = metric.minimum_rotated_rectangle
+    except Exception:
+        return True
+    if rectangle.is_empty or rectangle.area <= 0:
+        return True
+    return polsby_popper(metric) < 0.2 or short_side(rectangle) < 80
+
+
+def trim_against_existing(fields, barrier):
+    kept = []
+    for field in fields:
+        metric = project(field["geom"], TO_METRES)
+        before = metric.area
+        if before <= 0:
+            continue
+        remain = metric.difference(barrier).buffer(0)
+        parts = polygons_of(remain)
+        if not parts:
+            continue
+        piece = max(parts, key=lambda part: part.area)
+        if piece.area < 50000 or piece.area < 0.6 * before or is_sliver(piece):
+            continue
+        kept.append({**field, "geom": piece})
+    return kept
+
+
+def resolve_new(fields):
+    ordered = sorted(fields, key=lambda field: field["geom"].area, reverse=True)
+    accepted = []
+    taken = None
+    for field in ordered:
+        geom = field["geom"]
+        if taken is not None and not taken.is_empty:
+            geom = geom.difference(taken).buffer(0)
+        geom = largest_piece(geom)
+        if geom is None or geom.area < 20000:
+            continue
+        lonlat = project(geom, TO_DEGREES)
+        if not lonlat.is_valid:
+            lonlat = lonlat.buffer(0)
+        lonlat = largest_piece(lonlat)
+        if lonlat is None:
+            continue
+        area_m2, _perim = GEOD.geometry_area_perimeter(lonlat)
+        area_ha = abs(area_m2) / 10000.0
+        if area_ha < 2 or area_ha > 300:
+            continue
+        accepted.append({**field, "geom": lonlat, "area_ha": area_ha})
+        taken = geom if taken is None else unary_union([taken, geom])
+    return accepted
+
+
+def shape_scores(lonlat):
+    """Rectangularity and convexity in EPSG:32615."""
+    metric = project(lonlat, TO_METRES)
+    if metric.is_empty:
+        return 0.0, 0.0
+    if not metric.is_valid:
+        metric = metric.buffer(0)
+    if metric.is_empty or metric.area <= 0:
+        return 0.0, 0.0
+    try:
+        rectangle = metric.minimum_rotated_rectangle
+    except Exception:
+        return 0.0, 0.0
+    hull = metric.convex_hull
+    if rectangle.is_empty or rectangle.area <= 0 or hull.is_empty or hull.area <= 0:
+        return 0.0, 0.0
+    return metric.area / rectangle.area, metric.area / hull.area
+
+
+def quality_gate(fields):
+    """Append-only. Keep fields that are close to a rectangle and to their convex hull."""
+    kept = []
+    for index, field in enumerate(fields, start=1):
+        rectangularity, convexity = shape_scores(field["geom"])
+        accept = rectangularity >= RECTANGULARITY_MIN and convexity >= CONVEXITY_MIN
+        log(
+            STEP,
+            f"candidate {index} rect={rectangularity:.3f} convex={convexity:.3f} "
+            f"{'kept' if accept else 'dropped'}",
+        )
+        if accept:
+            kept.append(field)
+    log(STEP, f"quality gate kept {len(kept)} dropped {len(fields) - len(kept)}")
+    return kept
+
+
+def crop_from_threshold(field, threshold):
+    early = field["series"].get("W2")
+    late = field["series"].get("W4")
+    if threshold is None or early is None or late is None:
+        return "unknown"
+    value = early - late
+    if abs(value - threshold) <= 0.05:
+        return "unknown"
+    return "corn" if value > threshold else "soybean"
+
+
+def stored_threshold(debug):
+    stored = (debug.get("crop") or {}).get("threshold")
+    if stored is not None:
+        return float(stored), False
+    samples = []
+    for series in (debug.get("fields") or {}).values():
+        if series.get("W2") is not None and series.get("W4") is not None:
+            samples.append(series["W2"] - series["W4"])
+    centres = kmeans_1d(samples) if len(samples) >= 2 else None
+    if centres is None or abs(centres[1] - centres[0]) < 0.15:
+        fail("crop threshold is missing from the debug JSON and could not be recomputed")
+    return (centres[0] + centres[1]) / 2, True
+
+
+def new_features(fields, region, first_number):
+    def sort_key(field):
+        centre = field["geom"].centroid
+        return (-round(centre.y, 3), centre.x)
+
+    features = []
+    for offset, field in enumerate(sorted(fields, key=sort_key)):
+        centre = field["geom"].centroid
+        features.append({
+            "type": "Feature",
+            "geometry": round_polygon(field["geom"]),
+            "properties": {
+                "field_id": f"F{first_number + offset:04d}",
+                "zone_id": zone_of(centre.x, centre.y, region),
+                "area_ha": round(field["area_ha"], 2),
+                "crop": field["crop"],
+                "source": "segmentation",
+            },
+        })
+    return features
+
+
+def append_fields():
+    dest = OUT / "fields.geojson"
+    if not dest.exists():
+        fail("data/out/fields.geojson is missing; nothing to append to")
+    old = json.loads(dest.read_text())
+    existing = old["features"]
+    region = load_region()
+    frame_box = region_geobox(region)
+    dates, ndvi, clear = load_cube(region, frame_box)
+    chosen = choose_windows(dates, clear, parse_day(region["as_of"]))
+    if "W4" not in chosen:
+        fail("W4 has no date")
+    stack, _stack_names = feature_stack(dates, ndvi, chosen)
+    names = [name for name in ("W1", "W2", "W3", "W4", "W5", "W6") if name in chosen]
+    date_index = {day: index for index, day in enumerate(dates)}
+    planes = [np.asarray(ndvi[date_index[chosen[name]["date"]]], dtype=np.float32) for name in names]
+    masks = [np.asarray(clear[date_index[chosen[name]["date"]]]) for name in names]
+    debug_path = CACHE / "s03_fields_debug.json"
+    debug = json.loads(debug_path.read_text()) if debug_path.exists() else {}
+    current = float((debug.get("chosen") or {}).get("thresh") or 0.12)
+    counts = {"crop_filter": 0, "area": 0, "multipolygon": 0, "sliver": 0, "overlap": 0}
+    segment_once(stack, planes, masks, names, frame_box.affine, current, counts)
+    log(STEP, f"drops at thresh={current:g}: segments {counts.get('segments', 0)}, "
+        f"crop filter {counts['crop_filter']}, area {counts['area']}, "
+        f"multipolygon {counts['multipolygon']}, sliver {counts['sliver']}, overlap {counts['overlap']}")
+    debug["drops"] = counts
+    mask = crop_pixels(planes, names)
+    before = mask_coverage(mask, existing, frame_box)
+    log(STEP, f"coverage of existing fields {before:.1%}")
+    candidates, _stats = segment_once(stack, planes, masks, names, frame_box.affine, 0.06)
+    barrier = unary_union([project(shape(feature["geometry"]), TO_METRES) for feature in existing]).buffer(5)
+    fresh = quality_gate(resolve_new(trim_against_existing(candidates, barrier)))
+    threshold, recomputed = stored_threshold(debug)
+    if recomputed:
+        debug.setdefault("crop", {})
+        debug["crop"]["signal"] = "W2-W4"
+        debug["crop"]["threshold"] = threshold
+        log(STEP, f"recomputed crop threshold {threshold:.3f}")
+    for field in fresh:
+        field["crop"] = crop_from_threshold(field, threshold)
+    added = new_features(fresh, region, len(existing) + 1)
+    combined = existing + added
+    after = mask_coverage(mask, combined, frame_box)
+    areas = [feature["properties"]["area_ha"] for feature in added]
+    crops = {}
+    for feature in added:
+        crop = feature["properties"]["crop"]
+        crops[crop] = crops.get(crop, 0) + 1
+    median = float(np.median(areas)) if areas else None
+    shown = "none" if median is None else f"{median:.1f}"
+    log(STEP, f"new fields {len(added)} | coverage {before:.1%} -> {after:.1%} | median ha {shown} | crops {crops}")
+    if after <= before:
+        write_json(debug_path, debug, pretty=True)
+        fail(f"coverage did not improve ({before:.1%} -> {after:.1%}); data/out left untouched")
+    doc = {"type": "FeatureCollection", "features": combined}
+    validate(doc, region)
+    staging = CACHE / "fields_staging.geojson"
+    write_json(staging, doc)
+    checked = json.loads(staging.read_text())
+    if checked["features"][:len(existing)] != existing:
+        staging.unlink(missing_ok=True)
+        fail("existing features would change; data/out left untouched")
+    os.replace(staging, dest)
+    debug["append"] = {
+        "thresh": 0.06,
+        "new_fields": len(added),
+        "coverage_before": round(before, 4),
+        "coverage_after": round(after, 4),
+        "median_ha": None if median is None else round(median, 2),
+        "crops": crops,
+        "threshold": threshold,
+        "rectangularity_min": RECTANGULARITY_MIN,
+        "convexity_min": CONVEXITY_MIN,
+    }
+    write_json(debug_path, debug, pretty=True)
+    draw_overlay(checked["features"], region, new_from=len(existing))
+    log(STEP, f"wrote {dest}")
+
+
 def main():
     parser = argparse.ArgumentParser(description="Segment fields from the NDVI cube")
     parser.add_argument("--force", action="store_true")
+    parser.add_argument("--append", action="store_true")
     args = parser.parse_args()
     dest = OUT / "fields.geojson"
+    if args.append:
+        if args.force:
+            fail("--append keeps the existing fields; do not pass --force")
+        append_fields()
+        return
     if dest.exists() and not args.force:
         print("fields frozen: data/out/fields.geojson exists, use --force to rebuild", flush=True)
         return
