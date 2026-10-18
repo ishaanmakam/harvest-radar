@@ -10,7 +10,8 @@ Everything below is already coded and tested with fakes; this is the checklist t
 | `ROSTER_PATH` | the roster CSV, outside git (layout in `roster.example.csv`) | you write it: one officer row, one farmer row per demo farm, `language` pa / hi / en |
 | `TWILIO_ACCOUNT_SID`, `TWILIO_AUTH_TOKEN`, `TWILIO_FROM` | outbound calls (and webhook signature checks) | Twilio console; `TWILIO_FROM` is a voice-enabled Twilio number in E.164 |
 | `TWILIO_API_KEY_SID`, `TWILIO_API_KEY_SECRET` | optional: call the API with an API key instead of the master token | Twilio console, API keys |
-| `PHOTON_API_KEY`, `PHOTON_PROJECT_ID`, `PHOTON_FROM` | texts through Photon 2.0 REST | app.photon.codes: project API key (`pho_sk_...`), project id (`pho_prj_...`), your SMS number |
+| `PHOTON_API_KEY`, `PHOTON_PROJECT_ID`, `PHOTON_FROM` | texts through Photon 2.0 REST | app.photon.codes: project API key (`pho_sk_...`), project id (`pho_prj_...`), your SMS number (or the assigned iMessage number) |
+| `PHOTON_PLATFORM` | `sms` (default) or `imessage` | `imessage` is the Photon shared line; the person must text it first |
 | `PHOTON_WEBHOOK_SECRET` | verify Photon's webhook signature | returned once when you create the webhook destination |
 | `XAI_API_KEY`, `XAI_MODEL` | Grok translation and the Grok Voice bridge | xAI console (the teammate doing Grok) |
 | `PUBLIC_URL` | https base of `inbound_server.py` as seen from the internet | ngrok: `ngrok http 8788` |
@@ -61,6 +62,10 @@ to Grok; without it the call speaks the plan with text-to-speech.
    `TWILIO_FROM` to the Photon number with the SIP `To` form from the cookbook; `providers.TwilioVoice` passes
    the `To`/`From` it is given, so this is a config change, not code.
 4. Message text format is `plain`; if Photon answers 422 about the format, set `PHOTON_TEXT_FORMAT`.
+
+### iMessage (shared line)
+
+In the dashboard: iMessage → add your number → assign it from the shared pool. Set `PHOTON_FROM` to that assigned number and `PHOTON_PLATFORM=imessage`. The API key needs `platforms:read` and `platforms:write`. A shared line cannot send the first message, so each person texts the line once before a morning plan can go out. Replies use the same `/photon/webhook` path. If that webhook does not deliver iMessages, run `python intelligence/photon_poll.py --data data/out` (add `--dry-run` to print replies and send nothing).
 
 ## 5. First real run
 

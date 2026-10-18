@@ -11,6 +11,7 @@ from http.server import ThreadingHTTPServer
 import pytest
 
 import inbound_server as srv
+import photon_poll
 import providers as pv
 import queue_morning as q
 import tools
@@ -196,3 +197,159 @@ class TestPhotonWebhookEndpoint:
         base, spy = service
         post(base + "/photon/webhook", beta_event("+15550000000", "plan for F0001"))
         assert spy.replies[-1][1] == tools.UNKNOWN_CALLER_MESSAGE
+
+
+def _msg(handle, text, space, mid, created, kind="human"):
+    return {"id": mid, "platform": "imessage", "status": "received", "createdAt": created,
+            "sentBy": {"id": PEER_USER, "handle": handle, "kind": kind, "platform": "imessage"},
+            "receivedBy": {"id": LINE_USER, "handle": "+15550001111", "kind": "agent", "platform": "imessage"},
+            "space": {"id": space, "kind": "direct", "platform": "imessage"},
+            "content": {"type": "text", "format": "plain", "text": text}}
+
+
+class Recording:
+    """Records every call and serves a list of received-message pages, then accepts sends."""
+
+    def __init__(self, pages=None, sticky=False):
+        self.pages = [list(p) for p in (pages or [])]
+        self.sticky = sticky
+        self.calls = []
+
+    def __call__(self, method, url, headers, body, timeout):
+        doc = json.loads(body) if body else {}
+        self.calls.append({"method": method, "url": url, "headers": headers, "body": doc})
+        if method == "GET" and "/messages" in url:
+            if self.sticky:
+                items = list(self.pages[0]) if self.pages else []
+                return 200, json.dumps({"items": items}).encode()
+            items = self.pages.pop(0) if self.pages else []
+            payload = {"items": items}
+            if self.pages:
+                payload["nextPageToken"] = "next.page"
+            return 200, json.dumps(payload).encode()
+        if method == "POST" and url.endswith("/messages"):
+            return 202, json.dumps({"id": "pho_msg_out", "status": "accepted"}).encode()
+        return 404, json.dumps({"title": "not used"}).encode()
+
+
+def _paths(http):
+    return [(c["method"], c["url"].split("/projects/")[-1]) for c in http.calls]
+
+
+class TestImessageSend:
+    def test_cached_space_is_reused_and_users_and_spaces_are_not_created(self):
+        http = Recording()
+        p = pv.PhotonSMS("pho_sk_test", PROJECT, "+15550001111", http=http, platform="imessage")
+        p.remember_space("+91 98765 00002", SPACE)
+        p.remember_line_sender(LINE_USER)
+        assert p.send("+919876500002", "Harvest before 2026-10-19.", "pa") == "photon pho_msg_out (accepted)"
+        assert _paths(http) == [("POST", f"{PROJECT}/messages")]
+        assert http.calls[0]["body"] == {"spaceId": SPACE, "senderId": LINE_USER,
+                                          "content": {"type": "text", "format": "plain", "text": "Harvest before 2026-10-19."}}
+        assert http.calls[0]["headers"]["Idempotency-Key"]
+
+    def test_latest_received_direct_chat_is_found_without_creating_users_or_spaces(self):
+        other = _msg("+919876500099", "elsewhere", "pho_spc_other", "m0", "2026-10-18T13:00:00.000Z")
+        newer = _msg("+919876500002", "new", SPACE, "m2", "2026-10-18T12:00:00.000Z")
+        older = _msg("+919876500002", "old", "pho_spc_old", "m1", "2026-10-18T11:00:00.000Z")
+        http = Recording(pages=[[other], [newer, older]])
+        p = pv.PhotonSMS("pho_sk_test", PROJECT, "+15550001111", http=http, platform="imessage")
+        p.send("+919876500002", "hi", "en")
+        gets = [c for c in http.calls if c["method"] == "GET"]
+        posts = [c for c in http.calls if c["method"] == "POST"]
+        assert len(gets) == 2 and "pageToken=next.page" in gets[1]["url"]
+        assert "platform=imessage" in gets[0]["url"] and "direction=received" in gets[0]["url"]
+        assert "order=desc" in gets[0]["url"] and "orderBy=created_at" in gets[0]["url"]
+        assert len(posts) == 1 and posts[0]["url"].endswith("/messages")
+        assert posts[0]["body"]["spaceId"] == SPACE and posts[0]["body"]["senderId"] == LINE_USER
+        assert not any(c["url"].rstrip("/").endswith("/users") or c["url"].rstrip("/").endswith("/spaces") for c in http.calls)
+
+    def test_no_prior_chat_raises_a_clear_error(self):
+        http = Recording(pages=[[_msg("+919876500099", "hi", "pho_spc_other", "m0", "2026-10-18T12:00:00.000Z")]])
+        p = pv.PhotonSMS("pho_sk_test", PROJECT, "+15550001111", http=http, platform="imessage")
+        with pytest.raises(pv.ProviderError, match="no iMessage chat yet: the person must text the Overfield line first"):
+            p.send("+919876500002", "hi", "en")
+        assert all(c["method"] == "GET" for c in http.calls)
+
+    def test_rate_limit_waits_for_retry_after(self):
+        waited = []
+
+        class Once:
+            def __init__(self):
+                self.n = 0
+
+            def __call__(self, method, url, headers, body, timeout):
+                self.n += 1
+                if self.n == 1:
+                    return 429, json.dumps({"title": "Too Many Requests", "code": "RATE_LIMITED"}).encode(), {"Retry-After": "2"}
+                return 200, json.dumps({"items": []}).encode()
+
+        http = Once()
+        p = pv.PhotonSMS("pho_sk_test", PROJECT, "+15550001111", http=http, platform="imessage", sleep=waited.append)
+        assert p.list_received() == []
+        assert waited == [2.0] and http.n == 2
+
+
+class TestPhotonPlatformEnv:
+    def test_unset_platform_stays_sms_and_imessage_is_opt_in(self):
+        env = {"PHOTON_API_KEY": "pho_sk_x", "PHOTON_PROJECT_ID": PROJECT, "PHOTON_FROM": "+15550001111"}
+        assert pv.photon_from_env(dict(env), http=FakePhoton()).platform == "sms"
+        env["PHOTON_PLATFORM"] = "imessage"
+        assert pv.photon_from_env(dict(env), http=FakePhoton()).platform == "imessage"
+        env["PHOTON_PLATFORM"] = "telegram"
+        with pytest.raises(pv.ProviderError, match="PHOTON_PLATFORM"):
+            pv.photon_from_env(env, http=FakePhoton())
+
+
+def _season(tmp_path):
+    (tmp_path / "plans.json").write_text(json.dumps({"as_of": "2026-10-16", "plans": [plan("F0001"), plan("F0002", "watch")]}))
+    (tmp_path / "route.json").write_text(json.dumps({"as_of": "2026-10-17", "stops": [
+        {"farm_id": "F0002", "action": "call", "why": "Field cut between 2026-10-11 and 2026-10-16"}]}))
+    (tmp_path / "roster.csv").write_text(ROSTER_CSV)
+    return tmp_path, tools.load_roster(tmp_path / "roster.csv")
+
+
+class TestPhotonPoll:
+    def _client(self, items):
+        http = Recording(pages=[items], sticky=True)   # every poll sees the same page; the cursor skips ones already answered
+        p = pv.PhotonSMS("pho_sk_test", PROJECT, "+15550001111", http=http, platform="imessage")
+        return p, http
+
+    def test_farmer_officer_and_unknown_are_scoped_like_the_webhook(self, tmp_path):
+        data, roster = _season(tmp_path)
+        farmer = _msg("+919876500002", "tell me about F0002", "pho_spc_farmer", "mf", "2026-10-18T12:00:01.000Z")
+        officer = _msg("+919876500001", "plan for F0001", "pho_spc_officer", "mo", "2026-10-18T12:00:02.000Z")
+        unknown = _msg("+15550000000", "plan for F0001", "pho_spc_unknown", "mu", "2026-10-18T12:00:03.000Z")
+        photon, http = self._client([farmer, officer, unknown])
+        cursor = {}
+        photon_poll.poll_once(photon, data, roster, cursor)
+        sent = {c["body"]["spaceId"]: c["body"]["content"]["text"] for c in http.calls if c["method"] == "POST"}
+        assert sent["pho_spc_farmer"] == "I can only tell you about your own farm."
+        assert "F0001" in sent["pho_spc_officer"] and "own farm" not in sent["pho_spc_officer"].lower()
+        assert sent["pho_spc_unknown"] == tools.UNKNOWN_CALLER_MESSAGE
+        assert not any(c["url"].rstrip("/").endswith("/users") or c["url"].rstrip("/").endswith("/spaces") for c in http.calls)
+        assert cursor["created_since"] == "2026-10-18T12:00:03.000Z"
+        photon_poll.poll_once(photon, data, roster, cursor)
+        assert sum(1 for c in http.calls if c["method"] == "POST") == 3
+        assert any("createdSince=" in c["url"] for c in http.calls if c["method"] == "GET")
+
+    def test_dry_run_prints_the_reply_and_sends_nothing(self, tmp_path):
+        data, roster = _season(tmp_path)
+        farmer = _msg("+919876500002", "tell me about F0002", "pho_spc_farmer", "mf", "2026-10-18T12:00:01.000Z")
+        photon, http = self._client([farmer])
+        lines = []
+        photon_poll.poll_once(photon, data, roster, {}, dry_run=True, log=lines.append)
+        assert lines == ["dry-run +919876500002: I can only tell you about your own farm."]
+        assert not any(c["method"] == "POST" for c in http.calls)
+
+    def test_received_by_is_parsed_and_remembered(self):
+        ev = beta_event("+919876500002", "hi")
+        ev["data"]["object"]["receivedBy"] = {"id": LINE_USER, "handle": "+15550001111"}
+        parsed = pv.parse_photon_webhook(ev)
+        assert parsed["received_by_id"] == LINE_USER
+        http = Recording()
+        p = pv.PhotonSMS("pho_sk_test", PROJECT, "+15550001111", http=http, platform="imessage")
+        photon_poll.handle_inbound(parsed, ".", [], photon=p, dry_run=True, log=lambda *_: None)
+        assert p._imessage_spaces[tools.normalize_phone("+919876500002")] == SPACE
+        assert p._line_sender_id == LINE_USER
+        assert http.calls == []

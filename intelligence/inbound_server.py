@@ -34,6 +34,7 @@ import accounts_api
 import inbound
 import signup
 from common import load_env, read_json, product_name
+from photon_poll import handle_inbound
 from providers import parse_photon_webhook, photon_from_env, photon_signature_ok, say_language, LANGUAGE_NAMES
 from tools import UNKNOWN_CALLER_MESSAGE, load_roster, resolve_caller
 
@@ -261,14 +262,7 @@ def make_handler(data_dir, roster_path, bridge_token=None, twilio_auth_token=Non
                     if len(seen_message_ids) > 5000:
                         seen_message_ids.clear()
                     seen_message_ids.add(mid)
-                reply = inbound.answer(ev["handle"], ev["text"], data_dir, current_roster())
-                sent = None
-                if photon is not None and ev.get("space_id"):
-                    try:
-                        sent = photon.send_to_space(ev["space_id"], reply)
-                    except Exception as e:  # the webhook must still be acknowledged
-                        sent = f"reply failed: {e}"
-                return self._json(200, {"handled": True, "to": ev["handle"], "reply": reply, "sent": sent})
+                return self._json(200, handle_inbound(ev, data_dir, current_roster(), photon=photon))
             if path == "/signup":
                 ip = self.client_address[0] if self.client_address else "?"
                 signups_by_ip[ip] = signups_by_ip.get(ip, 0) + 1

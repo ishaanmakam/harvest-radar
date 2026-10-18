@@ -24,9 +24,12 @@ import hmac
 import json
 import os
 import smtplib
+import time
 import urllib.error
 import urllib.request
 import uuid
+from datetime import datetime, timezone
+from email.utils import parsedate_to_datetime
 from pathlib import Path
 from urllib.parse import urlencode
 from xml.sax.saxutils import escape
@@ -41,7 +44,66 @@ PHOTON_BASE = "https://api.photon.codes"
 
 
 class ProviderError(RuntimeError):
-    """A failed attempt the queue may retry."""
+    """A failed attempt the queue may retry. retry_after is set when Photon answers 429."""
+
+    def __init__(self, message, retry_after=None):
+        super().__init__(message)
+        self.retry_after = retry_after
+
+
+# Shared iMessage lines cannot open a chat. The queue stores this string on the failed delivery and moves on.
+IMESSAGE_NO_CHAT = ("no iMessage chat yet: the person must text the Overfield line first "
+                    "(shared lines cannot start a conversation)")
+_RATE_LIMIT_TRIES = 4          # one try plus three backoffs, then the error reaches the caller
+
+
+def _handle_key(handle):
+    """Phone handles become E.164 (the roster's own normalizer). Email handles stay emails, lowercased."""
+    h = (handle or "").strip()
+    lower = h.lower()
+    for prefix in ("tel:", "sms:", "imessage:"):
+        if lower.startswith(prefix):
+            h = h[len(prefix):].strip()
+            lower = h.lower()
+            break
+    if "@" in h:
+        return lower
+    from tools import normalize_phone
+    return normalize_phone(h)
+
+
+def _http_parts(result):
+    """(status, body, headers). Fakes may return a pair; a real call can add a header map as the third item."""
+    if isinstance(result, tuple) and len(result) >= 3:
+        return result[0], result[1], result[2] or {}
+    status, raw = result
+    return status, raw, {}
+
+
+def _header(headers, name):
+    for key, value in (headers or {}).items():
+        if str(key).lower() == name:
+            return value
+    return None
+
+
+def _retry_after_seconds(headers):
+    """OpenAPI Retry-After: a delay in seconds, or an HTTP date. None when the header is absent or unreadable."""
+    raw = _header(headers, "retry-after")
+    if raw is None:
+        return None
+    text = str(raw).strip()
+    try:
+        return max(0.0, float(text))
+    except ValueError:
+        pass
+    try:
+        when = parsedate_to_datetime(text)
+    except (TypeError, ValueError, IndexError, OverflowError):
+        return None
+    if when.tzinfo is None:
+        when = when.replace(tzinfo=timezone.utc)
+    return max(0.0, (when - datetime.now(timezone.utc)).total_seconds())
 
 
 def say_language(code):
@@ -60,6 +122,18 @@ def _urllib_http(method, url, headers, body, timeout):
         raise ProviderError(f"{url}: {getattr(e, 'reason', e)}")
 
 
+def _photon_http(method, url, headers, body, timeout):
+    """Same as _urllib_http, plus response headers, so a 429 Retry-After is visible."""
+    req = urllib.request.Request(url, data=body, method=method, headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return r.status, r.read(), dict(r.headers)
+    except urllib.error.HTTPError as e:
+        return e.code, e.read(), dict(e.headers)
+    except (urllib.error.URLError, OSError) as e:
+        raise ProviderError(f"{url}: {getattr(e, 'reason', e)}")
+
+
 def _payload(body):
     try:
         return json.loads(body or b"{}")
@@ -67,13 +141,15 @@ def _payload(body):
         return {"raw": (body or b"")[:200].decode(errors="replace")}
 
 
+def _problem_text(payload, status):
+    msg = (payload.get("message") or payload.get("title") or payload.get("detail") or payload.get("error")
+           or payload.get("raw") or f"HTTP {status}")
+    return json.dumps(msg) if isinstance(msg, dict) else msg
+
+
 def _ok(status, payload, what):
     if not 200 <= status < 300:
-        msg = (payload.get("message") or payload.get("title") or payload.get("detail") or payload.get("error")
-               or payload.get("raw") or f"HTTP {status}")
-        if isinstance(msg, dict):
-            msg = json.dumps(msg)
-        raise ProviderError(f"{what}: {msg} (HTTP {status})")
+        raise ProviderError(f"{what}: {_problem_text(payload, status)} (HTTP {status})")
 
 
 def _basic(user, password):
@@ -109,24 +185,43 @@ class TwilioVoice:
 
 
 class PhotonSMS:
-    """Photon 2.0 REST (api.photon.codes/v1/projects/{id}): create-or-get the recipient's User, create-or-get the
-    direct Space between our line and them, then send a plain-text message. Lookups are cached per recipient."""
+    """Photon 2.0 REST (api.photon.codes/v1/projects/{id}).
+
+    platform "sms" (the default): create-or-get the recipient's User, create-or-get the direct Space, then send.
+    platform "imessage": a shared line. SendMessageRequest still requires senderId, but that id is receivedBy.id
+    on a message the person already sent — POST /users would try to create a user, which a shared line cannot
+    use to open a chat. We reuse the direct space (a cache filled by inbound traffic, else GET /messages) and
+    never POST /users or /spaces.
+    """
 
     def __init__(self, api_key, project_id, from_number, http=None, base_url=PHOTON_BASE, platform="sms",
-                 text_format="plain", timeout=20):
+                 text_format="plain", timeout=20, sleep=None):
         self.api_key, self.project_id, self.from_number = api_key, project_id, from_number
-        self.http, self.base_url, self.platform, self.text_format, self.timeout = http or _urllib_http, base_url.rstrip("/"), platform, text_format, timeout
+        self.http, self.base_url, self.platform, self.text_format, self.timeout = http or _photon_http, base_url.rstrip("/"), platform, text_format, timeout
         self._users, self._spaces = {}, {}
+        self._imessage_spaces = {}        # separate from _spaces so SMS create-or-get is unchanged
+        self._line_sender_id = None       # pho_usr_ of the shared line, learned from receivedBy.id
+        self._sleep = sleep or time.sleep
 
     def _call(self, method, path, body=None, idempotency=None):
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json", "Accept": "application/json"}
         if idempotency:
             headers["Idempotency-Key"] = idempotency
         data = json.dumps(body).encode() if body is not None else None
-        status, raw = self.http(method, f"{self.base_url}/v1/projects/{self.project_id}{path}", headers, data, self.timeout)
-        payload = _payload(raw)
-        _ok(status, payload, "photon")
-        return payload
+        url = f"{self.base_url}/v1/projects/{self.project_id}{path}"
+        for attempt in range(_RATE_LIMIT_TRIES):
+            status, raw, resp_headers = _http_parts(self.http(method, url, headers, data, self.timeout))
+            if status == 429 and attempt < _RATE_LIMIT_TRIES - 1:
+                # Retry-After is seconds or an HTTP date. One second when Photon omits it.
+                wait = _retry_after_seconds(resp_headers)
+                self._sleep(1.0 if wait is None else wait)
+                continue
+            payload = _payload(raw)
+            if status == 429:
+                wait = _retry_after_seconds(resp_headers)
+                raise ProviderError(f"photon: {_problem_text(payload, status)} (HTTP 429)", retry_after=wait)
+            _ok(status, payload, "photon")
+            return payload
 
     def user_id(self, handle):
         if handle not in self._users:
@@ -143,13 +238,91 @@ class PhotonSMS:
             self._spaces[handle] = self._call("POST", "/spaces", body, idempotency=key)["id"]
         return self._spaces[handle]
 
+    def remember_space(self, handle, space_id):
+        """Keep the direct chat a person already opened, so a later send does not have to list messages."""
+        key = _handle_key(handle)
+        if key and space_id:
+            self._imessage_spaces[key] = space_id
+
+    def remember_line_sender(self, user_id):
+        """senderId for the shared line. SendMessageRequest requires it; receivedBy.id on an inbound message is that user."""
+        if user_id:
+            self._line_sender_id = user_id
+
+    def _absorb(self, msg, overwrite):
+        """Cache space.id for sentBy.handle, and the line's user id from receivedBy.id. Direct chats only."""
+        received = (msg.get("receivedBy") or {}).get("id")
+        if received and not self._line_sender_id:
+            self._line_sender_id = received
+        space = msg.get("space") or {}
+        kind = space.get("kind")
+        if kind and kind != "direct":
+            return
+        sent = msg.get("sentBy") or {}
+        if sent.get("kind") == "agent":
+            return
+        key = _handle_key(sent.get("handle"))
+        sid = space.get("id")
+        if key and sid and (overwrite or key not in self._imessage_spaces):
+            self._imessage_spaces[key] = sid
+
+    def _iter_messages(self, order, created_since=None, stop=None):
+        """GET /messages?platform&direction=received&order&orderBy=created_at&pageSize&createdSince&pageToken."""
+        token, seen_tokens, out = None, set(), []
+        for _page in range(40):
+            query = {"platform": self.platform, "direction": "received", "order": order,
+                     "orderBy": "created_at", "pageSize": 50}
+            if created_since:
+                query["createdSince"] = created_since
+            if token:
+                query["pageToken"] = token
+            page = self._call("GET", "/messages?" + urlencode(query))
+            for msg in page.get("items") or []:
+                if self.platform == "imessage":
+                    # desc: the first hit is the newest, so do not let older pages replace it.
+                    self._absorb(msg, overwrite=(order == "asc"))
+                out.append(msg)
+                if stop and stop():
+                    return out
+            nxt = page.get("nextPageToken")
+            if not nxt or nxt in seen_tokens:
+                return out
+            seen_tokens.add(nxt)
+            token = nxt
+        return out
+
+    def list_received(self, created_since=None):
+        """Received messages, oldest first, so a poller can advance a createdSince cursor."""
+        return self._iter_messages("asc", created_since=created_since)
+
+    def imessage_space(self, phone):
+        key = _handle_key(phone)
+        if key and key in self._imessage_spaces:
+            return self._imessage_spaces[key]
+        # Newest first: the first direct chat whose sentBy.handle is this phone is the one to reuse.
+        self._iter_messages("desc", stop=lambda: bool(key) and key in self._imessage_spaces and bool(self._line_sender_id))
+        if not key or key not in self._imessage_spaces:
+            raise ProviderError(IMESSAGE_NO_CHAT)
+        return self._imessage_spaces[key]
+
+    def _sender_id_for_send(self):
+        if self.platform != "imessage":
+            return self.sender_id()
+        if not self._line_sender_id:
+            self._iter_messages("desc", stop=lambda: bool(self._line_sender_id))
+        if not self._line_sender_id:
+            raise ProviderError("shared iMessage sender id is unknown: no received message included receivedBy.id yet")
+        return self._line_sender_id
+
     def send_to_space(self, space_id, text):
-        body = {"spaceId": space_id, "senderId": self.sender_id(),
+        body = {"spaceId": space_id, "senderId": self._sender_id_for_send(),
                 "content": {"type": "text", "format": self.text_format, "text": text}}
         payload = self._call("POST", "/messages", body, idempotency=str(uuid.uuid4()))
         return f"photon {payload.get('id', '?')} ({payload.get('status', 'accepted')})"
 
     def send(self, phone, text, language):
+        if self.platform == "imessage":
+            return self.send_to_space(self.imessage_space(phone), text)
         return self.send_to_space(self.space_id(phone), text)
 
 
@@ -203,8 +376,12 @@ def parse_photon_webhook(doc):
     if content.get("type") != "text" or not content.get("text"):
         return None
     handle = sender.get("handle") or sender.get("phone") or sender.get("address") or ""
-    return {"handle": handle, "text": content["text"], "space_id": space.get("id"), "message_id": msg.get("id"),
-            "from_agent": sender.get("kind") == "agent"}
+    out = {"handle": handle, "text": content["text"], "space_id": space.get("id"), "message_id": msg.get("id"),
+           "from_agent": sender.get("kind") == "agent"}
+    received_id = (msg.get("receivedBy") or {}).get("id")
+    if received_id:
+        out["received_by_id"] = received_id       # the shared line's user id, when Photon includes it
+    return out
 
 
 def photon_signature_ok(body, header, secret):
@@ -227,8 +404,11 @@ def photon_from_env(env=None, http=None):
         load_env()
         env = os.environ
     if all(env.get(v) for v in PHOTON_VARS):
+        platform = (env.get("PHOTON_PLATFORM") or "sms").strip().lower()
+        if platform not in ("sms", "imessage"):
+            raise ProviderError(f"PHOTON_PLATFORM must be sms or imessage (got {platform})")
         return PhotonSMS(env["PHOTON_API_KEY"], env["PHOTON_PROJECT_ID"], env["PHOTON_FROM"], http=http,
-                         base_url=env.get("PHOTON_BASE_URL") or PHOTON_BASE,
+                         base_url=env.get("PHOTON_BASE_URL") or PHOTON_BASE, platform=platform,
                          text_format=env.get("PHOTON_TEXT_FORMAT") or "plain")
     return None
 
