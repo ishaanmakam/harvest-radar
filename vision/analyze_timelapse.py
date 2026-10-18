@@ -24,6 +24,7 @@ from shapely.geometry import shape
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from landscape import landscape  # noqa: E402
+from marks import crop_bounds, upscale  # noqa: E402
 from perceptron_client import MODEL, ask, clean_text, norm_to_lonlat, parse_annotations, spent_usd  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -38,24 +39,10 @@ def crop_zone(img_path, bounds, zbbox, out_path, crop_px):
     The saved image is resized so its long side is crop_px, and is never downscaled.
     Bounds stay on the source pixel window; box coords are normalized 0-1000.
     """
-    im = Image.open(img_path)
-    W, S, E, N = bounds
-    x0 = (zbbox[0] - W) / (E - W) * im.width
-    x1 = (zbbox[2] - W) / (E - W) * im.width
-    y0 = (N - zbbox[3]) / (N - S) * im.height
-    y1 = (N - zbbox[1]) / (N - S) * im.height
-    ix0, iy0, ix1, iy1 = int(x0), int(y0), int(x1), int(y1)
-    cropped = im.crop((ix0, iy0, ix1, iy1))
-    long_side = max(cropped.size)
-    if 0 < long_side < crop_px:
-        scale = crop_px / long_side
-        cropped = cropped.resize((max(1, round(cropped.width * scale)), max(1, round(cropped.height * scale))), Image.LANCZOS)
+    cropped, window = crop_bounds(img_path, bounds, zbbox)
+    cropped, _scale = upscale(cropped, crop_px)
     cropped.save(out_path, quality=90)
-    west = W + (ix0 / im.width) * (E - W)
-    east = W + (ix1 / im.width) * (E - W)
-    north = N - (iy0 / im.height) * (N - S)
-    south = N - (iy1 / im.height) * (N - S)
-    return out_path, [west, south, east, north]
+    return out_path, window
 
 
 def zone_bbox(feat):

@@ -1,0 +1,522 @@
+{
+  "frame_prev": "2026-10-10",
+  "frame_latest": "2026-10-17",
+  "fields": {
+    "F0001": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0002": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0003": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0004": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0005": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0006": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0007": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0008": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0009": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0010": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0011": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0012": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0013": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0014": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0015": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0016": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0017": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0018": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0019": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0020": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0021": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0022": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0023": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0024": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0025": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0026": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0027": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0028": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0029": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0030": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0031": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0032": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0033": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0034": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0035": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0036": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0037": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0038": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0039": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0040": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0041": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0042": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0043": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0044": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0045": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0046": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0047": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0048": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0049": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0050": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0051": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0052": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0053": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0054": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0055": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0056": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0057": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0058": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0059": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0060": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0061": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0062": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0063": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0064": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0065": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0066": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0067": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0068": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0069": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0070": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0071": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0072": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0073": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0074": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0075": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0076": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0077": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0078": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0079": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0080": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0081": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0082": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0083": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0084": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0085": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0086": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0087": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0088": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0089": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0090": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0091": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0092": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0093": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0094": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0095": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0096": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0097": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0098": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0099": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0100": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0101": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0102": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0103": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0104": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0105": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0106": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0107": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0108": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0109": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0110": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0111": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0112": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0113": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0114": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0115": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0116": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0117": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0118": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0119": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0120": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0121": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0122": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0123": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0124": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0125": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0126": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0127": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0128": {
+      "state_oct17": null,
+      "changed": null
+    },
+    "F0129": {
+      "state_oct17": null,
+      "changed": null
+    }
+  }
+}
