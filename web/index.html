@@ -3,18 +3,50 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Harvest Radar</title>
+    <title>Overfield</title>
   </head>
   <body>
+    <section id="intro">
+      <div id="globe"></div>
+      <p id="toast" hidden></p>
+      <div id="intro-copy">
+        <h1>Overfield</h1>
+        <p class="tagline">The satellite visits every farm. Every farmer gets a morning plan.</p>
+        <p id="intro-stats"></p>
+        <button id="enter" type="button">Enter the season</button>
+      </div>
+    </section>
+    <div id="app">
     <header>
-      <h1>Harvest Radar</h1>
+      <h1>Overfield</h1>
       <p id="stats"></p>
+      <button id="orbit" type="button">Orbit</button>
+      <span id="badge" class="badge"></span>
     </header>
     <p id="error" hidden></p>
     <main>
-      <div id="map"></div>
-      <aside id="panel"></aside>
+      <div class="map-wrap">
+        <div id="map"></div>
+        <div id="timelapse" hidden>
+          <button id="play" type="button">Play</button>
+          <input id="frame-slider" type="range" min="0" value="0" aria-label="Season date" />
+          <span id="frame-date"></span>
+        </div>
+      </div>
+      <aside id="panel">
+        <section id="route"></section>
+        <section id="plan"></section>
+      </aside>
     </main>
+    </div>
+    <div id="place-card" hidden>
+      <h2 id="place-title"></h2>
+      <p id="place-body"></p>
+      <div class="card-actions">
+        <button id="see-live" type="button">See a live farm landscape</button>
+        <button id="back-orbit" type="button">Back to orbit</button>
+      </div>
+    </div>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>
