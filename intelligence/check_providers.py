@@ -12,7 +12,7 @@ import os
 import sys
 
 from common import load_env
-from providers import PHOTON_VARS, VOICE_VARS, PhotonSMS, _basic, _ok, _payload, _urllib_http
+from providers import EMAIL_VARS, PHOTON_VARS, VOICE_VARS, PhotonSMS, _basic, _ok, _payload, _urllib_http
 from tools import load_roster
 
 
@@ -73,7 +73,9 @@ def report(env, roster_path=None, http=None):
 
     voice_ok = tw["configured"] and not tw["error"]
     sms_ok = ph["configured"] and not ph["error"]
-    rep["ready_for_real_send"] = bool(rep["roster"].get("ok") and (voice_ok or sms_ok))
+    missing_email = [v for v in EMAIL_VARS if not env.get(v)]
+    rep["email"] = {"configured": not missing_email, "missing": missing_email, "host": env.get("SMTP_HOST"), "from": env.get("SMTP_FROM")}
+    rep["ready_for_real_send"] = bool(rep["roster"].get("ok") and (voice_ok or sms_ok or not missing_email))
     return rep
 
 
@@ -104,6 +106,9 @@ def render(rep):
     else:
         lines.append(f"{mark(False)} PUBLIC_URL not set (needed for Twilio webhooks and Photon webhooks)")
     lines.append(f"{mark(bool(rep['public_ws_url']))} PUBLIC_WS_URL {'set' if rep['public_ws_url'] else 'not set'} (Grok bridge)")
+    em = rep.get("email") or {"configured": False, "missing": list(EMAIL_VARS)}
+    lines.append(f"{mark(em['configured'])} email (optional): " + (f"SMTP {em['host']} as {em['from']}" if em["configured"]
+                                                                   else f"set {', '.join(em['missing'])} in .env for the email channel"))
     lines.append(("READY: a real send can go ahead (morning.py --real)" if rep["ready_for_real_send"]
                   else "NOT READY: fix the [..] lines above"))
     return "\n".join(lines)
