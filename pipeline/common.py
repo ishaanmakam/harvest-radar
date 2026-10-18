@@ -1,11 +1,11 @@
 """Shared helpers for the season pipeline. Owner: Person A."""
 import json
 import os
+from datetime import date
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 CACHE = ROOT / "data" / "cache"
-OUT = ROOT / "data" / "out"
 
 
 def load_env():
@@ -22,9 +22,17 @@ def load_env():
 
 load_env()
 
+# Child steps of pipeline/run.py set these. Unset, every script uses the files it always has.
+OUT = Path(os.environ["HR_OUT"]) if os.environ.get("HR_OUT") else ROOT / "data" / "out"
+
 
 def load_region() -> dict:
-    return json.loads((ROOT / "config" / "region.json").read_text())
+    region = json.loads((ROOT / "config" / "region.json").read_text())
+    override = os.environ.get("HR_AS_OF", "").strip()
+    if override:
+        date.fromisoformat(override)
+        region["as_of"] = override
+    return region
 
 
 def write_json(path: Path, obj, pretty: bool = False):
