@@ -29,12 +29,13 @@ FILES = {
     "insights.json": "insights.schema.json",
     "plans.json": "plans.schema.json",
     "analytics.json": "analytics.schema.json",
+    "field_env.json": "field_env.schema.json",
     "route.json": "route.schema.json",
     "deliveries.json": "deliveries.schema.json",
 }
 
 # Written by the morning queue on its first run, so never required, even with --strict
-OPTIONAL = {"deliveries.json", "analytics.json"}
+OPTIONAL = {"deliveries.json", "analytics.json", "field_env.json"}
 
 CHECK_KINDS = ["harvest_ready", "harvest_before_rain", "establishment", "burn_scar", "fire", "flood", "stress", "visible_change"]
 STATUS_RANK = {"clear": 0, "watch": 1, "act_now": 2}
