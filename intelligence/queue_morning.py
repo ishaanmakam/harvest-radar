@@ -26,7 +26,7 @@ from tools import load_roster
 CHANNELS = ("grok_voice", "photon_sms")
 RETRIES = 2
 LABELS = {"harvest_ready": "Harvest readiness", "harvest_before_rain": "Harvest versus rain", "establishment": "Establishment",
-          "burn_scar": "Burn scar", "fire": "Fire", "flood": "Flood", "stress": "Stress or browning",
+          "burn_scar": "Burn or tillage scar", "fire": "Fire", "flood": "Flood", "stress": "Stress or browning",
           "visible_change": "Visible change"}
 STATUS_WORDS = {"clear": "clear", "watch": "watch", "act_now": "act now"}
 

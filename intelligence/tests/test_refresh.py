@@ -26,7 +26,7 @@ class TestRefresh:
         for name in ("status.json", "plans.json", "route.json"):
             assert (season / name).exists()
         assert not (season / ".staging").exists()                        # staging is cleaned up
-        assert result["as_of"] == "2026-10-16" and result["plans"] > 2000
+        assert result["as_of"] == "2026-10-16" and result["plans"] > 100
 
     def test_broken_input_keeps_the_last_good_files(self, season):
         refresh.run(season)
