@@ -7,6 +7,8 @@
     <meta name="theme-color" content="#000000" />
     <meta name="description" content="Overfield: the satellite visits every farm and every farmer gets a morning plan." />
     <title>Overfield</title>
+    <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+    <link rel="apple-touch-icon" href="icons/apple-touch-icon.png" />
   </head>
   <body>
     <a class="skip-link" href="#dock-body">Skip to the farm list</a>
@@ -47,16 +49,19 @@
     <div id="app">
       <header class="topbar">
         <a class="wordmark" href="./" aria-label="Overfield">
-          <svg viewBox="0 0 24 24" aria-hidden="true">
-            <rect x="3" y="3" width="18" height="18" rx="5" fill="none" stroke="currentColor" stroke-width="1.6" />
-            <path d="M7 9.5h10M7 13.5h10M7 17.5h6" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" />
-            <circle cx="17.5" cy="6.5" r="1.7" fill="#8fe0a8" />
+          <svg viewBox="0 0 100 100" aria-hidden="true">
+            <g fill="none" stroke="currentColor" stroke-width="8">
+              <polygon points="50,5 88.97,27.5 88.97,72.5 50,95 11.03,72.5 11.03,27.5" />
+              <polygon points="50,18 77.71,34 77.71,66 50,82 22.29,66 22.29,34" />
+              <polygon points="50,31 66.45,40.5 66.45,59.5 50,69 33.55,59.5 33.55,40.5" />
+            </g>
+            <circle cx="50" cy="50" r="10" fill="currentColor" />
           </svg>
           <span>Overfield</span>
         </a>
         <div class="aspects" role="group" aria-label="Aspect">
-          <button class="aspect" type="button" data-aspect="health" aria-pressed="true">Crop health</button>
-          <button class="aspect" type="button" data-aspect="yield" aria-pressed="false">Crop yield</button>
+          <button class="aspect" type="button" data-aspect="health" aria-pressed="true">Health</button>
+          <button class="aspect" type="button" data-aspect="yield" aria-pressed="false">Yield</button>
         </div>
         <nav class="tabs" aria-label="Views">
           <button class="tab" type="button" data-view="fields" data-aspect="health" aria-current="page">Fields</button>
@@ -69,14 +74,14 @@
         <div class="topbar-right">
           <span id="run-badge" class="badge" hidden></span>
           <span id="badge" class="badge"></span>
-          <button id="orbit" type="button" class="btn btn-ghost">Show the globe</button>
+          <button id="orbit" type="button" class="btn btn-ghost">Globe</button>
           <nav class="page-links" aria-label="Pages">
             <a href="#regions">Regions</a>
-            <a href="#data">Data sources</a>
-            <a href="#developers">Developers</a>
+            <a href="#data">Data</a>
+            <a href="#developers">API</a>
           </nav>
           <div id="auth" class="auth-slot"></div>
-          <a id="signup" class="signup" href="#account">Create an account</a>
+          <a id="signup" class="signup" href="#account">Account</a>
         </div>
       </header>
       <p id="error" class="error-banner" role="alert" hidden></p>
