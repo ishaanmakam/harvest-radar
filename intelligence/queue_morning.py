@@ -31,14 +31,15 @@ STATUS_WORDS = {"clear": "clear", "watch": "watch", "act_now": "act now"}
 
 
 class UnverifiedProvider:
-    """Placeholder until the live channels are verified (xAI Voice Agents for calls, Photon 2.0 for SMS)."""
+    """Placeholder for a channel that is not configured yet (see providers.py for the real adapters)."""
 
-    def __init__(self, channel):
-        self.channel = channel
+    def __init__(self, channel, reason=None):
+        self.channel, self.reason = channel, reason
 
     def send(self, phone, text, language):
-        raise NotImplementedError(f"{self.channel}: provider not verified yet. Run with --dry-run, or plug a provider "
-                                  f"with send(phone, text, language) into run(providers=...)")
+        why = self.reason or "provider not configured"
+        raise NotImplementedError(f"{self.channel}: {why}. Run with --dry-run, configure .env for providers.from_env(), "
+                                  f"or pass run(providers=...) objects with send(phone, text, language)")
 
 
 # ---------------- words ----------------
@@ -100,7 +101,12 @@ def run(data_dir, roster_path=None, dry_run=True, today=None, providers=None, on
     roster = load_roster(roster_path)
     plans = {p["farm_id"]: p for p in read_json(data_dir, "plans.json")["plans"]}
     route = read_json(data_dir, "route.json")
-    providers = providers or {c: UnverifiedProvider(c) for c in CHANNELS}
+    if providers is None:
+        if dry_run:
+            providers = {c: UnverifiedProvider(c, "dry run") for c in CHANNELS}
+        else:
+            from providers import from_env  # real send: adapters from .env (unconfigured channels fail loudly)
+            providers = from_env()
     doc = load_deliveries(data_dir)
     index = {(r["date"], r["roster_id"], r["channel"]): r for r in doc["deliveries"]}
     counts = Counter()
