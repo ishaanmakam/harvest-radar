@@ -25,7 +25,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import forecast_models as fm  # noqa: E402
-from common import ROOT, load_region, read_json, write_json  # noqa: E402
+from common import ROOT, load_region, read_json, season_as_of, write_json  # noqa: E402
 
 # (module file, key) in dependency order: coverage and phenology feed nothing but are cheap; yield and workability feed
 # economics; plans and route feed the landscape table and the officer's drive.
@@ -61,8 +61,8 @@ def load_data(data_dir: Path):
     ensemble = fm.load_ensemble_doc(data_dir)                      # tolerant shared reader (None when absent or malformed)
     as_of = None
     try:
-        as_of = date.fromisoformat(load_region().get("as_of"))
-    except (TypeError, ValueError):
+        as_of = season_as_of(data_dir)
+    except (TypeError, ValueError, KeyError):
         pass
     if ensemble and fm.is_stale(ensemble, as_of):
         print(f"  WARN weather_ensemble.json fetched {ensemble.get('fetched_at')} is stale for {as_of}: analytics use the pipeline forecast")
@@ -222,6 +222,7 @@ def run(data_dir, modules=MODULES, write=True):
     data_dir = Path(data_dir)
     data = load_data(data_dir)
     config = load_region()
+    config = {**config, "as_of": season_as_of(data_dir, config).isoformat()}   # run.json (live or replay) wins
     results, failed, timings = run_modules(data, config, modules)
     doc = assemble(results, failed, timings, data, config)
     if write:

@@ -32,7 +32,7 @@ from pathlib import Path
 
 import forecast_models as fm
 import weather_model as wm
-from common import ROOT, d, load_region, read_json, s, write_json
+from common import ROOT, d, load_region, read_json, s, write_json, season_as_of
 
 KINDS = ["harvest_ready", "harvest_before_rain", "establishment", "burn_scar", "fire", "flood", "stress", "visible_change"]
 ROUTE_ORDER = [("act_now", "fire"), ("act_now", "flood"), ("act_now", "harvest_before_rain"), ("act_now", "burn_scar"),
@@ -531,7 +531,7 @@ def _validate(name, doc):
 def run(data_dir: Path):
     region = load_region()
     th = dict(region.get("thresholds", {}))
-    today = d(region["as_of"])
+    today = season_as_of(data_dir, region)       # run.json (live or replay) wins over config/region.json
     status = read_json(data_dir, "status.json")
     ts = read_json(data_dir, "timeseries.json")
     fields = read_json(data_dir, "fields.geojson")
