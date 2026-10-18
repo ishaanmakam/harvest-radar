@@ -38,22 +38,22 @@ async function fetchJson(url) {
   }
 }
 
+// Every URL is relative to the page, so the built site runs from any folder or host.
 function pinnedBase() {
   const value = new URLSearchParams(window.location.search).get("base");
   if (!value) return null;
-  const trimmed = value.trim().replace(/\/+$/, "");
-  return trimmed.startsWith("/") ? trimmed : `/${trimmed}`;
+  return value.trim().replace(/^\/+/, "").replace(/\/+$/, "") || null;
 }
 
 async function loadFile(path, pinned) {
   if (pinned) {
     const data = await fetchJson(`${pinned}/${path}`);
-    return { data, source: data ? pinned.slice(1) : null, base: pinned };
+    return { data, source: data ? pinned : null, base: pinned };
   }
-  const out = await fetchJson(`/out/${path}`);
-  if (out) return { data: out, source: "out", base: "/out" };
-  const mock = await fetchJson(`/mock/${path}`);
-  if (mock) return { data: mock, source: "mock", base: "/mock" };
+  const out = await fetchJson(`out/${path}`);
+  if (out) return { data: out, source: "out", base: "out" };
+  const mock = await fetchJson(`mock/${path}`);
+  if (mock) return { data: mock, source: "mock", base: "mock" };
   return { data: null, source: null, base: null };
 }
 
@@ -62,16 +62,16 @@ async function loadGroup(pinned) {
     const entries = await Promise.all(
       GROUP.map(async ([key, path]) => {
         const data = key in known ? known[key] : await fetchJson(`${base}/${path}`);
-        return [key, { data, source: data ? base.slice(1) : null, base }];
+        return [key, { data, source: data ? base : null, base }];
       }),
     );
     return Object.fromEntries(entries);
   };
   if (pinned) return { files: await fromBase(pinned), realFields: null };
 
-  const [outFields, outPlans] = await Promise.all([fetchJson("/out/fields.geojson"), fetchJson("/out/plans.json")]);
-  if (outFields && outPlans) return { files: await fromBase("/out", { fields: outFields, plans: outPlans }), realFields: null };
-  return { files: await fromBase("/mock"), realFields: outFields || null };
+  const [outFields, outPlans] = await Promise.all([fetchJson("out/fields.geojson"), fetchJson("out/plans.json")]);
+  if (outFields && outPlans) return { files: await fromBase("out", { fields: outFields, plans: outPlans }), realFields: null };
+  return { files: await fromBase("mock"), realFields: outFields || null };
 }
 
 function walkCoords(coords, visit) {
@@ -192,7 +192,7 @@ export async function loadData() {
     pinned,
     farmBase: byKey.fields.base,
     isMock: sources.plans !== "out",
-    framesBase: byKey.frames.base || "/mock",
+    framesBase: byKey.frames.base || "mock",
     fields,
     realFields: group.realFields,
     plans,
