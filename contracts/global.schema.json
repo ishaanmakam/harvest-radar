@@ -1,0 +1,96 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://harvest-radar.local/contracts/global.schema.json",
+  "title": "World watch",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["as_of", "generated_at", "method", "sources", "regions"],
+  "properties": {
+    "as_of": {"type": "string", "format": "date"},
+    "generated_at": {"type": "string", "format": "date-time"},
+    "method": {"type": "string", "minLength": 20},
+    "sources": {"type": "array", "minItems": 1, "items": {"type": "string"}},
+    "regions": {
+      "type": "array",
+      "items": {"$ref": "#/$defs/region"}
+    }
+  },
+  "$defs": {
+    "region": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "name", "country", "lat", "lon", "crops", "crops_note", "headline"],
+      "properties": {
+        "id": {"type": "string"},
+        "name": {"type": "string"},
+        "country": {"type": "string"},
+        "lat": {"type": "number"},
+        "lon": {"type": "number"},
+        "bbox": {
+          "type": "array",
+          "minItems": 4,
+          "maxItems": 4,
+          "items": {"type": "number"}
+        },
+        "crops": {"type": "array", "items": {"type": "string"}},
+        "crops_note": {"const": "hand-labelled, not detected"},
+        "status": {"type": "string"},
+        "cropland_frac": {"type": ["number", "null"]},
+        "cropland_mask": {"type": "boolean"},
+        "clear_passes": {"type": "integer", "minimum": 0},
+        "latest_clear_date": {"type": "string", "format": "date"},
+        "ndvi": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["dates", "values"],
+          "properties": {
+            "dates": {"type": "array", "items": {"type": "string", "format": "date"}},
+            "values": {"type": "array", "items": {"type": ["number", "null"]}}
+          }
+        },
+        "peak": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["date", "value"],
+          "properties": {
+            "date": {"type": "string", "format": "date"},
+            "value": {"type": "number"}
+          }
+        },
+        "current": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["date", "value"],
+          "properties": {
+            "date": {"type": "string", "format": "date"},
+            "value": {"type": "number"}
+          }
+        },
+        "stage": {"type": "string"},
+        "stage_reason": {"type": "string"},
+        "forecast": {"type": ["object", "null"]},
+        "rain_next3_mm": {"type": ["number", "null"]},
+        "rain_flag": {"type": "boolean"},
+        "alert": {"type": ["string", "null"]},
+        "fires_5d": {"type": ["integer", "null"], "minimum": 0},
+        "fires": {
+          "type": "array",
+          "maxItems": 20,
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["lat", "lon", "date", "frp"],
+            "properties": {
+              "lat": {"type": "number"},
+              "lon": {"type": "number"},
+              "date": {"type": "string"},
+              "frp": {"type": ["number", "null"]}
+            }
+          }
+        },
+        "thumb": {"type": ["string", "null"]},
+        "headline": {"type": "string"}
+      }
+    }
+  }
+}
