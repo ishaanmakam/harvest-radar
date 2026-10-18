@@ -55,12 +55,16 @@ def load_data(data_dir: Path):
         chcs = json.loads((ROOT / "config" / "chcs.json").read_text(encoding="utf-8")).get("chcs")
     except (OSError, ValueError):
         pass
+    weather = read_json(data_dir, "weather.json", default={})
+    ensemble = read_optional(data_dir, "weather_ensemble.json")
+    overlay_ensemble(weather, ensemble)
     return {
         "fields": read_json(data_dir, "fields.geojson"),
         "zones": read_json(data_dir, "zones.geojson", default={"type": "FeatureCollection", "features": []}),
         "timeseries": read_json(data_dir, "timeseries.json"),
         "status": read_json(data_dir, "status.json"),
-        "weather": read_json(data_dir, "weather.json", default={}),
+        "weather": weather,
+        "ensemble": ensemble,
         "fires": read_json(data_dir, "fires.json", default={"detections": []}),
         "insights": read_optional(data_dir, "insights.json"),
         "plans": read_optional(data_dir, "plans.json"),
@@ -69,6 +73,40 @@ def load_data(data_dir: Path):
         "usda": read_optional(data_dir, "usda_crop_progress.json"),
         "chcs": chcs,
     }
+
+
+def overlay_ensemble(weather, ensemble):
+    """When the multi-model ensemble exists, the analytics read its median rain and its share of models calling a
+    shower as the forecast's amount and probability, day by day where the dates overlap. The pipeline's single-model
+    values stay beside them as precip_mm_single_model / precip_prob_single_model. Temperatures are left alone."""
+    if not ensemble or not isinstance(weather, dict):
+        return False
+    fc = weather.get("forecast") or {}
+    dates = list(fc.get("dates") or [])
+    if not dates:
+        return False
+    by_date = {d.get("date"): d for d in ensemble.get("days", []) if isinstance(d, dict)}
+    hit = False
+    mm = list(fc.get("precip_mm") or [None] * len(dates))
+    prob = list(fc.get("precip_prob") or [None] * len(dates))
+    mm_single, prob_single = list(mm), list(prob)
+    for i, dt in enumerate(dates):
+        day = by_date.get(str(dt)[:10])
+        if not day or not day.get("n_models"):
+            continue
+        hit = True
+        if day.get("precip_median_mm") is not None and i < len(mm):
+            mm[i] = day["precip_median_mm"]
+        if day.get("p_rain_5mm") is not None and i < len(prob):
+            prob[i] = round(100 * day["p_rain_5mm"])
+    if not hit:
+        return False
+    fc["precip_mm_single_model"], fc["precip_prob_single_model"] = mm_single, prob_single
+    fc["precip_mm"], fc["precip_prob"] = mm, prob
+    n = len(ensemble.get("models") or [])
+    fc["source"] = f"{fc.get('source') or 'pipeline'} + multi-model ensemble ({n} models)"
+    weather["forecast"] = fc
+    return True
 
 
 def clean(obj):
@@ -134,9 +172,14 @@ def assemble(results, failed, timings, data, config):
         for zid, v in (out.get("zones") or {}).items():
             zones.setdefault(zid, {})[key] = v
     status = data.get("status") or {}
+    ens = data.get("ensemble") or {}
+    fc_src = (data.get("weather") or {}).get("forecast", {}).get("source") or ""
+    forecast_source = (f"multi-model ensemble ({len(ens.get('models') or [])} models) over the pipeline forecast"
+                       if ens and "ensemble" in fc_src else "pipeline forecast")
     return {
         "as_of": status.get("as_of") or config.get("as_of"),
         "source": "intelligence/analytics.py",
+        "forecast_source": forecast_source,
         "modules": list(results),
         "failed": failed,
         "timings_s": timings,

@@ -63,6 +63,32 @@ class TestRealShapes:
         assert "F9999" in doc["fields"]
 
 
+class TestEnsembleOverlay:
+    def test_the_multi_model_ensemble_replaces_the_single_feed_for_the_analytics(self, tmp_path):
+        d = mock_copy(tmp_path)
+        w = json.loads((d / "weather.json").read_text())
+        dates = w["forecast"]["dates"]
+        days = [{"date": dt, "n_models": 8, "p_rain_5mm": 0.25 if i == 2 else 0.0, "p_rain_12mm": 0.125 if i == 2 else 0.0,
+                 "p_rain_15mm": 0.0, "p_rain_25mm": 0.0, "precip_median_mm": 2.0 if i == 2 else 0.0, "precip_max_mm": 16.0 if i == 2 else 0.0,
+                 "p_frost": 0.0, "p_hard_freeze": 0.0} for i, dt in enumerate(dates[:5])]          # a shorter ensemble than the forecast
+        (d / "weather_ensemble.json").write_text(json.dumps({"source": "test", "dates": dates[:5], "models": ["a"] * 8, "days": days}))
+        data = analytics.load_data(d)
+        fc = data["weather"]["forecast"]
+        assert data["ensemble"]["models"] == ["a"] * 8
+        assert fc["precip_prob"][2] == 25 and fc["precip_mm"][2] == 2.0            # ensemble share and median on an overlaid day
+        assert fc["precip_mm_single_model"][2] == w["forecast"]["precip_mm"][2]      # the pipeline's value is kept
+        assert fc["precip_mm"][7] == w["forecast"]["precip_mm"][7]                  # days the ensemble does not cover stay as they were
+        assert "ensemble" in fc["source"]
+        doc = analytics.run(d, write=False)
+        assert doc["failed"] == {} and doc["forecast_source"] == "multi-model ensemble (8 models) over the pipeline forecast"
+
+    def test_without_the_file_nothing_changes(self, tmp_path):
+        d = mock_copy(tmp_path)
+        data = analytics.load_data(d)
+        assert data["ensemble"] is None and "precip_mm_single_model" not in data["weather"]["forecast"]
+        assert analytics.run(d, write=False)["forecast_source"] == "pipeline forecast"
+
+
 class TestIsolation:
     def test_a_broken_module_is_recorded_and_the_others_still_run(self, tmp_path, monkeypatch):
         import types

@@ -30,6 +30,7 @@ from collections import defaultdict
 from datetime import date, timedelta
 from pathlib import Path
 
+import forecast_models as fm
 import weather_model as wm
 from common import ROOT, d, load_region, read_json, s, write_json
 
@@ -52,6 +53,7 @@ DEFAULTS = {
     "peak_ndvi_min": 0.55, "burn_nbr_max": -0.05, "harvest_ndvi_max": 0.25,   # shared with harvest_model; region.json overrides
 }
 CONFIDENCE = {"l": "low", "n": "nominal", "h": "high"}
+ENSEMBLE_SPLIT_MIN = 0.25      # a quarter of the weather models putting the act-now rain on a day is worth a sentence
 TODAY_TEXT = {
     ("act_now", "fire"): "Check the field for fire now. If it is burning, call emergency services first; the officer will follow up today.",
     ("act_now", "flood"): "Water is standing on the field: check the drainage today.",
@@ -141,12 +143,14 @@ def _cue_text(cue, default):
 
 
 def farm_plan(rec, passes, forecast, hotspots, insight, today: date, th=None, fallback_as_of=None, zone_drop=None,
-              outlook=None):
+              outlook=None, ensemble=None):
     """One farm's plan. passes = [(date, ndvi, nbr)] clear passes; forecast = [(date, precip_mm)];
     hotspots = FIRMS detections in this field; insight = per-field Perceptron cues (kind -> cue) or None;
     fallback_as_of = the landscape's latest clear pass, used when this farm has no clear pass of its own;
     zone_drop = the zone's typical NDVI drop between the last two passes (see zone_declines), or None;
-    outlook = weather_model.harvest_outlook(...) for a standing crop (combine window, rain, frost), or None."""
+    outlook = weather_model.harvest_outlook(...) for a standing crop (combine window, rain, frost), or None;
+    ensemble = forecast_models.load_ensemble(...) ({date: day}) when the multi-model forecast exists: it only adds words
+    (how many of the latest weather models agree); the rules stay on the pipeline forecast."""
     th = {**DEFAULTS, **(th or {})}
     passes = sorted(p for p in passes if p[1] is not None)
     latest = passes[-1] if passes else None
@@ -232,12 +236,36 @@ def farm_plan(rec, passes, forecast, hotspots, insight, today: date, th=None, fa
     frost = [(e[0], e[2]) for e in horizon if len(e) > 2 and e[2] is not None and e[2] <= th["frost_tmin_c"]]
     precip = {e[0]: (e[1] or 0.0) for e in forecast}
 
+    ens = ensemble or {}
+
+    def agree(day, key):
+        """'k of n weather models agree' for a day the ensemble knows, else ''."""
+        e = ens.get(day) or {}
+        n = e.get("n_models") or 0
+        if not n or e.get(key) is None:
+            return ""
+        return f"{round(e[key] * n)} of {n} weather models agree"
+
+    def split_days():
+        """Days inside the lookahead where a real share of the models put the act-now rain that the single feed does not."""
+        out = []
+        for e in horizon:
+            day = e[0]
+            info = ens.get(day) or {}
+            n = info.get("n_models") or 0
+            share = info.get("p_rain_15mm") or 0.0
+            if n and share >= ENSEMBLE_SPLIT_MIN and (e[1] is None or e[1] < th["rain_act_now_mm"]):
+                out.append(f"{round(share * n)} of {n} weather models put {th['rain_act_now_mm']:.0f} mm or more on {s(day)}")
+        return out
+
     def frost_temp():
         t = frost[0][1]
         shown = f"{t:.1f}".rstrip("0").rstrip(".")          # -0.5 stays -0.5; -2.0 reads -2; never "-0"
         if shown == "-0":
             shown = "0"
-        return f"{shown} °C, a hard freeze" if t <= wm.HARD_FREEZE_C else f"{shown} °C"
+        a = agree(frost[0][0], "p_frost").replace(" weather models agree", " models agree")
+        shown = f"{shown} °C" + (f"; {a}" if a else "")
+        return f"{shown}, a hard freeze" if t <= wm.HARD_FREEZE_C else shown
 
     def frost_words(mature):
         if mature:
@@ -264,6 +292,8 @@ def farm_plan(rec, passes, forecast, hotspots, insight, today: date, th=None, fa
     if ready and rain:
         first_day, first_mm = rain[0]
         more = f" and more on {s(rain[-1][0])}" if len(rain) > 1 else ""
+        a = agree(first_day, "p_rain_15mm")
+        more = (f" ({a})" if a else "") + more
         fit_txt, fit = fit_words(first_day)
         gap = (first_day - today).days
         if gap == 0:
@@ -291,6 +321,9 @@ def farm_plan(rec, passes, forecast, hotspots, insight, today: date, th=None, fa
                 detail = f"{w_mm:.0f} mm of rain expected on {s(w_day)} (under the {th['rain_act_now_mm']:.0f} mm act-now line): {have}{fit_txt}"
             else:
                 detail = f"No rain of {th['rain_act_now_mm']:.0f} mm or more in the next {n_days} days"
+            splits = split_days()
+            if splits:
+                detail += "; " + "; ".join(splits)
             if frost:
                 detail += "; " + frost_words(True)
         elif harvest or stage == "harvested":
@@ -518,6 +551,7 @@ def run(data_dir: Path):
     zone_of = {f["properties"]["field_id"]: f["properties"]["zone_id"] for f in fields["features"]}
     thr = {**DEFAULTS, **th}
     drops = zone_declines(ts, zone_of, thr["stress_max_gap_days"])
+    ensemble = fm.load_ensemble(data_dir)         # optional: the latest weather models' agreement, words only
     observed = weather.get("observed") or {}
     fc_dates = [d(x[:10]) for x in fc.get("dates", [])]
     fresh_fc = any(x >= today for x in fc_dates)
@@ -551,7 +585,7 @@ def run(data_dir: Path):
         passes = [(dt, v, b) for dt, v, b in zip(dates, series["ndvi"], series["nbr"]) if v is not None]
         plan = farm_plan(rec, passes, forecast, hotspots.get(fid, []), cues.get(fid), today, th,
                          fallback_as_of=latest_clear, zone_drop=drops.get(p["zone_id"]),
-                         outlook=outlook_for(rec, passes, p.get("crop") or "corn"))
+                         outlook=outlook_for(rec, passes, p.get("crop") or "corn"), ensemble=ensemble)
         plan["zone_id"] = p["zone_id"]
         plans.append(plan)
     route = build_route(plans, today)
