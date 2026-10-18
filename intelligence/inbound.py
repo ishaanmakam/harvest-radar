@@ -86,9 +86,13 @@ def handle_stop(roster_path, handle, text):
     when the text is not a stop word so the normal answer applies."""
     if (text or "").strip().upper() not in STOP_WORDS:
         return None
+    import accounts
     import signup
     sender = _strip_scheme(handle or "")
-    if signup.unsubscribe(roster_path, sender):
+    removed = bool(roster_path) and signup.unsubscribe(roster_path, sender)
+    db = accounts.open_from_env()
+    paused = db.pause_by_handle(sender) if db is not None else False        # people who signed up on the site are paused
+    if removed or paused:
         return f"Stopped: no more morning plans from {product_name()} to this number or address. Sign up again any time."
     return f"This number or address is not on the {product_name()} list, so there is nothing to stop."
 

@@ -1576,51 +1576,6 @@
     "web/README.md:19",
     "web/vite.config.js:53-58"
    ]
-  },
-  {
-   "name": "Supabase",
-   "provider": "Supabase",
-   "url": "https://supabase.com",
-   "kind": "hosting",
-   "used_for": "Accounts, farm profiles, developer keys, terms acceptances and the delivery log, behind row-level security.",
-   "why": "Sign-in and a database without running a server.",
-   "cadence": "continuous",
-   "resolution": "",
-   "licence": "Supabase terms of service; keys required",
-   "key_required": true,
-   "live_or_offline": "live when configured",
-   "where_in_code": [
-    ".env.example:31",
-    ".env.example:31-32",
-    ".env.example:32",
-    "backend/README.md:1-88",
-    "backend/README.md:3",
-    "backend/supabase/functions/api/index.ts:1-17",
-    "backend/supabase/functions/api/index.ts:45-60",
-    "backend/supabase/functions/api/index.ts:64-85",
-    "backend/supabase/migrations/0001_init.sql:1-40",
-    "docs/superpowers/specs/2026-10-18-product-accounts-api-design.md",
-    "intelligence/check_providers.py:55-59",
-    "intelligence/morning.py:18",
-    "intelligence/morning.py:60",
-    "intelligence/morning.py:72",
-    "intelligence/roster_supabase.py:1",
-    "intelligence/roster_supabase.py:1-20",
-    "intelligence/roster_supabase.py:16",
-    "intelligence/roster_supabase.py:17",
-    "intelligence/roster_supabase.py:3",
-    "intelligence/roster_supabase.py:54",
-    "intelligence/roster_supabase.py:59",
-    "intelligence/roster_supabase.py:80",
-    "intelligence/roster_supabase.py:90",
-    "intelligence/tests/test_roster_supabase.py:1",
-    "intelligence/tests/test_roster_supabase.py:10",
-    "intelligence/tools.py:32-53",
-    "intelligence/tools.py:33",
-    "intelligence/tools.py:39",
-    "intelligence/tools.py:49",
-    "intelligence/tools.py:51"
-   ]
   }
  ]
 }

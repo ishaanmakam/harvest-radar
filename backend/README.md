@@ -1,88 +1,82 @@
-# Overfield backend: Supabase
+# Overfield accounts: our own backend
 
-Accounts, farm profiles, developer keys, terms acceptances and the delivery log live in one Supabase project. The site stays static; the Python layer reads the roster from here and writes the morning log back. Design: `docs/superpowers/specs/2026-10-18-product-accounts-api-design.md`.
+Sign-in, farm profiles, developer keys, the terms acceptances, the morning delivery log and the admin pages all live in
+one SQLite file served by the Python inbound server, the same process that answers the Photon and Twilio webhooks and
+the sign-up page. No third-party account, no email provider, no rate limits we do not set.
 
-Nothing in this folder contains a secret. The service role key goes in `.env` only; the anon key is public by design and goes in a repository variable.
+| piece | file |
+|---|---|
+| the store: passwords (PBKDF2-HMAC-SHA256, salted), sessions, profiles, keys, terms, deliveries, admin counts | `intelligence/accounts.py` |
+| the HTTP routes, CORS for the static site, the key-gated `/v1` API | `intelligence/accounts_api.py` |
+| the server that mounts them next to the webhooks | `intelligence/inbound_server.py` |
+| the browser client the site uses | `web/src/backend.js` |
+| tests | `intelligence/tests/test_accounts*.py` |
 
-## One-time setup (about ten minutes, owner only)
+## Run it (demo day)
 
-1. **Create the project.** supabase.com, New project, name `overfield`, region closest to the farms (us-east for Iowa), generate a database password and keep it in your password manager.
-2. **Run the migration.** SQL editor, paste `backend/supabase/migrations/0001_init.sql`, Run. It is safe to run twice.
-3. **Sign-in.** Authentication, Providers: Email on (magic link; "Confirm email" can stay on). Authentication, URL configuration: Site URL `https://ishaanmakam.github.io/harvest-radar/`, add the same URL under Redirect URLs (and `http://localhost:5173/` for local work). Phone sign-in is optional and needs an SMS provider in Authentication, Providers, Phone.
-4. **Keys.** Project settings, API. Copy the Project URL and the `anon` key into repository variables so the Pages build sees them:
-
-   ```bash
-   gh variable set SUPABASE_URL --body "https://<ref>.supabase.co"
-   ```
-
-   ```bash
-   gh variable set SUPABASE_ANON_KEY --body "<anon key>"
-   ```
+1. **Start the server** from the repo root. It creates `data/accounts.sqlite` (gitignored) on first run:
 
    ```bash
-   gh variable set API_BASE --body "https://<ref>.supabase.co/functions/v1/api"
+   python intelligence/inbound_server.py --data data/out
    ```
 
-   Then append the service role key to `.env` yourself (never commit it):
+   The CSV in `ROSTER_PATH` (the officer and demo farms) and the people who sign up on the site are one roster: the
+   morning queue, the scheduler and the inbound handlers read both.
+2. **Expose it** with a free Cloudflare quick tunnel (no account; the address changes each time you start it):
 
    ```bash
-   echo SUPABASE_URL=https://<ref>.supabase.co >> .env
+   cloudflared tunnel --url http://localhost:8788
    ```
+
+   `winget install Cloudflare.cloudflared` installs it. ngrok works the same way (`ngrok http 8788`).
+3. **Tell the site** where the server is. This sets two repository variables and rebuilds the site (two minutes):
 
    ```bash
-   echo SUPABASE_SERVICE_ROLE_KEY=<service role key> >> .env
+   python scripts/publish_backend_url.py https://<the address the tunnel printed>
    ```
 
-5. **Deploy the API.** Needs the Supabase CLI once (`npm i -g supabase` or `npx supabase`), then:
+4. **Make yourself admin** after creating your account on the site:
 
    ```bash
-   npx supabase login
+   python intelligence/accounts.py promote you@example.com admin
    ```
 
-   ```bash
-   npx supabase functions deploy api --project-ref <ref> --no-verify-jwt
-   ```
+   `python intelligence/accounts.py list` shows everyone and who is in the roster.
 
-   `--no-verify-jwt` is correct: the function checks Overfield keys itself. Optional: `npx supabase secrets set OVERFIELD_SITE=https://ishaanmakam.github.io/harvest-radar/ --project-ref <ref>`.
-6. **Make yourself admin.** Sign in on the site once (so the profile row exists), then in the SQL editor:
+Local work needs none of this: on `localhost` the site talks to `http://localhost:8788` by default.
 
-   ```sql
-   update public.profiles set role = 'admin' where email = 'you@example.com';
-   ```
+## What a person gets
 
-7. **Re-run the Pages deploy** (push to main, or Actions, Deploy site, Run workflow) so the build picks up the variables.
+- **Account page** (`#account`): create an account with email and password, or sign in. Then the farm address (matched to a watched field, or the nearest one within 5 km), phone with country code, language, morning time, timezone, channels, the SMS and call consent box, a pause switch, the last deliveries, and delete my data.
+- **Developers** (`#developers`): the API docs, the terms (`developer-v1`), I agree, create a key (shown once, only its hash is stored), the keys table with usage, revoke.
+- **Admin** (`#admin`, officers and admins): count cards, the roster with search and filters, inline role and pause edits (admins), deliveries by morning, keys and usage, a CSV export in the `ROSTER_PATH` shape.
+- **STOP** by text pauses the account as well as removing a CSV row.
 
-## What each piece does
+## The API
 
-| piece | file | reads | writes |
-|---|---|---|---|
-| schema and policies | `supabase/migrations/0001_init.sql` | | tables, RLS, functions, triggers |
-| developer API | `supabase/functions/api/index.ts` | `api_keys` via `verify_api_key()`, the published `out/*.json` | `api_usage` |
-| roster for the queue | `intelligence/roster_supabase.py` | `profiles` (service role) | `deliveries` |
-| site | `web/src/supabase.js`, `views/account.js`, `views/developer.js`, `views/admin.js` | own rows under RLS | own profile, terms, keys via RPC |
-
-## Developer API
-
-Base: `https://<ref>.supabase.co/functions/v1/api`. Header `Authorization: Bearer ovf_...` (or `?key=`).
+Base: the server address. `Authorization: Bearer ovf_...` (or `?key=`).
 
 | endpoint | returns |
 |---|---|
-| `GET /v1/health` | no key needed; `as_of` and the endpoint list |
-| `GET /v1/plans` | every farm's plan for the latest morning (the published `plans.json`) |
-| `GET /v1/farms/{farm_id}/plan` | one farm's plan |
+| `GET /v1/health` | no key; `as_of` and the endpoint list |
+| `GET /v1/plans` | every farm's plan for the latest morning |
+| `GET /v1/farms/{farm_id}/plan` | one farm |
 | `GET /v1/route` | the officer route |
 | `GET /v1/landscape` | the landscape analytics block and the forecast source |
 | `GET /v1/sources` | the data sources list |
 
-Every response is `{served_at, as_of, attribution, licence, data}`. 401 for a missing or revoked key, 429 past the key's daily limit (default 1000), 503 while a file is not published.
+Answers are `{served_at, as_of, attribution, licence, data}`; 401 without a live key, 429 past the key's daily limit
+(1000), 503 while a file is not published. Every call with a live key is logged against it.
 
-```bash
-curl -H "Authorization: Bearer ovf_..." https://<ref>.supabase.co/functions/v1/api/v1/farms/F0001/plan
-```
+## Routes behind the site
 
-## Checks after setup
+`POST /auth/signup`, `POST /auth/login`, `GET /auth/me`, `POST /auth/logout`; `PATCH /me`, `GET /me/deliveries`,
+`POST /me/delete`; `GET /terms`, `POST /terms/accept`, `GET /keys`, `POST /keys`, `DELETE /keys/{id}`;
+`GET /admin/overview`, `GET /admin/accounts`, `PATCH /admin/accounts/{id}`, `GET /admin/deliveries`, `GET /admin/keys`,
+`GET /admin/export.csv`. Sessions are bearer tokens (`ovs_...`) that live 30 days; ten wrong passwords lock an email
+for fifteen minutes; thirty sign-ups per address per server run.
 
-- Site: sign in with your email, fill the account page, confirm the row in Table editor, profiles.
-- Queue: `python intelligence/morning.py --data data/out` (dry run) lists the Supabase rows; `python intelligence/check_providers.py` shows the roster source.
-- API: `curl .../v1/health`, then create a key on the Developers page and call `/v1/plans`.
-- Policies: in the SQL editor as an `authenticated` role, `select * from profiles` returns only your own row.
+## Not done yet
+
+Password reset by email (there is no email provider; an admin can set a new password with a one-line script if
+needed), phone sign-in, and running the server somewhere other than the laptop and a tunnel.

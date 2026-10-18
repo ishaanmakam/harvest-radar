@@ -2,7 +2,7 @@
 // the map; the map, the aspect switch and the view chrome stay underneath (inert) until the page closes.
 // This module also owns the sign-in state shown in the header and in the page bar.
 import { h } from "./dom.js";
-import { configured, myProfile, onAuth, signOut as supabaseSignOut } from "./supabase.js";
+import { configured, myProfile, onAuth, signOut as backendSignOut } from "./backend.js";
 import { isStaff } from "./ui.js";
 import { renderAccount } from "./views/account.js";
 import { renderDeveloper } from "./views/developer.js";
@@ -162,7 +162,7 @@ export function initPages({ dataPromise }) {
 
   async function doSignOut() {
     try {
-      await supabaseSignOut();
+      await backendSignOut();
     } catch (err) {
       console.error(err);
     }

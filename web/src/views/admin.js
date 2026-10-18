@@ -1,6 +1,6 @@
 import { h } from "../dom.js";
 import { CHANNEL_LABEL, ROLE_LABEL, chip, fmtNum, titleCase } from "../format.js";
-import { KEY_COLUMNS, NOT_CONFIGURED, PROFILE_COLUMNS, client, configured } from "../supabase.js";
+import { NOT_CONFIGURED, adminAccounts, adminDeliveries, adminKeys, adminOverview, adminUpdate, configured } from "../backend.js";
 import { csvCell, downloadText, errorNote, fmtDateTime, fmtDay, isAdmin, isStaff, loading, maskPhone, notice, select, signInPrompt, stat, statusLine } from "../ui.js";
 
 const ROLES = ["farmer", "officer", "admin"];
@@ -8,45 +8,24 @@ const ROLES = ["farmer", "officer", "admin"];
 const CSV_COLUMNS = ["roster_id", "farm_id", "name", "phone", "language", "role", "email", "send_time", "timezone", "address", "lon", "lat", "created"];
 const DAY_MS = 864e5;
 
-function rows(result) {
-  if (result.error) throw new Error(result.error.message);
-  return result.data || [];
-}
-
-function dayKey(iso) {
-  const date = new Date(iso);
-  return Number.isNaN(date.getTime()) ? "" : date.toISOString().slice(0, 10);
-}
-
 function lastDays(n) {
   const today = Date.now();
   return Array.from({ length: n }, (_, i) => new Date(today - (n - 1 - i) * DAY_MS).toISOString().slice(0, 10));
 }
 
 async function loadAll() {
-  const since = new Date(Date.now() - 7 * DAY_MS).toISOString();
-  const [profiles, signups, runDates, keys, usage] = await Promise.all([
-    client.from("profiles").select(PROFILE_COLUMNS).order("roster_id").range(0, 4999).then(rows),
-    client.from("signups_per_day").select("day,signups").then(rows),
-    client.from("deliveries").select("run_date").order("run_date", { ascending: false }).range(0, 1999).then(rows),
-    client.from("api_keys").select(KEY_COLUMNS).then(rows),
-    client.from("api_usage").select("key_id,at,status").gte("at", since).range(0, 9999).then(rows),
-  ]);
-  const dates = [...new Set(runDates.map((r) => r.run_date).filter(Boolean))];
-  return { profiles, signups, dates, keys, usage };
+  const [overview, profiles, deliveries, keys] = await Promise.all([adminOverview(), adminAccounts(), adminDeliveries(), adminKeys()]);
+  const dates = (deliveries.runs || []).map((r) => r.run_date);
+  // usage rows in the shape keysSection counts: one entry per call day with its count
+  const usage = keys.flatMap((k) => Object.entries(k.by_day || {}).map(([day, n]) => ({ key_id: k.id, day, n })));
+  return { profiles, signups: overview.signups_per_day || [], dates, keys, usage, overview };
 }
 
 function loadRun(runDate) {
-  return client
-    .from("deliveries")
-    .select("id,run_date,roster_id,farm_id,role,channel,status,detail,dry_run,sent_at")
-    .eq("run_date", runDate)
-    .order("id")
-    .range(0, 4999)
-    .then(rows);
+  return adminDeliveries(runDate).then((d) => d.rows || []);
 }
 
-// ---------------------------------------------------------------- CSV (mirrors intelligence/roster_supabase.fetch_roster)
+// ---------------------------------------------------------------- CSV (mirrors intelligence/accounts.Accounts.roster_rows)
 function normalizePhone(phone) {
   const text = String(phone || "");
   const digits = text.replace(/\D/g, "");
@@ -131,14 +110,14 @@ function rosterSection(ctx, profiles) {
 
   async function update(p, patch, revert) {
     status.set(`Saving ${p.roster_id || p.name}...`);
-    const { error } = await client.from("profiles").update(patch).eq("id", p.id);
-    if (error) {
+    try {
+      const row = await adminUpdate(p.id, patch);
+      Object.assign(p, row || patch);
+      status.set(`Saved ${p.roster_id || p.name}.`, "ok");
+    } catch (err) {
       revert();
-      status.set(error.message, "warn");
-      return;
+      status.set(err.message, "warn");
     }
-    Object.assign(p, patch);
-    status.set(`Saved ${p.roster_id || p.name}.`, "ok");
   }
 
   function roleCell(p) {
@@ -262,7 +241,7 @@ function deliveriesSection(dates) {
   const body = h("div", {});
   const section = h("div", { class: "section" }, h("div", { class: "section-title" }, "Deliveries"));
   if (!dates.length) {
-    section.append(h("div", { class: "empty" }, "No morning runs have been logged yet. The queue writes here after each run when SUPABASE_URL and the service role key are set."));
+    section.append(h("div", { class: "empty" }, "No morning runs have been logged yet. The queue writes here after each run (dry runs included) when ACCOUNTS_DB is set."));
     return section;
   }
   let alive = true;
@@ -362,8 +341,7 @@ function keysSection(ctx, keys, usage) {
   const live = keys.filter((k) => !k.revoked_at).length;
   const perDay = new Map(lastDays(7).map((d) => [d, 0]));
   for (const row of usage) {
-    const key = dayKey(row.at);
-    if (perDay.has(key)) perDay.set(key, perDay.get(key) + 1);
+    if (perDay.has(row.day)) perDay.set(row.day, perDay.get(row.day) + (row.n || 0));
   }
   const total = [...perDay.values()].reduce((a, b) => a + b, 0);
   return h(

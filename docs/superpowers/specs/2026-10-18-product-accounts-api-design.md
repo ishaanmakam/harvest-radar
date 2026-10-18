@@ -1,5 +1,13 @@
 # Overfield as a product: accounts, admin, developer API — design
 
+> **Revision, later on 2026-10-18.** Supabase is out. Sign-in, profiles, developer keys, terms, the delivery log and the
+> admin pages now live in Overfield's own backend: `intelligence/accounts.py` (SQLite, PBKDF2 passwords, bearer sessions)
+> and `intelligence/accounts_api.py` (the routes), served by `intelligence/inbound_server.py` next to the webhooks and
+> exposed with a tunnel; the site talks to it through `web/src/backend.js`. Email-link sign-in became email and password,
+> because the email provider's rate limits and redirect rules stood between a farmer and their account. The data model,
+> roles, key format, limits and the `/v1` endpoints below are unchanged in meaning; read "Supabase" as "the accounts
+> database" and `backend/README.md` for how to run it.
+
 Date: 2026-10-18. Status: building. Companion to `2026-10-17-field-inspector-design.md` (the product itself), which still wins on what a plan is and how it is delivered.
 
 ## Why
