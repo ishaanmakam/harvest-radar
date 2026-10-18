@@ -101,3 +101,13 @@ spec's plans, route and deliveries do not depend on it; delete the file to switc
   and SMTP_FROM in `.env`; rows with an email get it, rows with a phone get the call and the text, rows with both get
   all three. `deliveries.json` gained the channel value `email` (CONTRACT IMPACT: additive).
 - Command-line sign-up: `python intelligence/signup.py --data data/out --roster <csv> --name "Ana" --address "..." --phone +1...`.
+
+## 9. The latest weather models (optional, additive)
+
+`python intelligence/forecast_models.py --data data/out` pulls the current runs of ECMWF IFS, NOAA GFS (with HRRR), DWD
+ICON, Canadian GEM, Meteo-France, the UK Met Office, JMA and NOAA's National Blend from Open-Meteo (free, no key) for the
+box centre and writes `weather_ensemble.json`: per day the median and range of rain, the share of models that put a
+shower, a blocking rain, the act-now rain or a soaking on that day, frost and hard-freeze agreement, gusts. When the file
+is present the plans say how many models agree ("16 mm of rain forecast on 2026-10-19 (6 of 8 weather models agree)")
+and the analytics use the ensemble median and shares instead of the single feed. The act-now rule itself stays on the
+pipeline's `weather.json`. Run it before the morning queue, or on a schedule; it takes one request.
