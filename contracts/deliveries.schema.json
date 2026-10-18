@@ -13,7 +13,7 @@
         "properties": {
           "date": {"type": "string"},
           "roster_id": {"type": "string"},
-          "channel": {"enum": ["grok_voice", "photon_sms"]},
+          "channel": {"enum": ["grok_voice", "photon_sms", "email"]},
           "status": {"enum": ["pending", "sent", "failed"]},
           "detail": {"type": "string", "description": "Short provider result"}
         }

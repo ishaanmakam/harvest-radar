@@ -13,6 +13,7 @@ import re
 from pathlib import Path
 
 from common import load_env
+from analytics import farm_outlook
 
 KINDS = ["harvest_ready", "harvest_before_rain", "establishment", "burn_scar", "fire", "flood", "stress", "visible_change"]
 ROSTER_COLUMNS = ["roster_id", "farm_id", "name", "phone", "language", "role"]
@@ -95,6 +96,7 @@ class Tools:
         self.caller = caller
         self._plans = None
         self._route = None
+        self._analytics = None
 
     # ---- scope ----
     @property
@@ -142,6 +144,26 @@ class Tools:
         if self.role != "officer":
             raise PermissionError("Only the officer session can read the route.")
         return self.route()
+
+    def analytics(self):
+        if self._analytics is None:
+            p = self.data_dir / "analytics.json"
+            self._analytics = json.loads(p.read_text(encoding="utf-8")) if p.exists() else {}
+        return self._analytics
+
+    def get_outlook(self, farm_id=None):
+        """The analytics layer's outlook for a farm beyond today's plan: yield band, harvest now or wait, the chance to
+        finish before the rain, soil water, anything unusual versus the neighbours. Same scope rules as get_plan;
+        empty lines with a note when the analytics have not run for this season."""
+        fid = self._farm(farm_id)
+        doc = self.analytics()
+        if not doc:
+            return {"farm_id": fid, "as_of": None, "lines": [], "note": "no analytics for this season yet"}
+        lines = farm_outlook(doc, fid)
+        out = {"farm_id": fid, "as_of": doc.get("as_of"), "lines": lines, "detail": doc.get("fields", {}).get(fid, {})}
+        if not lines:
+            out["note"] = "nothing beyond today's plan for this farm"
+        return out
 
     def get_change(self, farm_id=None):
         """What changed on the farm since the previous clear pass: the visible_change check, with the plan's date."""

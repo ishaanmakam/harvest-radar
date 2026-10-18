@@ -234,7 +234,10 @@ def farm_plan(rec, passes, forecast, hotspots, insight, today: date, th=None, fa
 
     def frost_temp():
         t = frost[0][1]
-        return f"{t:.0f} °C, a hard freeze" if t <= wm.HARD_FREEZE_C else f"{t:.0f} °C"
+        shown = f"{t:.1f}".rstrip("0").rstrip(".")          # -0.5 stays -0.5; -2.0 reads -2; never "-0"
+        if shown == "-0":
+            shown = "0"
+        return f"{shown} °C, a hard freeze" if t <= wm.HARD_FREEZE_C else f"{shown} °C"
 
     def frost_words(mature):
         if mature:
