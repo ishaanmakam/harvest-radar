@@ -70,7 +70,8 @@ export function renderRegionCard(region, { onBack = null, onMap = null } = {}) {
     ])) : null,
     h("p", { class: "region-note" }, HONESTY_LINE),
     h("div", { class: "region-actions" },
-      onMap ? h("button", { class: "world-open", type: "button", onclick: onMap }, "Open the map here") : null,
+      h("a", { class: "world-open", href: "#account" }, "Create an account for a farm here"),
+      onMap ? h("button", { class: "region-back", type: "button", onclick: onMap }, "Open the season map here") : null,
       onBack ? h("button", { class: "region-back", type: "button", onclick: onBack }, "Return to the globe") : null),
   );
 }

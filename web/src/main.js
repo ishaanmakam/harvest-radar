@@ -1,6 +1,6 @@
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./style.css";
-import { loadData } from "./data.js";
+import { loadData, SEASON_ID } from "./data.js";
 import { store } from "./state.js";
 import { createMap } from "./map.js";
 import { renderPlan } from "./panel.js";
@@ -98,13 +98,7 @@ function setIntroStats(data) {
 
 async function start() {
   const signup = $("signup");
-  if (SIGNUP_URL) signup.href = SIGNUP_URL;
-  else {
-    signup.href = `#${EXPLAINER_ID}`;
-    signup.removeAttribute("target");
-    signup.removeAttribute("rel");
-    signup.title = "The morning plan, step by step";
-  }
+  signup.href = "#account"; // account creation is in the site; the server sign-up page stays available at SIGNUP_URL
 
   const headline = $("headline");
   const dock = $("dock");
@@ -214,7 +208,7 @@ async function start() {
     });
   }
 
-  if (!SIGNUP_URL) {
+  if (!SIGNUP_URL && signup.getAttribute("href") !== "#account") {
     signup.addEventListener("click", (event) => {
       event.preventDefault();
       if (chromeShown) showExplainer();
@@ -381,13 +375,22 @@ async function start() {
     tooltip.style.top = `${y}px`;
   }
 
+  /** [[w, s], [e, n]] of a field collection, or null when there are no fields. */
+  function fieldsBounds(fc) {
+    let w = Infinity, s = Infinity, e = -Infinity, n = -Infinity;
+    for (const f of fc?.features || []) {
+      const rings = f.geometry?.type === "Polygon" ? [f.geometry.coordinates[0]] : f.geometry?.type === "MultiPolygon" ? f.geometry.coordinates.map((p) => p[0]) : [];
+      for (const ring of rings) for (const [x, y] of ring) { if (x < w) w = x; if (x > e) e = x; if (y < s) s = y; if (y > n) n = y; }
+    }
+    return Number.isFinite(w) ? [[w, s], [e, n]] : null;
+  }
   const frameBounds = data.frames?.bounds;
   const aoiBounds = frameBounds
     ? [
         [frameBounds[0], frameBounds[1]],
         [frameBounds[2], frameBounds[3]],
       ]
-    : [
+    : fieldsBounds(data.fields) || [
         [data.bbox[0], data.bbox[1]],
         [data.bbox[2], data.bbox[3]],
       ];
@@ -547,12 +550,8 @@ async function start() {
     regionCopy.replaceChildren(renderRegionCard(region, {
       onBack: hideRegion,
       onMap: () => {
-        hideRegion();
-        handoff({
-          live: false, lat: region.lat, lng: region.lon, name: `${region.name}, ${region.country}`, zoom: 13.2,
-          body: region.headline || "",
-          overlay: Array.isArray(region.bbox) && region.bbox.length === 4 ? { id: region.id, bbox: region.bbox } : null,
-        });
+        // the region has its own stand-in season: reload straight into it
+        window.location.href = `${window.location.pathname}?season=${encodeURIComponent(region.id)}`;
       },
     }));
     $("earth-copy").hidden = true;
@@ -595,6 +594,7 @@ async function start() {
     });
     globe.start();
     globe.onWorldChange(() => hideRegion());
+    if (SEASON_ID) handoff({ live: true }); // a regional season opens on its map at once
     if (marsView.isOpen()) globe.stop();
     // Worlds beyond Earth load lazily; without the file the globe shows Earth alone and hides the controls.
     (async () => {

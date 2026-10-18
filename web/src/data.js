@@ -1,4 +1,11 @@
 import { SEVERITY } from "./format.js";
+/** ?season=<id> reads a regional stand-in season from data/global/seasons/<id>/; otherwise the real season. */
+export const SEASON_ID = (() => {
+  const id = new URLSearchParams(window.location.search).get("season");
+  return id && /^[a-z0-9-]+$/.test(id) ? id : null;
+})();
+export const DATA_BASE = SEASON_ID ? `global/seasons/${SEASON_ID}/` : "out/";
+
 
 // The four farm files are one group: real fields joined to mock plans would show the wrong flags,
 // because real and mock farm ids overlap (F0001...) but are different farms. The group comes from
@@ -62,7 +69,7 @@ async function loadFile(path, pinned) {
     const data = await fetchJson(`${pinned}/${path}`);
     return { data, source: data ? pinned : null, base: pinned };
   }
-  const out = await fetchJson(`out/${path}`);
+  const out = await fetchJson(`${DATA_BASE}${path}`);
   if (out) return { data: out, source: "out", base: "out" };
   const mock = await fetchJson(`mock/${path}`);
   if (mock) return { data: mock, source: "mock", base: "mock" };
@@ -81,7 +88,7 @@ async function loadGroup(pinned) {
   };
   if (pinned) return { files: await fromBase(pinned), realFields: null };
 
-  const [outFields, outPlans] = await Promise.all([fetchJson("out/fields.geojson"), fetchJson("out/plans.json")]);
+  const [outFields, outPlans] = await Promise.all([fetchJson(`${DATA_BASE}fields.geojson`), fetchJson(`${DATA_BASE}plans.json`)]);
   if (outFields && outPlans) return { files: await fromBase("out", { fields: outFields, plans: outPlans }), realFields: null };
   return { files: await fromBase("mock"), realFields: outFields || null };
 }

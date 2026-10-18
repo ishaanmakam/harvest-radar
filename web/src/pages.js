@@ -7,8 +7,10 @@ import { isStaff } from "./ui.js";
 import { renderDeveloper } from "./views/developer.js";
 import { renderAdmin } from "./views/admin.js";
 import { renderData } from "./views/data.js";
+import { renderAccount } from "./views/account.js";
 
 const PAGES = {
+  account: { title: "Account", render: renderAccount },
   developers: { title: "Developers", render: renderDeveloper },
   admin: { title: "Admin", render: renderAdmin },
   data: { title: "Data sources", render: renderData },
@@ -96,6 +98,7 @@ export function initPages({ dataPromise }) {
     for (const slot of slots) {
       if (!auth.user) {
         slot.replaceChildren(
+          h("button", { class: "btn btn-ghost auth-btn", type: "button", onclick: () => go("account") }, "Sign in"),
         );
         continue;
       }

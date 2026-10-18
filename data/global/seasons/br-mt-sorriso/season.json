@@ -1,0 +1,48 @@
+{
+  "name": "Sorriso, Mato Grosso, Brazil",
+  "crop_system": "corn_soy",
+  "bbox": [
+    -55.885,
+    -12.58,
+    -55.815,
+    -12.52
+  ],
+  "season_start": "2026-06-01",
+  "as_of": "2026-10-17",
+  "crs_processing": "EPSG:4326",
+  "resolution_deg": 0.0001,
+  "zones_grid": [
+    3,
+    3
+  ],
+  "sowing_window_days": 14,
+  "forecast_horizon_days": 14,
+  "machine_rate_ha_per_day": 40.0,
+  "share_needing_chc": 0.15,
+  "baseline_request_lag_days": 2,
+  "max_service_km": 40,
+  "assumptions": {
+    "landscape": "Corn and soybeans, Story County, Iowa. Both crops mature by late September and dry down standing in the field; soybean harvest runs late September to mid October, corn harvest October into early November. Residue burning is rare here, so burn_scar and fire will mostly read clear.",
+    "season_start": "The pipeline season starts 2026-06-01 (frames available from then). Peak greenness in late July is still captured; an April start would add the bare-soil baseline but needs the cube re-pulled.",
+    "sowing_window_days": "ASSUMPTION: days after the combine to drill a cover crop (cereal rye) or finish fall tillage. Only the dispatch extension uses it as a deadline.",
+    "machine_rate_ha_per_day": "ASSUMPTION ~100 acres/day for one combine (12-row corn head or 35 ft platform). Dispatch extension only; the morning plans do not use it.",
+    "share_needing_chc": "ASSUMPTION: share of row-crop area combined by a custom operator rather than an owned machine; most Iowa operations own a combine, 15% is a scenario placeholder. Dispatch extension only.",
+    "baseline_request_lag_days": "ASSUMPTION: a custom operator is booked about 2 days after the field is judged ready. Dispatch extension only.",
+    "max_service_km": "ASSUMPTION: custom crews work a county-scale radius; 40 km covers the whole box from any simulated depot in config/chcs.json.",
+    "thresholds": "harvest_ndvi_max 0.25 separates residue (about 0.15 to 0.25) from dry standing corn and soybeans (about 0.25 to 0.40): on synthetic corn/soy seasons the old 0.35 called more than half the standing fields harvested weeks early. To be checked against real fields and USDA Crop Progress (intelligence/validate_usda.py). No sown_ndvi_min: no following crop inside the window, so the regrow check is off. frost_tmin_c: a forecast minimum at or below it within the rain lookahead triggers harvest-versus-weather on a ready crop; needs forecast tmin_c in weather.json.",
+    "crop_system": "corn_soy drives the mock generator (field sizes, dry-down phenology, rare burning, autumn frost) and nothing else; the models themselves are crop-agnostic. rice_wheat is the Punjab stand-in."
+  },
+  "thresholds": {
+    "peak_ndvi_min": 0.55,
+    "harvest_ndvi_max": 0.25,
+    "harvest_drop_min": 0.12,
+    "burn_nbr_max": -0.05,
+    "clear_fraction_min": 0.6,
+    "default_peak_to_harvest_days": 58,
+    "peak_plateau_drop": 0.04,
+    "rain_act_now_mm": 15.0,
+    "rain_lookahead_days": 3,
+    "frost_tmin_c": 0.0
+  },
+  "region_id": "br-mt-sorriso"
+}
