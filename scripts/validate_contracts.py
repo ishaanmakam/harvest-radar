@@ -32,6 +32,9 @@ FILES = {
     "deliveries.json": "deliveries.schema.json",
 }
 
+# Written by the morning queue on its first run, so never required, even with --strict
+OPTIONAL = {"deliveries.json"}
+
 CHECK_KINDS = ["harvest_ready", "harvest_before_rain", "establishment", "burn_scar", "fire", "flood", "stress", "visible_change"]
 STATUS_RANK = {"clear": 0, "watch": 1, "act_now": 2}
 
@@ -51,7 +54,7 @@ def main():
         path = data_dir / rel
         if not path.exists():
             msg = f"missing {rel}"
-            (errors.append(msg) if strict else print(f"  WARN {msg}"))
+            (errors.append(msg) if strict and rel not in OPTIONAL else print(f"  WARN {msg}"))
             continue
         try:
             doc = load(path)
