@@ -127,7 +127,7 @@ class TestRealRun:
 
 class TestRendering:
     def test_farmer_words_include_every_check_and_the_clear_ones(self):
-        text = q.render_plan(plan("F0002", "act_now"), "pa")
+        text = q.render_plan(plan("F0002", "act_now"), "en")
         for label in ("harvest", "rain", "establish", "burn", "fire", "flood", "stress", "change"):
             assert label in text.lower()
         assert "clear" in text.lower() and "act now" in text.lower()

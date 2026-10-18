@@ -72,6 +72,27 @@ def _span(a, b):
     return f"{s(a)} to {s(b)}"
 
 
+def _cue_norm(cue):
+    """A Perceptron cue with the fields decide relies on coerced: where/detail are strings ('' when null or not a
+    string, the spec's 'empty when it does not apply'), date is YYYY-MM-DD (an ISO datetime is cut to its day)."""
+    c = dict(cue or {})
+    c["where"] = c["where"] if isinstance(c.get("where"), str) else ""
+    c["detail"] = c["detail"] if isinstance(c.get("detail"), str) else ""
+    dt = c.get("date")
+    c["date"] = str(dt)[:10] if dt else None
+    return c
+
+
+def forecast_pairs(dates, precip):
+    """(date, mm) per forecast day. A precip array that is shorter or longer than the dates is padded with None /
+    cut, with a warning, instead of silently dropping days (zip would)."""
+    dates, precip = list(dates or []), list(precip or [])
+    if len(precip) != len(dates):
+        print(f"  WARN weather forecast has {len(dates)} dates but {len(precip)} precip values; padding with null")
+        precip = (precip + [None] * len(dates))[:len(dates)]
+    return [(d(x), mm) for x, mm in zip(dates, precip)]
+
+
 def _cue_text(cue, default):
     """A Perceptron cue's own words (or a default), tagged with its confidence."""
     text = cue.get("detail") or default
@@ -80,15 +101,16 @@ def _cue_text(cue, default):
     return f"{text} ({tag})"
 
 
-def farm_plan(rec, passes, forecast, hotspots, insight, today: date, th=None):
+def farm_plan(rec, passes, forecast, hotspots, insight, today: date, th=None, fallback_as_of=None):
     """One farm's plan. passes = [(date, ndvi, nbr)] clear passes; forecast = [(date, precip_mm)];
-    hotspots = FIRMS detections in this field; insight = per-field Perceptron cues or None."""
+    hotspots = FIRMS detections in this field; insight = per-field Perceptron cues (kind -> cue) or None;
+    fallback_as_of = the landscape's latest clear pass, used when this farm has no clear pass of its own."""
     th = {**DEFAULTS, **(th or {})}
     passes = sorted(p for p in passes if p[1] is not None)
     latest = passes[-1] if passes else None
     prev = passes[-2] if len(passes) > 1 else None
-    as_of = latest[0] if latest else today
-    insight = insight or {}
+    as_of = latest[0] if latest else (fallback_as_of or today)
+    insight = {k: _cue_norm(v) for k, v in (insight or {}).items()}
     perceptron = False
     stage = rec.get("stage", "unknown")
     standing = stage in ("growing", "maturing", "ready")
@@ -133,13 +155,18 @@ def farm_plan(rec, passes, forecast, hotspots, insight, today: date, th=None):
 
     # 3. establishment
     peak = rec.get("peak_ndvi")
+    too_few = False
+    if peak is None and passes:                      # the model gave up (too few passes) but the passes still show the crop
+        peak = max(p[1] for p in passes)
     if peak is None:
-        checks.append(_check("establishment", "watch", "Too few clear passes to confirm the crop established"))
+        too_few = True
+        checks.append(_check("establishment", "watch", "Too few clear passes to judge whether the crop established"))
     elif peak < th["peak_ndvi_min"]:
         checks.append(_check("establishment", "watch",
                              f"Never reached crop-level greenness (peak NDVI {peak:.2f}, crop level {th['peak_ndvi_min']:.2f})"))
     else:
-        checks.append(_check("establishment", "clear", f"Crop established: peak NDVI {peak:.2f} on {rec.get('peak_date')}"))
+        when = f" on {rec.get('peak_date')}" if rec.get("peak_date") else " in the clear passes"
+        checks.append(_check("establishment", "clear", f"Crop established: peak NDVI {peak:.2f}{when}"))
 
     # 4. burn scar
     scar_date, scar_where, scar_note = None, "", ""
@@ -152,7 +179,7 @@ def farm_plan(rec, passes, forecast, hotspots, insight, today: date, th=None):
         cue_date = d(cue["date"])
         scar_date = min(scar_date, cue_date) if scar_date else cue_date
         scar_where, scar_note = cue.get("where", ""), "; " + _cue_text(cue, "confirmed by Perceptron")
-    if scar_date and latest and scar_date == latest[0]:
+    if scar_date and (latest is None or scar_date >= latest[0]):     # on or after the last index pass = new
         checks.append(_check("burn_scar", "act_now", f"New burn scar seen in the latest pass ({s(scar_date)}){scar_note}",
                              where=scar_where, window=_win(scar_date)))
     elif scar_date:
@@ -229,7 +256,7 @@ def farm_plan(rec, passes, forecast, hotspots, insight, today: date, th=None):
         if harvest and prev[0] < harvest <= latest[0]:
             checks.append(_check("visible_change", "watch", f"Field cut between {s(prev[0])} and {s(latest[0])}",
                                  window=_win(prev[0], latest[0])))
-        elif scar_date and scar_date == latest[0]:
+        elif scar_date and scar_date >= latest[0]:
             checks.append(_check("visible_change", "watch", f"Burn scar appeared between {s(prev[0])} and {s(latest[0])}",
                                  window=_win(prev[0], latest[0])))
         elif abs(latest[1] - prev[1]) >= th["change_ndvi_min"]:
@@ -252,6 +279,8 @@ def farm_plan(rec, passes, forecast, hotspots, insight, today: date, th=None):
         w = by_kind["harvest_ready"]["window"]
         when = f" for {w['start']} to {w['end']}" if w else ""
         today_line = f"Crop looks ready: line up the harvester and a residue machine{when}."
+    elif key == ("watch", "establishment") and too_few:
+        today_line = "Too few clear satellite passes to judge the crop yet: the officer will check by phone."
     else:
         today_line = TODAY_TEXT[key]
     return {
@@ -300,7 +329,12 @@ def run(data_dir: Path):
     insights = read_json(data_dir, "insights.json", default={"items": []})
 
     dates = [d(x) for x in ts["dates"]]
-    forecast = list(zip((d(x) for x in weather["forecast"]["dates"]), weather["forecast"]["precip_mm"]))
+    fc = weather.get("forecast") or {}
+    forecast = forecast_pairs(fc.get("dates", []), fc.get("precip_mm", []))
+    # the landscape's latest clear pass: the as_of for a farm that has no clear pass of its own, and the document's
+    clear_days = [i for i, _ in enumerate(dates)
+                  if any(i < len(sr["ndvi"]) and sr["ndvi"][i] is not None for sr in ts["fields"].values())]
+    latest_clear = dates[clear_days[-1]] if clear_days else today
     hotspots = defaultdict(list)
     for det in fires["detections"]:
         if det.get("field_id"):
@@ -318,11 +352,12 @@ def run(data_dir: Path):
         rec = recs.get(fid) or {"field_id": fid, "zone_id": p["zone_id"], "stage": "unknown", "peak_ndvi": None}
         series = ts["fields"].get(fid, {"ndvi": [], "nbr": []})
         passes = [(dt, v, b) for dt, v, b in zip(dates, series["ndvi"], series["nbr"]) if v is not None]
-        plan = farm_plan(rec, passes, forecast, hotspots.get(fid, []), cues.get(fid), today, th)
+        plan = farm_plan(rec, passes, forecast, hotspots.get(fid, []), cues.get(fid), today, th,
+                         fallback_as_of=latest_clear)
         plan["zone_id"] = p["zone_id"]
         plans.append(plan)
     route = build_route(plans, today)
-    plans_doc = {"as_of": max((p["as_of"] for p in plans), default=s(today)), "source": "intelligence/decide.py",
+    plans_doc = {"as_of": s(latest_clear), "source": "intelligence/decide.py",
                  "vision_verdict": insights.get("verdict"), "plans": plans}
 
     errs = _validate("plans", plans_doc) + _validate("route", route)

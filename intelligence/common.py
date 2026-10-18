@@ -38,9 +38,13 @@ def read_json(data_dir: Path, name: str, default=None):
 
 
 def write_json(data_dir: Path, name: str, obj):
+    """Atomic: the file is either the previous complete document or the new one, never a truncated one."""
+    import os
     p = Path(data_dir) / name
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(obj, separators=(",", ":")))
+    tmp = p.with_name(p.name + ".tmp")
+    tmp.write_text(json.dumps(obj, separators=(",", ":")))
+    os.replace(tmp, p)
     print(f"  wrote {p}")
 
 

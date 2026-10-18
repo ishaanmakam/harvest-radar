@@ -49,10 +49,10 @@ class TestUnknownCaller:
 class TestFarmer:
     def test_default_question_returns_own_plan_with_every_check(self, data, roster):
         reply = inbound.answer("+91 98765 00003", "what should I do today", data, roster)
-        assert "F0002" in reply and "[hi]" in reply
-        assert "Field cut between" in reply
-        for label in ("Fire", "Flood", "Burn scar", "Establishment"):
-            assert label in reply                                     # clear checks are read out too
+        assert "F0002" in reply
+        assert any("ऀ" <= ch <= "ॿ" for ch in reply)         # rendered in the roster language (hi)
+        assert "Field cut between" in reply                            # free-text detail (English until translated)
+        assert reply.count("\n- ") == 8                                # clear checks are read out too
 
     def test_cannot_read_another_farm(self, data, roster):
         reply = inbound.answer("+919876500003", "tell me about F0001", data, roster)
@@ -68,12 +68,17 @@ class TestFarmer:
 
 class TestOfficer:
     def test_default_question_is_the_route(self, data, roster):
+        import queue_morning as q
         reply = inbound.answer("+919876500001", "where do I go first", data, roster)
-        assert "route" in reply.lower() and "F0002" in reply and "call" in reply.lower()
+        pa = q.pack("pa")
+        assert reply.startswith(pa["route_head"].split("{")[0])          # the officer's language is Punjabi
+        assert "1. " in reply and "F0002" in reply and pa["actions"]["call"] in reply
 
     def test_named_farm_gives_that_plan(self, data, roster):
+        import queue_morning as q
         reply = inbound.answer("+919876500001", "plan for F0001 please", data, roster)
-        assert "farm F0001" in reply and "All eight checks are clear" in reply
+        assert "F0001" in reply and q.pack("pa")["all_clear"] in reply
+        assert reply.count("\n- ") == 8
 
     def test_named_farm_change(self, data, roster):
         reply = inbound.answer("+919876500001", "what changed at f0002", data, roster)
@@ -86,7 +91,9 @@ class TestOfficer:
 
 class TestChannels:
     def test_imessage_handle_resolves_like_a_phone(self, data, roster):
-        assert "route" in inbound.answer("tel:+919876500001", "route", data, roster).lower()
+        import queue_morning as q
+        reply = inbound.answer("tel:+919876500001", "route", data, roster)
+        assert reply.startswith(q.pack("pa")["route_head"].split("{")[0]) and "F0002" in reply
 
     def test_tools_json_contract_for_voice_agent(self, data, roster):
         """The voice agent calls the same three tools; expose them as a JSON-friendly dispatcher."""
