@@ -3,6 +3,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { makeAtmosphere } from "./atmosphere.js";
 import { latLngFromVector3, latLngToVector3, subsolarPoint } from "./geo.js";
 import { createSatellites } from "./satellites.js";
+import { createWorlds } from "./worlds.js";
 import { FEATURED } from "../places.js";
 import colorUrl from "../assets/earth/earth_atmos_2048.jpg";
 import normalUrl from "../assets/earth/earth_normal_2048.jpg";
@@ -143,7 +144,7 @@ function makeStars() {
   return points;
 }
 
-export function createGlobe(container, { bounds, onEnter, onToast }) {
+export function createGlobe(container, { bounds, onEnter, onToast, worldsHosts = null, onOpenMars = null, introVisible = null, orbiters = null }) {
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
@@ -238,6 +239,7 @@ export function createGlobe(container, { bounds, onEnter, onToast }) {
 
   const pickMeshes = [];
   const pulses = [];
+  const markerGroups = [];
   for (const place of FEATURED) {
     const local = latLngToVector3(place.lat, place.lng, 1.012);
     const group = new THREE.Group();
@@ -278,6 +280,7 @@ export function createGlobe(container, { bounds, onEnter, onToast }) {
     group.add(pick);
     pickMeshes.push(pick);
     earth.add(group);
+    markerGroups.push(group);
   }
 
   // Real satellites from the CelesTrak snapshot; the visit arc below fires when a Sentinel-2 nears the farms.
@@ -301,6 +304,31 @@ export function createGlobe(container, { bounds, onEnter, onToast }) {
   );
   glow.visible = false;
   earth.add(arcLine, glow);
+
+  // Other worlds along a line in space; Earth keeps everything it has and hides its extras while another world is focused.
+  const worlds = createWorlds({
+    scene, camera, controls, domElement: renderer.domElement, earth, label, reduced,
+    legendHost: container.parentElement || container,
+    copyHost: worldsHosts?.copyHost || container, navHost: worldsHosts?.navHost || container,
+    hooks: {
+      onOpenMars,
+      introVisible: introVisible || (() => true),
+      orbiters: () => orbiters?.() || [],
+      sunWorld: () => sunWorld,
+      onFocus(def) {
+        const home = def.kind === "home";
+        sats.setVisible(home);
+        for (const g of markerGroups) g.visible = home;
+        if (!home) {
+          arcLine.visible = false;
+          glow.visible = false;
+        }
+        hovered = null;
+        label.hidden = true;
+      },
+    },
+  });
+  if (!worldsHosts) worlds.setEnabled(false);
 
   let specCanvas = null;
   let specCtx = null;
@@ -361,12 +389,12 @@ export function createGlobe(container, { bounds, onEnter, onToast }) {
   renderer.domElement.addEventListener("pointermove", (event) => {
     if (fly.active) return;
     setRay(event);
-    const hits = raycaster.intersectObjects(pickMeshes, false);
-    hovered = hits.find((hit) => facingCamera(hit.object) > 0.08)?.object || null;
+    const hits = raycaster.intersectObjects(worlds.isEarth() ? pickMeshes : worlds.pickMeshes(), false);
+    hovered = hits.find((hit) => (worlds.isEarth() ? facingCamera(hit.object) > 0.08 : true))?.object || null;
     renderer.domElement.style.cursor = hovered ? "pointer" : "";
   });
   renderer.domElement.addEventListener("click", (event) => {
-    if (fly.active || !pointerDown) return;
+    if (fly.active || !pointerDown || !worlds.isEarth()) return;
     if (Math.hypot(event.clientX - pointerDown.x, event.clientY - pointerDown.y) > 5) return;
     setRay(event);
     const markerHit = raycaster.intersectObjects(pickMeshes, false).find((hit) => facingCamera(hit.object) > 0.08);
@@ -518,7 +546,7 @@ export function createGlobe(container, { bounds, onEnter, onToast }) {
       return;
     }
     hovered.getWorldPosition(labelPos);
-    const facing = labelPos.clone().normalize().dot(camera.position.clone().normalize());
+    const facing = worlds.isEarth() ? labelPos.clone().normalize().dot(camera.position.clone().normalize()) : 1;
     const ndc = labelPos.clone().project(camera);
     if (facing < 0.05 || ndc.z > 1) {
       label.hidden = true;
@@ -537,18 +565,21 @@ export function createGlobe(container, { bounds, onEnter, onToast }) {
     last = now;
     elapsed += delta;
     if (fly.active) stepFly();
-    else if (!dragging) {
+    else if (!dragging && worlds.isEarth()) {
       const idle = elapsed - idleSince;
       if (idle > SPIN_RESUME_AFTER) {
         const ramp = Math.min(1, (idle - SPIN_RESUME_AFTER) / SPIN_RAMP);
         earth.rotation.y += delta * (reduced ? 0.004 : SPIN_RATE) * easeInOut(ramp);
       }
     }
-    if (!fly.active) controls.update();
+    worlds.update(delta, elapsed);
+    if (!fly.active && !worlds.moving()) controls.update();
     camera.updateMatrixWorld();
     earth.updateMatrixWorld();
-    sats.update(delta, camera, viewWidth, viewHeight);
-    updateArc(sats.nearestSentinel(aoiDir));
+    if (worlds.isEarth()) {
+      sats.update(delta, camera, viewWidth, viewHeight);
+      updateArc(sats.nearestSentinel(aoiDir));
+    }
     const pulse = (elapsed % 2) / 2;
     for (const ring of pulses) {
       ring.scale.setScalar(1 + pulse * 2.4);
@@ -580,6 +611,11 @@ export function createGlobe(container, { bounds, onEnter, onToast }) {
   return {
     start,
     stop,
+    setWorlds: worlds.setWorlds,
+    showWorld: (id) => worlds.focusId(id, { instant: true }),
+    stepWorld: worlds.step,
+    currentWorld: worlds.current,
+    onWorldChange: worlds.onChange,
     flyIn() {
       beginAim(aoiDir, 1.8, () => {
         if (onEnter) onEnter({ live: true, lat: story.lat, lng: story.lng, name: story.name });
@@ -601,6 +637,7 @@ export function createGlobe(container, { bounds, onEnter, onToast }) {
     dispose() {
       stop();
       observer.disconnect();
+      worlds.dispose();
       controls.dispose();
       sats.dispose();
       atmosphere.dispose();

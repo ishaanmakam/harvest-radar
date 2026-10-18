@@ -22,6 +22,7 @@ const vertexShader = `
 // On the back shell the visible band runs from n·v = -uInner (right at the Earth's limb) to 0
 // (the shell's own silhouette), so t goes 1 → 0 across the halo.
 const haloFragment = `
+  uniform vec3 uTint;
   uniform vec3 uSun;
   uniform vec3 uCamPos;
   uniform float uInner;
@@ -39,11 +40,12 @@ const haloFragment = `
     vec3 warm = vec3(1.0, 0.62, 0.38);
     vec3 col = mix(blue, warm, terminator * 0.55);
     float strength = band * (0.08 + 0.72 * day + 0.45 * terminator * day);
-    gl_FragColor = vec4(col * strength, strength);
+    gl_FragColor = vec4(col * uTint * strength, strength);
   }
 `;
 
 const rimFragment = `
+  uniform vec3 uTint;
   uniform vec3 uSun;
   uniform vec3 uCamPos;
   varying vec3 vNormal;
@@ -57,16 +59,17 @@ const rimFragment = `
     float terminator = 1.0 - smoothstep(0.0, 0.4, abs(sunDot));
     vec3 col = mix(vec3(0.42, 0.68, 1.0), vec3(1.0, 0.7, 0.45), terminator * 0.5);
     float strength = fresnel * (0.05 + 0.5 * day + 0.25 * terminator);
-    gl_FragColor = vec4(col * strength, strength);
+    gl_FragColor = vec4(col * uTint * strength, strength);
   }
 `;
 
-export function makeAtmosphere(radius) {
+export function makeAtmosphere(radius, tint = 0xffffff) {
   const outerRadius = radius * 1.035;
   const uniforms = {
     uSun: { value: new THREE.Vector3(1, 0, 0) },
     uCamPos: { value: new THREE.Vector3(0, 0, 3) },
     uInner: { value: Math.sqrt(1 - (radius / outerRadius) ** 2) },
+    uTint: { value: new THREE.Color(tint) },
   };
   const halo = new THREE.Mesh(
     new THREE.SphereGeometry(outerRadius, 72, 72),

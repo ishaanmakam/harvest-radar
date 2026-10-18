@@ -4,7 +4,7 @@ Generated 2026-10-18 from `web/public/data/sources.json`, the same list the site
 
 Overfield cross-checks several sources because no single one is enough on its own. Imagery says what a field looks like today, weather says what is coming, fire feeds say what happened overnight, soil and terrain say why two neighbouring fields differ, and official statistics say whether the satellite reading can be trusted. Every check in a morning plan traces back to the sources below.
 
-**Counts:** 33 sources; 24 need no key; 9 need a key or an account.
+**Counts:** 42 sources; 33 need no key; 9 need a key or an account.
 
 ## Satellite imagery
 
@@ -156,6 +156,30 @@ Overfield cross-checks several sources because no single one is enough on its ow
 
 - **USDA NASS Crop Progress.** The satellite harvest model is only trusted because it can be scored against the official weekly numbers. (.env.example:30, config/region.json:32, data/mock/usda_crop_progress.json, data/mock/validation_usda.json and 36 more)
 
+## Mars (beyond Earth)
+
+| Source | Provider | What we use it for | Cadence | Resolution | Licence | Key | Live or cached |
+|---|---|---|---|---|---|---|---|
+| [MOLA MEGDR elevation, 16 pixels per degree](https://pds-geosciences.wustl.edu/mgs/urn-nasa-pds-mgs_mola_topography_derived/meg016/megt90n000eb.img) | NASA PDS Geosciences Node (MGS MOLA) | Elevation for the low-ground check, the regional slope shown on every Mars site card, the hillshade behind the painted globe and maps, and the thumbnail fallback. | static (1999 to 2001 mission data) | 3.7 km (16 pixels per degree) | NASA data, public domain | no | downloaded once and cached |
+| [SWIM 2025 ice consistency maps (0-1 m, 1-5 m, >5 m)](https://swim.psi.edu/SWIM4MIMProducts.php) | Subsurface Water Ice Mapping project, Planetary Science Institute | The ice check: consistency of neutron, radar, thermal and landform evidence with shallow ice, at 0-1 m and 1-5 m depth. | 2025 release | 3 km | Public SWIM products; cite the SWIM team (PSI) | no | downloaded once through the product page form and cached |
+| [MGS TES nighttime thermal inertia, 20 pixels per degree](https://se.psi.edu/inertia/nmap2003.bin) | Putzig and Mellon (Icarus 2005), Planetary Science Institute | The plume-safe-ground check: very low inertia is loose dust, very high is rock and bedrock, in between is firm packed soil. | static (1999 to 2001 mission data) | 3 km (20 pixels per degree) | Public map from the authors; cite the paper | no | downloaded once and cached |
+| [MGS TES albedo mosaic, 7410 m](https://planetarymaps.usgs.gov/mosaic/Mars_MGS_TES_Albedo_mosaic_global_7410m.tif) | USGS Astrogeology Science Center | The dust context shown on every Mars site card, and the colour of the painted globe and map. | static | 7.4 km | USGS data, public domain | no | downloaded once and cached |
+| [USGS Mars Global Geologic Map, SIM 3292](https://astrogeology.usgs.gov/pygeoapi/collections/mars/sim3292_global_geologic_map/units) | USGS Astrogeology (Tanaka et al. 2014), OGC API Features | The science-reach check: distinct geologic units within about 100 km of each cell, and whether any date from the Noachian or Hesperian. | static (2014 map) | 1:20,000,000 map units | USGS data, public domain | no | downloaded once (paged API) and cached |
+| [THEMIS daytime infrared controlled mosaics](https://stac.astrogeology.usgs.gov/api) | NASA/USGS (Mars Odyssey THEMIS), USGS Astrogeology STAC | The orbital thumbnail of every Mars site and SpaceX candidate, found with the same STAC search Overfield runs for Sentinel-2 over Iowa. | static mosaics | 100 m | NASA/USGS data, public domain | no | windowed reads from the public bucket, cached as thumbnails |
+| [HiRISE candidate landing site pages (ESP_060706_2195 and five more)](https://hirise.lpl.arizona.edu/ESP_060706_2195) | NASA/JPL/University of Arizona | The six 2019 observations titled Candidate Landing Site for SpaceX Starship: their centred latitude, east longitude and acquisition date, parsed from the pages. | 2019 observations | 30 cm per pixel (image); site coordinates used here | Public web pages; NASA imagery is public domain | no | pages fetched once and cached |
+| [Space.com, SpaceX Studying Landing Sites for Mars Missions (2017)](https://www.space.com/36142-spacex-studying-mars-landing-sites.html) | Space.com (the criteria Paul Wooster stated) | The source of the two SpaceX criteria we score (ice within reach, low elevation) and the two we show but do not score (latitude, flat ground). | 2017 article |  | News article, cited for the criteria only | no | cited, not fetched at run time |
+| [NASA Exoplanet Archive, pscomppars](https://exoplanetarchive.ipac.caltech.edu/) | NASA Exoplanet Archive (Caltech/IPAC) | The fifteen exoplanets on the worlds view: distance, radius, mass, temperature, insolation, period, discovery year and method, from one TAP query. | continuous (archive) |  | Public; the archive asks to be acknowledged | no | fetched once and cached |
+
+- **MOLA MEGDR elevation, 16 pixels per degree.** Low ground means more atmosphere to slow the ship; it is one of the two SpaceX criteria we score. (pipeline/mars/m01_fetch.py:24, pipeline/mars/m01_fetch.py:93, pipeline/mars/m02_score.py:76, pipeline/mars/m03_assets.py:66)
+- **SWIM 2025 ice consistency maps (0-1 m, 1-5 m, >5 m).** Water within reach is the first criterion SpaceX stated: propellant, air and crops. (pipeline/mars/m01_fetch.py:129, pipeline/mars/m02_score.py:117)
+- **MGS TES nighttime thermal inertia, 20 pixels per degree.** A landing and launching rocket blasts the ground under it; thermal inertia from orbit measures how firm that ground is. (pipeline/mars/m01_fetch.py:26, pipeline/mars/m01_fetch.py:109, pipeline/mars/m02_score.py:129)
+- **MGS TES albedo mosaic, 7410 m.** Bright ground usually means a dust cover; it is context next to the firmness check, not a score. (pipeline/mars/m01_fetch.py:28, pipeline/mars/m02_score.py:142, pipeline/mars/m03_assets.py:67)
+- **USGS Mars Global Geologic Map, SIM 3292.** A base is also a science station; more kinds of rock within a rover range means more science per trip. (pipeline/mars/m01_fetch.py:30, pipeline/mars/m01_fetch.py:184, pipeline/mars/m02_score.py:97)
+- **THEMIS daytime infrared controlled mosaics.** A judge should see the ground, not a number; the frames are real orbital images, with a MOLA hillshade crop as the fallback. (pipeline/mars/m03_assets.py:151, pipeline/mars/m03_assets.py:168)
+- **HiRISE candidate landing site pages (ESP_060706_2195 and five more).** These are the sites SpaceX had photographed; we grade them on what SpaceX does not publicly screen for. (pipeline/mars/m01_fetch.py:31, pipeline/mars/m01_fetch.py:236, pipeline/mars/m02_score.py:276)
+- **Space.com, SpaceX Studying Landing Sites for Mars Missions (2017).** The comparison is only honest if the SpaceX criteria are quoted from a public record. (pipeline/mars/config.json:13, pipeline/mars/m02_score.py:45)
+- **NASA Exoplanet Archive, pscomppars.** No number about the planet of another star is typed by hand; the archive answers or the world is dropped. (pipeline/mars/m04_worlds.py:21, pipeline/mars/m04_worlds.py:51)
+
 ## Hosting and accounts
 
 | Source | Provider | What we use it for | Cadence | Resolution | Licence | Key | Live or cached |
@@ -176,6 +200,6 @@ Overfield cross-checks several sources because no single one is enough on its ow
 
 ## Not sources
 
-Every entry was checked against the code at the listed file and line. Starlink is drawn on the globe for connectivity context; it is not a data source.
+Every entry was checked against the code at the listed file and line. Starlink is drawn on the globe for connectivity context; it is not a data source. The Mars entries feed pipeline/mars and the worlds view; SpaceX and the HiRISE sites are referenced from public records only.
 
 Not used, in case anyone assumes otherwise: Starlink (drawn on the globe for connectivity context only), Landsat, Terra and Aqua imagery (their orbits are drawn, their pixels are not read), Sentinel-1 radar, MODIS, commercial imagery or drones, weather stations or soil sensors, direct agency weather feeds (every model arrives through Open-Meteo), Google or Mapbox tiles, and farmer-entered measurements. Facts in a plan come from plans.json and route.json only.

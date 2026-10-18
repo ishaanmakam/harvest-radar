@@ -14,11 +14,33 @@
       <div id="globe"></div>
       <p id="toast" hidden></p>
       <div id="intro-copy">
-        <h1>Overfield</h1>
-        <p class="tagline">The satellite visits every farm. Every farmer gets a morning plan.</p>
-        <p id="intro-stats"></p>
-        <button id="enter" type="button">Enter the season</button>
+        <div id="earth-copy">
+          <h1>Overfield</h1>
+          <p class="tagline">The satellite visits every farm. Every farmer gets a morning plan.</p>
+          <p id="intro-stats"></p>
+          <button id="enter" type="button">Enter the season</button>
+        </div>
       </div>
+      <div id="world-nav"></div>
+    </section>
+    <section id="mars-view" hidden aria-label="Mars landing-site map">
+      <div class="mars-top">
+        <button id="mars-back" type="button" class="btn btn-ghost">Back to worlds</button>
+        <div class="mars-title">
+          <h1>Where Starship should land</h1>
+          <p>Every 7 km of Mars between 60 S and 60 N, checked against four rules from public orbital data.</p>
+        </div>
+        <a class="btn btn-ghost mars-data-link" href="#data">Data</a>
+      </div>
+      <div class="mars-stage">
+        <div id="mars-map" class="map" aria-label="Mars map"></div>
+        <aside id="mars-dock" class="dock" aria-label="Sites">
+          <button id="mars-dock-handle" class="sheet-handle" type="button" aria-label="Expand panel" aria-expanded="false"><span></span></button>
+          <div id="mars-dock-body" class="dock-body" tabindex="-1"></div>
+        </aside>
+        <aside id="mars-drawer" class="drawer" aria-label="Site detail" hidden><div id="mars-drawer-body" class="drawer-body"></div></aside>
+      </div>
+      <p class="mars-foot">Independent analysis from public NASA, USGS and PSI data. Not affiliated with or endorsed by SpaceX. <a href="#data">Every source on the Data page.</a></p>
     </section>
     <div id="app">
       <header class="topbar">

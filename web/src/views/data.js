@@ -25,6 +25,7 @@ const KIND_LABEL = {
   validation: "Validation against official numbers",
   hosting: "Hosting and accounts",
   other: "The globe",
+  mars: "Mars",
 };
 
 async function loadSources() {
