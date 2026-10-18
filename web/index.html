@@ -6,9 +6,20 @@
     <title>Harvest Radar</title>
   </head>
   <body>
+    <section id="intro">
+      <div id="globe"></div>
+      <div id="intro-copy">
+        <h1>Harvest Radar</h1>
+        <p class="tagline">The satellite visits every farm. Every farmer gets a morning plan.</p>
+        <p id="intro-stats"></p>
+        <button id="enter" type="button">Enter the season</button>
+      </div>
+    </section>
+    <div id="app">
     <header>
       <h1>Harvest Radar</h1>
       <p id="stats"></p>
+      <button id="orbit" type="button">Orbit</button>
       <span id="badge" class="badge"></span>
     </header>
     <p id="error" hidden></p>
@@ -26,6 +37,7 @@
         <section id="plan"></section>
       </aside>
     </main>
+    </div>
     <script type="module" src="/src/main.js"></script>
   </body>
 </html>

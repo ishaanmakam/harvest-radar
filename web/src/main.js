@@ -3,6 +3,10 @@ import "maplibre-gl/dist/maplibre-gl.css";
 import "./style.css";
 import { loadData } from "./data.js";
 import { renderPlan, renderRoute } from "./panel.js";
+import { aoiCenter } from "./globe/geo.js";
+import { createGlobe } from "./globe/globe.js";
+
+const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 const FILL_COLOR = [
   "match",
@@ -181,6 +185,16 @@ async function start() {
 
   drawRoute();
 
+  const frameBounds = data.frames?.bounds;
+  const aoiBounds = frameBounds
+    ? [[frameBounds[0], frameBounds[1]], [frameBounds[2], frameBounds[3]]]
+    : fieldsBbox(data.fields);
+  const pass = data.frames?.frames?.length ? data.frames.frames[data.frames.frames.length - 1].date : data.plans.as_of;
+  const [, month, day] = (pass || "2026-10-17").split("-");
+  let actNow = 0;
+  for (const plan of data.plans.plans) if (plan.flag === "act_now") actNow += 1;
+  document.getElementById("intro-stats").textContent = `Story County, Iowa · ${MONTHS[Number(month) - 1]} ${Number(day)} · ${data.plans.plans.length} farms · ${actNow} act now`;
+
   const map = new maplibregl.Map({
     container: "map",
     style: {
@@ -201,10 +215,7 @@ async function start() {
     addFields(map, data.fields);
     if (selectedId) highlight(selectedId);
     setupTimelapse(map, data.frames, data.base);
-    const bounds = data.frames?.bounds
-      ? [[data.frames.bounds[0], data.frames.bounds[1]], [data.frames.bounds[2], data.frames.bounds[3]]]
-      : fieldsBbox(data.fields);
-    map.fitBounds(bounds, { padding: 24 });
+    map.fitBounds(aoiBounds, { padding: 24 });
 
     map.on("mouseenter", "fields-fill", () => {
       map.getCanvas().style.cursor = "pointer";
@@ -216,6 +227,54 @@ async function start() {
       const feature = event.features[0];
       selectFarm(feature.properties.field_id, feature);
     });
+  });
+
+  const intro = document.getElementById("intro");
+  const enterBtn = document.getElementById("enter");
+  const orbitBtn = document.getElementById("orbit");
+  const reducedMotion = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let globe = null;
+
+  function handoff() {
+    intro.classList.add("is-leaving");
+    globe.stop();
+    map.resize();
+    const west = aoiBounds[0][0];
+    const south = aoiBounds[0][1];
+    const east = aoiBounds[1][0];
+    const north = aoiBounds[1][1];
+    map.jumpTo({ center: [(west + east) / 2, (south + north) / 2], zoom: 9 });
+    map.fitBounds(aoiBounds, { padding: 24, duration: reducedMotion ? 0 : 1200 });
+    window.setTimeout(() => {
+      intro.classList.add("is-hidden");
+      enterBtn.disabled = false;
+    }, 500);
+  }
+
+  try {
+    globe = createGlobe(document.getElementById("globe"), {
+      aoi: aoiCenter(frameBounds),
+      stats: document.getElementById("intro-stats").textContent,
+      onEnter: handoff,
+    });
+    globe.start();
+  } catch (err) {
+    console.error(err);
+    intro.classList.add("is-hidden");
+    orbitBtn.hidden = true;
+  }
+
+  enterBtn.addEventListener("click", () => {
+    if (!globe || intro.classList.contains("is-leaving")) return;
+    enterBtn.disabled = true;
+    globe.flyIn();
+  });
+  orbitBtn.addEventListener("click", () => {
+    if (!globe) return;
+    enterBtn.disabled = false;
+    intro.classList.remove("is-hidden", "is-leaving");
+    globe.start();
+    globe.flyOut();
   });
 }
 

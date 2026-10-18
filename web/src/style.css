@@ -31,12 +31,24 @@ header h1 {
 #stats { margin: 0; font-size: 14px; }
 
 .badge {
-  margin-left: auto;
+  margin-left: 8px;
   padding: 2px 8px;
   border-radius: 999px;
   font-size: 12px;
   font-weight: 700;
   letter-spacing: 0.04em;
+}
+
+#orbit {
+  margin-left: auto;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 999px;
+  background: transparent;
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  padding: 4px 10px;
+  cursor: pointer;
 }
 
 .badge.mock { background: #f4a259; color: #1c1917; }
@@ -156,8 +168,78 @@ h3 { margin: 16px 0 8px; font-size: 14px; }
 
 .delivery { display: flex; gap: 8px; align-items: baseline; margin: 4px 0; }
 
+#app {
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+}
+
+#intro {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  background: radial-gradient(circle at 30% 20%, #0b1020, #05070d 62%);
+  color: #fff;
+  opacity: 1;
+  transition: opacity 500ms ease;
+}
+
+#intro.is-leaving { opacity: 0; pointer-events: none; }
+#intro.is-hidden { display: none; }
+
+#globe { position: absolute; inset: 0; }
+#globe canvas { display: block; width: 100%; height: 100%; }
+
+#intro-copy {
+  position: absolute;
+  left: 40px;
+  bottom: 40px;
+  z-index: 1;
+  max-width: 460px;
+}
+
+#intro-copy h1 {
+  margin: 0;
+  font-size: 40px;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+}
+
+#intro-copy .tagline {
+  margin: 8px 0 0;
+  font-size: 18px;
+  opacity: 0.7;
+}
+
+#intro-stats {
+  margin: 16px 0 0;
+  font-size: 12px;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  font-variant-numeric: tabular-nums;
+  opacity: 0.85;
+}
+
+#enter {
+  margin-top: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+  font: inherit;
+  font-size: 15px;
+  padding: 10px 16px;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+}
+
+#enter:hover { background: rgba(255, 255, 255, 0.16); }
+#enter:disabled { opacity: 0.6; cursor: default; }
+
 @media (max-width: 800px) {
   main { flex-direction: column; }
   .map-wrap { height: 55vh; flex: none; }
   #panel { width: auto; flex: 1; border-left: 0; border-top: 1px solid #e4dfd8; }
+  #intro-copy { left: 20px; right: 20px; bottom: 28px; max-width: none; text-align: center; }
 }
