@@ -49,7 +49,7 @@ function weatherIcon() {
 }
 
 function joinParts(parts) {
-  return parts.filter((p) => p != null && p !== "").join(" · ");
+  return parts.filter((p) => p != null && p !== "").join(" / ");
 }
 
 function card(label, value, sub, { span = false } = {}) {
@@ -184,7 +184,7 @@ function outlookBlock(modules, env) {
           ph.green_up_date ? `green-up ${fmtDate(ph.green_up_date)}` : null,
           ph.senescence_onset ? `senescence ${fmtDate(ph.senescence_onset)}` : null,
           ph.curve_harvest_date ? `curve harvest ${fmtDate(ph.curve_harvest_date)}` : null,
-          ph.agreement ? `${typeof ph.agreement === "number" ? fmtNum(ph.agreement, 2) : titleCase(ph.agreement)} with the model` : null,
+          ph.agreement ? `${typeof ph.agreement === "number" ? fmtNum(ph.agreement, 2) : titleCase(ph.agreement)} with the lag estimate` : null,
         ]),
       ),
     );

@@ -1073,17 +1073,9 @@ select {
 
 .skeleton {
   border-radius: 0;
-  background: linear-gradient(90deg, var(--raised) 25%, var(--raised-2) 50%, var(--raised) 75%);
-  background-size: 200% 100%;
-  animation: shimmer 1.4s linear infinite;
+  background: var(--ghost);
   min-height: 14px;
   margin-bottom: 8px;
-}
-
-@keyframes shimmer {
-  to {
-    background-position: -200% 0;
-  }
 }
 
 /* ---------- Fields view ---------- */

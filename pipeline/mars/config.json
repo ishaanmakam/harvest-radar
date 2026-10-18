@@ -13,7 +13,7 @@
   "factors": {
     "ice": {
       "name": "Ice within reach",
-      "from": "spacex",
+      "from": "ours",
       "dataset": "SWIM ice consistency, 0-1 m and 1-5 m (PSI)",
       "why": "Water for propellant, air and crops.",
       "go": "0-1 m consistency >= 0.25, or 1-5 m consistency >= 0.5",
@@ -30,7 +30,7 @@
     },
     "low_elevation": {
       "name": "Low ground",
-      "from": "spacex",
+      "from": "ours",
       "dataset": "MOLA MEGDR elevation, 16 pixels per degree (NASA PDS)",
       "why": "More atmosphere to slow the ship.",
       "go": "elevation <= -2,500 m",

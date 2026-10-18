@@ -397,7 +397,7 @@ async function start() {
 
   // Everything below is the orbit intro and its hand-off to the imagery map.
   const cardBody =
-    "Sentinel-2 passes over this place every ~5 days, so Overfield can inspect farms here the same way. Our live demo landscape is Story County, Iowa: real imagery, real farm plans.";
+    "Sentinel-2 passes over this place every ~5 days, so Overfield can inspect farms here the same way. The live county is Story County, Iowa: real imagery, real farm plans.";
   let moveToken = 0;
   let toastTimer = 0;
   let revealTimer = 0;

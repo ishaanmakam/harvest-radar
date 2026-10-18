@@ -45,7 +45,7 @@
 }
 
 html, body { background: var(--void); color: var(--fg); font-family: var(--font); }
-:where(body *:not([data-globe], [data-globe] *)) { border-radius: 0; box-shadow: none; }
+:where(body *:not([data-globe], [data-globe] *)) { border-radius: 0; box-shadow:none; }
 :focus-visible { outline: 2px solid var(--fg); outline-offset: 3px; }
 
 .t-hero       { font: 700 clamp(2.25rem, 1.4rem + 3.2vw, 4rem)/1 var(--font); letter-spacing: 0.02em; text-transform: uppercase; }
@@ -67,7 +67,7 @@ html, body { background: var(--void); color: var(--fg); font-family: var(--font)
 
 /* The one button: outline, uppercase, fill sweeps up on hover and focus. Measured on the reference site: 49px tall,
    20px side padding, 1px border at 35 percent white, 4px radius (the one radius in the system). */
-.ghost-btn { position: relative; isolation: isolate; overflow: hidden; display: inline-flex; align-items: center; justify-content: center; min-height: 49px; padding: 0 20px; border: 1px solid var(--rule-strong); border-radius: 4px; color: var(--fg); background: rgba(0, 0, 0, 0.5); font: 700 0.8125rem/1 var(--font); letter-spacing: 0.09em; text-transform: uppercase; text-decoration: none; cursor: pointer; transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease); }
+.ghost-btn { position: relative; isolation: isolate; overflow: hidden; display: inline-flex; align-items: center; justify-content: center; min-height: 49px; padding: 0 20px; border: 1px solid var(--rule-strong); border-radius: 0; color: var(--fg); background: rgba(0, 0, 0, 0.5); font: 700 0.8125rem/1 var(--font); letter-spacing: 0.09em; text-transform: uppercase; text-decoration: none; cursor: pointer; transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease); }
 .ghost-btn::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--fg); transform: translateY(101%); transition: transform var(--dur) var(--ease); }
 .ghost-btn:hover, .ghost-btn:focus-visible { color: var(--void); border-color: var(--fg); }
 .ghost-btn:hover::before, .ghost-btn:focus-visible::before { transform: translateY(0); }

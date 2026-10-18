@@ -79,7 +79,7 @@ export function signInPrompt(ctx, what) {
     "div",
     { class: "card" },
     h("p", {}, `Sign in to ${what}.`),
-    h("p", { class: "muted small", style: { margin: "4px 0 10px" } }, "No password is needed: a link in your email signs you in."),
+    h("p", { class: "muted small", style: { margin: "4px 0 10px" } }, "Sign in with your email and password, or create an account."),
     h("button", { class: "btn btn-primary", type: "button", onclick: () => ctx.go("account") }, "Sign in"),
   );
 }

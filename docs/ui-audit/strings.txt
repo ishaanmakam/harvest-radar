@@ -1,0 +1,507 @@
+web\src\backend.js:13: Accounts are not set up on this copy of Overfield yet: the site does not know where its server is. Start the inbound server and publish its address (backend/README.md).
+web\src\backend.js:53: The Overfield server did not answer. Is it running, and is the tunnel up?
+web\src\backend.js:62: ${res.status} from the server
+web\src\charts.js:59: chart chart-ndvi
+web\src\charts.js:59: NDVI through the season
+web\src\charts.js:82: predicted harvest
+web\src\charts.js:161: chart chart-hindcast
+web\src\charts.js:161: County yield, measured against predicted, by year
+web\src\charts.js:192: key key-actual
+web\src\charts.js:192: Measured county yield
+web\src\charts.js:193: key key-projected
+web\src\charts.js:193: Predicted, that year held out
+web\src\charts.js:194: key key-band
+web\src\charts.js:194: 90 percent band
+web\src\charts.js:195: key key-peak
+web\src\charts.js:195: This season's estimate
+web\src\charts.js:221: chart chart-progress
+web\src\charts.js:221: Harvest progress
+web\src\charts.js:270: key key-usda
+web\src\charts.js:271: key key-projected
+web\src\charts.js:272: key key-today
+web\src\data.js:192: Could not load ${missing}${pinned ? 
+web\src\data.js:192:  : " from data/out or data/mock"}.
+web\src\data.js:195: Optional files not found: ${missingOptional.join(", ")}
+web\src\data.js:196: Real fields.geojson found in data/out without real plans: drawn as outlines only.
+web\src\dom.js:16: ) && typeof value === 
+web\src\format.js:6: Act now
+web\src\format.js:16: Harvest readiness
+web\src\format.js:17: Harvest before rain
+web\src\format.js:19: Burn scar
+web\src\format.js:23: Visible change
+web\src\format.js:31: Other crop
+web\src\format.js:32: Unknown crop
+web\src\format.js:36: Voice call
+web\src\format.js:44: Vegetation index
+web\src\format.js:45: Perceptron read
+web\src\format.js:154: chip chip-${key}${large ? " chip-lg" : ""}
+web\src\globe\region-card.js:8: Region-level preview: one box about 5 km across at the region centre. The canopy curve is the 
+web\src\globe\region-card.js:9: Iowa season shape adjusted for this region's hemisphere and crop, not a new satellite read.
+web\src\globe\region-card.js:38: Rain next 3 days
+web\src\globe\region-card.js:47: Clear passes
+web\src\globe\region-card.js:48: Latest clear pass
+web\src\globe\region-card.js:53: Region watch${region.country ? 
+web\src\globe\region-card.js:65: Return to Earth
+web\src\globe\region-card.js:66: world-pill is-open
+web\src\globe\region-card.js:74: Open the map here
+web\src\main.js:34: Nothing to show.
+web\src\main.js:45: badge badge-standin badge-toggle
+web\src\main.js:50: Imagery: ${imagery} / Farms and plans: ${farms} / Real field outlines: ${on ? "shown" : "hidden"}
+web\src\main.js:52: Hide the real field outlines (plans pending)
+web\src\main.js:52: Show the real field outlines (plans pending)
+web\src\main.js:62: Imagery: ${imagery} / Farms and plans: ${farms}
+web\src\main.js:62: Live season
+web\src\main.js:63: badge badge-standin
+web\src\main.js:63: badge badge-live
+web\src\main.js:64: Stand-in season: at least one file came from data/mock
+web\src\main.js:64: Every file came from data/out
+web\src\main.js:81: Live run
+web\src\main.js:81: Replay of an earlier run
+web\src\main.js:82: latest pass ${fmtDate(run.latest_pass)}
+web\src\main.js:96: Story County, Iowa / latest clear pass ${MONTHS[Number(month) - 1]} ${Number(day)} / ${data.plans.plans.length} farms / ${actNow} act now${standIn}
+web\src\main.js:106: How a farmer gets the morning plan
+web\src\main.js:295: No frames in this dataset. The pipeline writes frames/frames.json with one image per clear pass.
+web\src\main.js:400: Sentinel-2 passes over this place every ~5 days, so Overfield can inspect farms here the same way. The live county is Story County, Iowa: real imagery, real farm plans.
+web\src\main.js:511: world-copy region-copy
+web\src\main.js:578: worlds.json not loaded
+web\src\main.js:592: regions.json not loaded
+web\src\mars\marsmap.js:15: Ice within reach: water for propellant, air and crops.
+web\src\mars\marsmap.js:16: Low ground: more atmosphere to slow the ship.
+web\src\mars\marsmap.js:17: Plume-safe ground: firm soil the engines will not dig out.
+web\src\mars\marsmap.js:18: Science reach: more kinds of rock within a rover's range.
+web\src\mars\marsmap.js:19: Magnetic shelter: a little local radiation cover from magnetized crust.
+web\src\mars\marsmap.js:72: The Mars data has not been built. Run 
+web\src\mars\marsmap.js:72: python pipeline/mars/run_all.py
+web\src\mars\marsmap.js:101: MOLA, TES (NASA/USGS); ice: SWIM (PSI); geology: USGS SIM 3292
+web\src\mars\marsmap.js:145: muted small
+web\src\mars\marsmap.js:146: mono small
+web\src\mars\marsmap.js:152: mars-rank is-spacex
+web\src\mars\marsmap.js:153: muted small
+web\src\mars\marsmap.js:154: Page could not be read; listed as missing.
+web\src\mars\marsmap.js:154: Scores better than ${fmtNum(c.percentile)} percent of scored cells.
+web\src\mars\marsmap.js:155: mono small
+web\src\mars\marsmap.js:161: Ranking rules
+web\src\mars\marsmap.js:163: table mars-rules-table
+web\src\mars\marsmap.js:166: Shown, not scored
+web\src\mars\marsmap.js:168: Blind spots
+web\src\mars\marsmap.js:170: Cells scored: ${fmtNum(doc.stats.cells_scored)} (go ${fmtNum(doc.stats.go)}, watch ${fmtNum(doc.stats.watch)}, no-go ${fmtNum(doc.stats.no_go)}).
+web\src\mars\marsmap.js:181: check-row small
+web\src\mars\marsmap.js:181: Show site scores on the map
+web\src\mars\marsmap.js:183: Our top ten
+web\src\mars\marsmap.js:202: muted small
+web\src\mars\marsmap.js:203: mono small
+web\src\mars\marsmap.js:210: Shown, not scored
+web\src\mars\marsmap.js:212:  : `${ctx.slope_deg.toFixed(2)} degrees over about 20 km. `, h(
+web\src\mars\marsmap.js:213:  : `${ctx.abs_latitude.toFixed(1)} degrees from the equator. `, h(
+web\src\mars\marsmap.js:220: }) at the site; ${g.units_within_100km ?? 
+web\src\mars\marsmap.js:220: } distinct units within about 100 km; ${g.oldest_within_100km || 
+web\src\mars\marsmap.js:227: ${p.id} seen from orbit
+web\src\mars\marsmap.js:228: muted small
+web\src\mars\marsmap.js:241: btn btn-ghost
+web\src\mars\marsmap.js:241: Close site details
+web\src\mars\marsmap.js:242: row row-wrap
+web\src\mars\marsmap.js:244: muted small
+web\src\mars\marsmap.js:244: better than ${fmtNum(cand.percentile)}% of scored cells
+web\src\mars\marsmap.js:245: muted small
+web\src\mars\marsmap.js:248: The four checks
+web\src\mars\marsmap.js:251: Best cell within 200 km
+web\src\mars\marsmap.js:252: row row-wrap
+web\src\mars\marsmap.js:253: mono small
+web\src\mars\marsmap.js:255: btn btn-primary
+web\src\mars\marsmap.js:255: Fly to that cell
+web\src\mars\marsmap.js:293: Loading the Mars screen.
+web\src\pages.js:14: Data sources
+web\src\pages.js:50: .page-nav a
+web\src\pages.js:111: btn btn-ghost auth-btn
+web\src\pages.js:111: Signed in as ${label}
+web\src\pages.js:118: menu-head small muted
+web\src\pages.js:129: Sign out
+web\src\panel.js:83: Calibrated yield
+web\src\panel.js:87: from the ${y.calibration}
+web\src\panel.js:88: ${y.band} for its zone
+web\src\panel.js:89: relative index ${fmtNum(y.index, 2)}
+web\src\panel.js:90: ${typeof y.confidence === "number" ? fmtPct(y.confidence * 100) : y.confidence} confidence
+web\src\panel.js:97: Yield outlook
+web\src\panel.js:98: ${titleCase(y.band)} for its zone
+web\src\panel.js:100: relative index ${fmtNum(y.index, 2)}
+web\src\panel.js:101: about ${fmtNum(y.estimate.bu_per_acre)} bu/acre (reference only)
+web\src\panel.js:103: ${fmtNum(y.production.bu)} bu on the field
+web\src\panel.js:104: ${typeof y.confidence === "number" ? fmtPct(y.confidence * 100) : y.confidence} confidence
+web\src\panel.js:119: organic carbon ${fmtNum(soil.soc_g_kg, 1)} g/kg
+web\src\panel.js:143: Harvest now
+web\src\panel.js:143: Either works
+web\src\panel.js:146: Harvest now or wait
+web\src\panel.js:151: moisture today ${fmtPct(e.moisture_today_pct, 1)}
+web\src\panel.js:159: Finish before the rain
+web\src\panel.js:166: Soil water
+web\src\panel.js:170: ${fmtNum(water.stress_days)} stress days
+web\src\panel.js:171: ${fmtNum(water.days_since_rain)} days since rain
+web\src\panel.js:181: Season curve
+web\src\panel.js:186: curve harvest ${fmtDate(ph.curve_harvest_date)}
+web\src\panel.js:187: ${typeof ph.agreement === "number" ? fmtNum(ph.agreement, 2) : titleCase(ph.agreement)} with the lag estimate
+web\src\panel.js:197: Against its peers
+web\src\panel.js:216: ${fmtNum(floods)} flood passes
+web\src\panel.js:217: fire exposure ${typeof fire === "number" ? fmtNum(fire, 2) : titleCase(fire)}
+web\src\panel.js:232: ${fmtNum(c.clear_passes)} clear passes
+web\src\panel.js:233: last clear look ${fmtNum(c.days_since_last_clear)} days ago
+web\src\panel.js:250: Expand panel
+web\src\panel.js:277: row row-wrap
+web\src\panel.js:292: btn btn-icon
+web\src\panel.js:292: Previous farm
+web\src\panel.js:292: Previous farm (arrow up)
+web\src\panel.js:293: btn btn-icon
+web\src\panel.js:293: Next farm
+web\src\panel.js:293: Next farm (arrow down)
+web\src\panel.js:294: btn btn-icon
+web\src\panel.js:294: Close farm plan
+web\src\panel.js:301: No morning plan for this farm in today's file.
+web\src\panel.js:310: muted small
+web\src\panel.js:312: Plan for ${fmtDate(plan.as_of, "long")}
+web\src\panel.js:314: Stop ${position.index + 1} on the route (${position.action})
+web\src\panel.js:330: NDVI this season
+web\src\panel.js:342: The eight checks
+web\src\panel.js:349: check check-${check.status}
+web\src\panel.js:378: Delivery today
+web\src\ui.js:5: note note-${kind}
+web\src\ui.js:38: status-line small${kind ? 
+web\src\ui.js:64: Select and copy
+web\src\ui.js:81: Sign in to ${what}.
+web\src\ui.js:83: btn btn-primary
+web\src\ui.js:83: Sign in
+web\src\views\account.js:11: Punjabi (Gurmukhi script)
+web\src\views\account.js:15: United States and Canada (+1)
+web\src\views\account.js:21: United Kingdom (+44)
+web\src\views\account.js:38: South Africa (+27)
+web\src\views\account.js:42: Sri Lanka (+94)
+web\src\views\account.js:50: South Korea (+82)
+web\src\views\account.js:52: New Zealand (+64)
+web\src\views\account.js:106: Voice call
+web\src\views\account.js:110: Send my morning plan to this number by text and voice call. Reply STOP to end.
+web\src\views\account.js:141: Your name
+web\src\views\account.js:144: btn btn-primary
+web\src\views\account.js:144: Sign in
+web\src\views\account.js:146: btn btn-link
+web\src\views\account.js:146: Create an account
+web\src\views\account.js:159: Your email and password; the session stays on this device until you sign out.
+web\src\views\account.js:160: Pick a password of at least 8 characters. Overfield keeps only a salted hash of it, on its own server.
+web\src\views\account.js:179: Signed in.
+web\src\views\account.js:191: row row-wrap
+web\src\views\account.js:199: What an account gives you
+web\src\views\account.js:202: small explainer-list
+web\src\views\account.js:214: Your last deliveries
+web\src\views\account.js:217: Could not read your deliveries
+web\src\views\account.js:223: Nothing has been sent to you yet. The first plan goes out the morning after your profile has a farm and a number or email.
+web\src\views\account.js:259: card card-danger
+web\src\views\account.js:263: row row-wrap
+web\src\views\account.js:263: Delete my data
+web\src\views\account.js:271: row row-wrap
+web\src\views\account.js:275: btn btn-danger
+web\src\views\account.js:279: Deleting your data.
+web\src\views\account.js:285: Return to the map
+web\src\views\account.js:293: Yes, delete everything
+web\src\views\account.js:295: btn btn-ghost
+web\src\views\account.js:295: Keep my account
+web\src\views\account.js:300: Delete my data
+web\src\views\account.js:334: matched small
+web\src\views\account.js:338: Your field: 
+web\src\views\account.js:339: No field matched yet. Type your farm address and press Find my field.
+web\src\views\account.js:344: Find my field
+web\src\views\account.js:348: Type an address or lat, lon first.
+web\src\views\account.js:352: Looking up the address.
+web\src\views\account.js:359: Could not find that address. Add the town and state, or type lat, lon.
+web\src\views\account.js:367: The field map has not loaded, so the address cannot be matched yet. Try again in a moment.
+web\src\views\account.js:376: Overfield does not cover that location yet (${form.lat}, ${form.lon}). No field is within ${MAX_MATCH_KM} km.
+web\src\views\account.js:380: (the address is inside this field)
+web\src\views\account.js:380: (nearest field, ${match.distance_km} km away)
+web\src\views\account.js:381: Found: ${where}. Save the profile to keep this field.
+web\src\views\account.js:381: Matched. Save the profile to keep this field.
+web\src\views\account.js:389: select select-code
+web\src\views\account.js:389: Country code
+web\src\views\account.js:396: Number without the country code
+web\src\views\account.js:422: check-row consent
+web\src\views\account.js:434: btn btn-primary
+web\src\views\account.js:434: Save profile
+web\src\views\account.js:458: Saving your profile.
+web\src\views\account.js:463: Saved. You are in the morning roster.
+web\src\views\account.js:463: Saved. The morning plan starts once you have a field, a number or email, and are not paused.
+web\src\views\account.js:471: Roster id
+web\src\views\account.js:471: input mono
+web\src\views\account.js:475: Farm address
+web\src\views\account.js:476: row find-row
+web\src\views\account.js:484: row phone-row
+web\src\views\account.js:485: Stored with the country code, digits only.
+web\src\views\account.js:487: Morning time
+web\src\views\account.js:487: Local time; the default is 06:30.
+web\src\views\account.js:489: Nothing is sent to a number without this box ticked.
+web\src\views\account.js:490: While paused nothing is sent; your profile stays.
+web\src\views\account.js:491: row row-wrap
+web\src\views\account.js:491: muted small
+web\src\views\account.js:491: Signed in as ${user.email || user.phone || ""}
+web\src\views\account.js:514: Could not load your profile
+web\src\views\account.js:515: row row-wrap
+web\src\views\account.js:515: Reload the profile
+web\src\views\account.js:515: btn btn-ghost
+web\src\views\account.js:515: Sign out
+web\src\views\admin.js:97: text and voice consent on file
+web\src\views\admin.js:127: select select-sm
+web\src\views\admin.js:128: Role for ${p.name || p.roster_id}
+web\src\views\admin.js:130: Your own role changes in the SQL editor, not here
+web\src\views\admin.js:143: Paused for ${p.name || p.roster_id}
+web\src\views\admin.js:188: Search name, id, farm, email, last 4 digits
+web\src\views\admin.js:188: Search the roster
+web\src\views\admin.js:192: All roles
+web\src\views\admin.js:192: select select-auto
+web\src\views\admin.js:196: Active and paused
+web\src\views\admin.js:196: select select-auto
+web\src\views\admin.js:209: table-wrap table-tall
+web\src\views\admin.js:244: No morning runs have been logged yet. The queue writes here after each run (dry runs included) when ACCOUNTS_DB is set.
+web\src\views\admin.js:248: select select-auto
+web\src\views\admin.js:248: Morning run
+web\src\views\admin.js:256: Could not read that run
+web\src\views\admin.js:271:  }, `${fmtNum(list.length)} rows for ${fmtDay(runDate)}${dry ? `, ${fmtNum(dry)} from a dry run` : 
+web\src\views\admin.js:288: table-wrap table-tall
+web\src\views\admin.js:315: small muted
+web\src\views\admin.js:315: Morning run
+web\src\views\admin.js:332: bar-label mono
+web\src\views\admin.js:350: Developer keys
+web\src\views\admin.js:351: Live keys
+web\src\views\admin.js:365: Only rows the morning queue would use (not paused, a phone or an email, farmers with a farm)
+web\src\views\admin.js:366: row row-wrap
+web\src\views\admin.js:368: btn btn-primary
+web\src\views\admin.js:370: roster-${new Date().toISOString().slice(0, 10)}.csv
+web\src\views\admin.js:371: Download the roster CSV
+web\src\views\admin.js:388: open the admin dashboard
+web\src\views\admin.js:392: Could not load your profile
+web\src\views\admin.js:408:  }, `Signed in as ${auth.profile.name || auth.user.email} (${auth.profile.role}).`), h(
+web\src\views\admin.js:416: Could not load the dashboard
+web\src\views\data.js:6: The sources list is being written.
+web\src\views\data.js:9: Satellite imagery
+web\src\views\data.js:12: Reference data
+web\src\views\data.js:13: Soil and terrain
+web\src\views\data.js:14: Yields and crop statistics
+web\src\views\data.js:15: Field boundaries
+web\src\views\data.js:16: Base maps
+web\src\views\data.js:20: Image reading
+web\src\views\data.js:21: Texts and messages
+web\src\views\data.js:22: Voice calls
+web\src\views\data.js:24: Translation and questions
+web\src\views\data.js:25: Validation against official numbers
+web\src\views\data.js:27: The globe
+web\src\views\data.js:87: muted small
+web\src\views\data.js:92: In the code: ${src.where_in_code.length} ${src.where_in_code.length === 1 ? "place" : "places"}
+web\src\views\data.js:93: mono muted
+web\src\views\data.js:137: Overfield cross-checks several sources because no single one is enough on its own. Imagery says what a field looks like today, and weather says what is coming. Fire and flood feeds say what happened overnight. Reference data says what is normal for this place and this crop. Every check in a morning plan traces back to the sources below.
+web\src\views\data.js:141: muted small
+web\src\views\data.js:142: Counts: ${fmtNum(total)} sources, ${fmtNum(open)} free and open (by licence), ${fmtNum(keyed)} need a key.
+web\src\views\data.js:143:  List generated ${fmtDay(doc.generated)}.
+web\src\views\deliveries.js:9: How a farmer gets this
+web\src\views\deliveries.js:12: small explainer-list
+web\src\views\deliveries.js:33: note note-info
+web\src\views\deliveries.js:34: No delivery log in this dataset yet. The morning queue writes deliveries.json after a dry run or a real send; until then nothing has gone out.
+web\src\views\deliveries.js:67: muted small
+web\src\views\deliveries.js:69: ${fmtNum(dayRows.length)} messages for ${fmtDate(forDate, "long")}: ${fmtNum(farmers)} to farmers, ${fmtNum(officers)} to the officer.${dates.length > 1 ? 
+web\src\views\deliveries.js:70: ${fmtNum(rows.length)} messages queued.
+web\src\views\deliveries.js:134: The delivery log is empty.
+web\src\views\developer.js:8: No key needed. as_of and the endpoint list.
+web\src\views\developer.js:9: Every farm's plan for the latest morning (the published plans.json).
+web\src\views\developer.js:10: One farm's plan.
+web\src\views\developer.js:11: The officer route.
+web\src\views\developer.js:12: The county analytics block and the forecast source.
+web\src\views\developer.js:13: The data sources list.
+web\src\views\developer.js:15: Overfield (ishaanmakam/harvest-radar). Imagery: Copernicus Sentinel-2. Weather: Open-Meteo. Yields: USDA NASS.
+web\src\views\developer.js:16: Plans and analytics: CC BY 4.0. Underlying sources keep their own terms; see /v1/sources.
+web\src\views\developer.js:18: Use the API for lawful purposes only.
+web\src\views\developer.js:19: Attribute Overfield and the underlying sources wherever you publish what you got from it.
+web\src\views\developer.js:20: Plans are estimates from satellite imagery and weather, not measurements, and must not be the sole basis for a safety decision.
+web\src\views\developer.js:21: Keys are personal. Do not share them; Overfield may revoke a key at any time.
+web\src\views\developer.js:22: Calls are logged: the path, the status and the time, against your key.
+web\src\views\developer.js:23: No resale of the raw feed. Build on it; do not relay it as is for money.
+web\src\views\developer.js:24: No warranty. The service may change or stop without notice.
+web\src\views\developer.js:30: the plan, route, county block or sources list
+web\src\views\developer.js:41: The Overfield API is a key-gated, versioned front for the plan files this site publishes. The files themselves are open data, served beside the map. A key buys a stable, documented endpoint, usage counts, a daily limit and a recorded acceptance of the terms.
+web\src\views\developer.js:46: Base URL 
+web\src\views\developer.js:48:  (shown as a placeholder until the backend is deployed)
+web\src\views\developer.js:71: curl -H "Authorization: Bearer ovf_<key>" ${base}/v1/farms/F0001/plan
+web\src\views\developer.js:81: small explainer-list
+web\src\views\developer.js:92: Developer terms
+web\src\views\developer.js:92: count mono
+web\src\views\developer.js:105: You have not created a key.
+web\src\views\developer.js:129: muted small
+web\src\views\developer.js:130: btn btn-link
+web\src\views\developer.js:130: Revoke key
+web\src\views\developer.js:141: Your keys
+web\src\views\developer.js:148: Keys need the Overfield server, and this copy of the site does not know where it is; the docs above still describe the API. Setup steps: backend/README.md.
+web\src\views\developer.js:168: Could not read your keys
+web\src\views\developer.js:176: Creating a key records that you accepted the developer terms above (version ${TERMS_VERSION}), with the time and your browser's user agent.
+web\src\views\developer.js:177: row row-wrap
+web\src\views\developer.js:179: btn btn-primary
+web\src\views\developer.js:183: Recording your acceptance.
+web\src\views\developer.js:193: Accept the developer terms
+web\src\views\developer.js:202: btn btn-primary
+web\src\views\developer.js:202: Create key
+web\src\views\developer.js:206: row row-wrap create-row
+web\src\views\developer.js:210: Creating the key.
+web\src\views\developer.js:228: You accepted the developer terms (${TERMS_VERSION}) on ${fmtDateTime(state.accepted)}.
+web\src\views\developer.js:233: Your new key
+web\src\views\developer.js:234: row row-wrap
+web\src\views\developer.js:234: Copy the key
+web\src\views\developer.js:238: New key
+web\src\views\fields.js:39: Find a farm, e.g. F0042
+web\src\views\fields.js:42: Find a farm by id
+web\src\views\fields.js:67: swatch swatch-${flag}
+web\src\views\fields.js:77: legend-row legend-static
+web\src\views\fields.js:78: swatch swatch-none
+web\src\views\fields.js:88: legend-row legend-static
+web\src\views\fields.js:89: swatch swatch-zone
+web\src\views\fields.js:90: Zone boundary
+web\src\views\fields.js:98: legend-row legend-static
+web\src\views\fields.js:99: swatch swatch-outline
+web\src\views\fields.js:100: Real field outlines (plans pending)
+web\src\views\fields.js:110: All crops
+web\src\views\fields.js:118: All zones
+web\src\views\fields.js:125: Any check
+web\src\views\fields.js:126: ${CHECK_LABEL[kind]} needs attention
+web\src\views\fields.js:132: btn-link small
+web\src\views\fields.js:142: Reset filters
+web\src\views\fields.js:146: Farms in view
+web\src\views\fields.js:154: Today in one look
+web\src\views\fields.js:155: quick-btn quick-act
+web\src\views\fields.js:155:  act now
+web\src\views\fields.js:156: quick-btn quick-watch
+web\src\views\fields.js:157:  stop on the route
+web\src\views\fields.js:157:  stops on the route
+web\src\views\fields.js:165: Legend and filters
+web\src\views\fields.js:196: Showing the first ${LIST_CAP} of ${visible.length}. Narrow the filters to see the rest.
+web\src\views\fields.js:224: No plan for this farm.
+web\src\views\headline.js:30: Farms scored
+web\src\views\headline.js:31: County estimate
+web\src\views\headline.js:31: not run
+web\src\views\headline.js:45: Plan for
+web\src\views\headline.js:47: Act now
+web\src\views\route.js:25: No route in this dataset. The decision layer writes route.json beside plans.json.
+web\src\views\route.js:37: On the road
+web\src\views\route.js:41: last visit ${extra.route.finish_time}
+web\src\views\route.js:42: ${fmtKm(extra.route.km_saved)} saved against the listed order
+web\src\views\route.js:52: ${fmtKm(detail.km_from_previous)} from the previous stop
+web\src\views\route.js:57: stop stop-${stop.action === "visit" ? "visit" : "call"}
+web\src\views\route.js:86:  }, `Route for ${fmtDate(data.route.as_of, 
+web\src\views\route.js:96: note note-watch
+web\src\views\season.js:69: chart chart-demand
+web\src\views\season.js:69: Machine-days of combining needed per day
+web\src\views\season.js:101: key key-bar
+web\src\views\season.js:101: Machine-days on a workable day
+web\src\views\season.js:102: key key-wet
+web\src\views\season.js:102: Day the fields are too wet
+web\src\views\season.js:103: key key-cap
+web\src\views\season.js:160: Against USDA crop progress
+web\src\views\season.js:161: note note-watch
+web\src\views\season.js:161: Stand-in USDA rows shaped like a QuickStats answer, not published figures.
+web\src\views\season.js:203: note note-info
+web\src\views\season.js:204: The analytics layer has not run on this dataset, so there is no yield, economics or USDA comparison yet. It writes analytics.json beside plans.json.
+web\src\views\season.js:211: Harvest progress from the satellite
+web\src\views\season.js:212: ${sat.harvested} of ${sat.total} fields with a crop signal look harvested, by the date their greenness collapsed.
+web\src\views\season.js:228:  }, `Analytics as of ${fmtDate(analytics.as_of || today, 
+web\src\views\season.js:228: )}.${land.latest_pass ? ` Latest pass ${fmtDate(land.latest_pass)}.` : 
+web\src\views\season.js:239: Still standing
+web\src\views\season.js:241: ${fmtNum(land.flags.act_now ?? 0)} act now
+web\src\views\season.js:253: ${CROP_LABEL[crop] || titleCase(crop)} harvest progress
+web\src\views\season.js:264: muted small
+web\src\views\season.js:266: Recent pace ${fmtHa(entry.recent_rate_ha_per_day)} a day.
+web\src\views\season.js:267: Fit r² ${fmtNum(entry.fit_r2, 2)}.
+web\src\views\season.js:283: Harvest progress from the satellite
+web\src\views\season.js:302: Combining the two weeks ahead
+web\src\views\season.js:310: Soil water
+web\src\views\season.js:314: Harvest timing
+web\src\views\season.js:315: ${fmtNum(modules.economics.fields_evaluated ?? 0)} standing fields priced: ${fmtNum(counts.harvest_now ?? 0)} harvest now, ${fmtNum(counts.wait ?? 0)} wait, ${fmtNum(counts.either ?? 0)} either. Following the recommendation saves about $${fmtNum(modules.economics.savings_usd_total)} in drying and shrink.
+web\src\views\season.js:321: Fields out of step
+web\src\views\season.js:322: ${fmtNum(modules.anomaly.n_flagged)} of ${fmtNum(modules.anomaly.n_compared ?? modules.anomaly.n_fields ?? 0)} fields differ from their cohort${counts.sudden_drop != null ? 
+web\src\views\season.js:327: Burn, flood and fire
+web\src\views\season.js:328: ${fmtNum(modules.events.burned_fields ?? 0)} burn scars, ${fmtNum(modules.events.flooded_fields ?? 0)} flooded fields, ${fmtNum(modules.events.recent_hotspots ?? 0)} recent hotspots.
+web\src\views\season.js:334: ${fmtNum(modules.coverage.passes_total ?? 0)} passes this season, ${fmtPct(modules.coverage.clear_rate_season * 100)} of field looks clear; latest clear look ${modules.coverage.latest_clear_date ? fmtDate(modules.coverage.latest_clear_date) : "unknown"}.
+web\src\views\season.js:342: Also in the analytics
+web\src\views\yield.js:24: held-out error about ${fmtNum(model.rmse_bu_per_acre, 1)} bu/acre
+web\src\views\yield.js:30: outlook-card county-card
+web\src\views\yield.js:32: value value-xl
+web\src\views\yield.js:33: 90 percent band ${band(model.interval_bu_per_acre)} bu/acre
+web\src\views\yield.js:41: legend-row legend-static
+web\src\views\yield.js:66: ramp-step ramp-end
+web\src\views\yield.js:70: Not scored (crop unknown or no clear season)
+web\src\views\yield.js:124: note note-info
+web\src\views\yield.js:124: The yield layer has not run on this dataset: no county estimate and no calibrated field values yet.
+web\src\views\yield.js:135: County estimate this season
+web\src\views\yield.js:154: note note-info
+web\src\views\yield.js:154: yield_model.json is not in this dataset, so there is no county estimate. The field values below are reference-only indices.
+web\src\views\yield.js:162: Calibrated yield on the map
+web\src\views\yield.js:174: County totals
+web\src\views\yield.js:193: Hide Fields of The World outlines
+web\src\views\yield.js:193: Show Fields of The World outlines
+web\src\views\yield.js:196: Hide Fields of The World outlines
+web\src\views\yield.js:196: Show Fields of The World outlines
+web\src\views\yield.js:202: Open field map
+web\src\views\yield.js:203: row row-wrap
+web\src\views\yield.js:203: swatch swatch-ftw
+web\src\views\yield.js:206: muted small
+web\src\views\yield.js:207: Fields of The World is the open global field map. Its ${fmtNum(data.ftw.features.length)} polygons for this box are drawn for comparison and are not the farms in the roster.
+web\src\views\yield.js:220: Soil and terrain across the county
+web\src\views\yield.js:224: Organic carbon
+web/index.html:5: width=device-width, initial-scale=1, viewport-fit=cover
+web/index.html:6: dark
+web/index.html:7: #0d1217
+web/index.html:8: Overfield: the satellite visits every farm and every farmer gets a morning plan.
+web/index.html:9: Overfield
+web/index.html:12: Skip to the farm list
+web/index.html:18: Every farm, every pass
+web/index.html:20: Overfield reads each new Sentinel-2 pass over a farm and turns it into a morning plan for the grower.
+web/index.html:22: Enter the season
+web/index.html:26: Sentinel-2 L2A via Earth Search / NASA FIRMS VIIRS / NASA POWER and Open-Meteo / CelesTrak GP / Contains modified Copernicus Sentinel data 2026
+web/index.html:28: Mars landing-site map
+web/index.html:30: Back to worlds
+web/index.html:32: Where Starship should land
+web/index.html:33: Every 7 km of Mars between 60 S and 60 N, checked against four rules from public orbital data.
+web/index.html:35: Data sources
+web/index.html:38: Mars map
+web/index.html:39: Sites
+web/index.html:40: Expand panel
+web/index.html:43: Site detail
+web/index.html:45: Independent analysis from public NASA, USGS and PSI data. Not affiliated with or endorsed by SpaceX.
+web/index.html:45: Every source on the Data page.
+web/index.html:49: Overfield
+web/index.html:55: Overfield
+web/index.html:57: Aspect
+web/index.html:58: Crop health
+web/index.html:59: Crop yield
+web/index.html:61: Views
+web/index.html:62: Fields
+web/index.html:63: Time-lapse
+web/index.html:64: Route
+web/index.html:65: Deliveries
+web/index.html:66: Yield
+web/index.html:67: Season
+web/index.html:72: Show the globe
+web/index.html:73: Pages
+web/index.html:74: Data sources
+web/index.html:75: Developers
+web/index.html:78: Get the morning plan
+web/index.html:83: Farm map
+web/index.html:84: Today at a glance
+web/index.html:85: View panel
+web/index.html:86: Expand panel
+web/index.html:89: Farm plan
+web/index.html:91: Play the season
+web/index.html:92: Previous pass
+web/index.html:92: Previous
+web/index.html:93: Next pass
+web/index.html:93: Next
+web/index.html:95: Season date
+web/index.html:99: Speed
+web/index.html:100: Playback speed
+web/index.html:108: Opacity
+web/index.html:109: Imagery opacity
+web/index.html:111: Sentinel-2 sees 10 m per pixel; zoom in on the Fields view for the latest aerial basemap.
+web/index.html:118: Back to the map
+web/index.html:119: Pages
+web/index.html:120: Data
+web/index.html:121: Developers
+web/index.html:122: Admin
+web/index.html:137: See the live farms
+web/index.html:138: Back to orbit

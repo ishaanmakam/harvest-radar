@@ -139,7 +139,7 @@ export function renderFields(el, ctx) {
         checkSelect.value = "any";
       },
     },
-    "Reset",
+    "Reset filters",
   );
 
   const listTitle = h("div", { class: "section-title" }, "Farms", h("span", { class: "count" }));
@@ -220,7 +220,7 @@ export function renderFields(el, ctx) {
             h(
               "span",
               { style: { minWidth: 0 } },
-              h("div", { class: "row" }, h("span", { class: "farm-id" }, id), h("span", { class: "farm-meta" }, `${CROP_LABEL[props.crop] || titleCase(props.crop)} · ${fmtHa(props.area_ha)}`)),
+              h("div", { class: "row" }, h("span", { class: "farm-id" }, id), h("span", { class: "farm-meta" }, `${CROP_LABEL[props.crop] || titleCase(props.crop)} / ${fmtHa(props.area_ha)}`)),
               h("div", { class: "farm-today" }, plan?.today || "No plan for this farm."),
             ),
           ),

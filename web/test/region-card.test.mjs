@@ -40,7 +40,7 @@ test("missing numbers are left out rather than shown as NaN", () => {
 });
 
 test("the pill says region watch with the country, and the honesty line says where the curve comes from", () => {
-  assert.equal(regionPill(region), "Region watch · Mexico");
+  assert.equal(regionPill(region), "Region watch / Mexico");
   assert.match(HONESTY_LINE, /Iowa season/);
   assert.match(HONESTY_LINE, /not a new satellite read/i);
 });

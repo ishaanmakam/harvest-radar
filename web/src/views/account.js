@@ -143,16 +143,16 @@ function signInForm(el, ctx) {
   const password = h("input", { id: "acct-password", class: "input", type: "password", required: true, minlength: "8", autocomplete: "current-password", placeholder: "At least 8 characters" });
   const button = h("button", { class: "btn btn-primary", type: "submit" }, "Sign in");
   const nameField = field("Name", name);
-  const toggle = h("button", { class: "btn btn-link", type: "button" }, "New here? Create an account");
-  const title = h("h2", { class: "panel-title" }, "Sign in");
+  const toggle = h("button", { class: "btn btn-link", type: "button" }, "Create an account");
+  const title = h("h2", { class: "panel-title" }, "Existing account");
   const blurb = h("p", { class: "muted small", style: { margin: "4px 0 12px" } }, "Your email and password; the session stays on this device until you sign out.");
 
   function setMode(next) {
     mode = next;
     nameField.hidden = mode === "in";
-    title.textContent = mode === "in" ? "Sign in" : "Create your account";
+    title.textContent = mode === "in" ? "Existing account" : "New account";
     button.textContent = mode === "in" ? "Sign in" : "Create account";
-    toggle.textContent = mode === "in" ? "New here? Create an account" : "Already have an account? Sign in";
+    toggle.textContent = mode === "in" ? "Create an account" : "Sign in to an existing account";
     password.autocomplete = mode === "in" ? "current-password" : "new-password";
     blurb.textContent =
       mode === "in"
@@ -172,7 +172,7 @@ function signInForm(el, ctx) {
         const value = email.value.trim();
         if (!value || !password.value) return;
         button.disabled = true;
-        status.set(mode === "in" ? "Signing in..." : "Creating your account...");
+        status.set(mode === "in" ? "Signing you in." : "Creating your account.");
         try {
           if (mode === "in") await signIn(value, password.value);
           else await signUp(value, password.value, name.value);
@@ -265,7 +265,7 @@ function deleteSection(ctx) {
     );
   const confirm = () =>
     box.replaceChildren(
-      h("p", { class: "small" }, h("strong", {}, "Are you sure? "), "Everything about you goes, including the number the morning plan is sent to."),
+      h("p", { class: "small" }, h("strong", {}, "This cannot be undone. "), "Everything about you goes, including the number the morning plan is sent to."),
       h(
         "div",
         { class: "row row-wrap", style: { marginTop: "10px" } },
@@ -276,13 +276,13 @@ function deleteSection(ctx) {
             type: "button",
             onclick: async (event) => {
               event.currentTarget.disabled = true;
-              status.set("Deleting...");
+              status.set("Deleting your data.");
               try {
                 await deleteMyAccount();
                 await ctx.signOut();
                 box.replaceChildren(
                   h("p", { class: "small" }, "Your data has been deleted. Thank you for trying Overfield."),
-                  h("div", { class: "row", style: { marginTop: "10px" } }, h("button", { class: "btn", type: "button", onclick: ctx.close }, "Back to the map")),
+                  h("div", { class: "row", style: { marginTop: "10px" } }, h("button", { class: "btn", type: "button", onclick: ctx.close }, "Return to the map")),
                 );
               } catch (err) {
                 status.set(err.message, "warn");
@@ -349,7 +349,7 @@ function profileForm(el, ctx) {
       return;
     }
     findButton.disabled = true;
-    findStatus.set("Looking up the address...");
+    findStatus.set("Looking up the address.");
     try {
       let point = parseLatLon(text);
       let where = null;
@@ -378,7 +378,7 @@ function profileForm(el, ctx) {
       }
       form.farm_id = match.field_id;
       showMatch(match.inside ? "(the address is inside this field)" : `(nearest field, ${match.distance_km} km away)`);
-      findStatus.set(where ? `Found: ${where}. Press Save to keep this field.` : "Matched. Press Save to keep this field.", "ok");
+      findStatus.set(where ? `Found: ${where}. Save the profile to keep this field.` : "Matched. Save the profile to keep this field.", "ok");
     } catch (err) {
       findStatus.set(err.message, "warn");
     } finally {
@@ -431,7 +431,7 @@ function profileForm(el, ctx) {
     h("span", {}, "Paused"),
   );
 
-  const saveButton = h("button", { class: "btn btn-primary", type: "submit" }, "Save");
+  const saveButton = h("button", { class: "btn btn-primary", type: "submit" }, "Save profile");
   const formEl = h(
     "form",
     {
@@ -455,7 +455,7 @@ function profileForm(el, ctx) {
           paused: form.paused,
         };
         saveButton.disabled = true;
-        status.set("Saving...");
+        status.set("Saving your profile.");
         try {
           const row = await updateMyProfile(user.id, patch);
           ctx.setProfile(row);
@@ -512,7 +512,7 @@ export function renderAccount(el, ctx) {
   if (auth.profileError) {
     el.replaceChildren(
       errorNote(auth.profileError, "Could not load your profile"),
-      h("div", { class: "row row-wrap", style: { marginTop: "12px" } }, h("button", { class: "btn", type: "button", onclick: () => ctx.refreshProfile() }, "Try again"), h("button", { class: "btn btn-ghost", type: "button", onclick: ctx.signOut }, "Sign out")),
+      h("div", { class: "row row-wrap", style: { marginTop: "12px" } }, h("button", { class: "btn", type: "button", onclick: () => ctx.refreshProfile() }, "Reload the profile"), h("button", { class: "btn btn-ghost", type: "button", onclick: ctx.signOut }, "Sign out")),
     );
     return {};
   }

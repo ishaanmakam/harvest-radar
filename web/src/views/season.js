@@ -225,7 +225,7 @@ export function renderSeason(el, ctx) {
       "div",
       { class: "section" },
       h("h2", { class: "panel-title" }, "The season so far"),
-      h("p", { class: "muted small" }, `Analytics as of ${fmtDate(analytics.as_of || today, "long")}${land.latest_pass ? ` · latest pass ${fmtDate(land.latest_pass)}` : ""}.`),
+      h("p", { class: "muted small" }, `Analytics as of ${fmtDate(analytics.as_of || today, "long")}.${land.latest_pass ? ` Latest pass ${fmtDate(land.latest_pass)}.` : ""}`),
     ),
   ];
 
@@ -238,7 +238,7 @@ export function renderSeason(el, ctx) {
     const stages = land.standing_by_stage && typeof land.standing_by_stage === "object" ? Object.entries(land.standing_by_stage).map(([k, v]) => `${titleCase(k).toLowerCase()} ${fmtHa(v)}`).join(", ") : null;
     tiles.push(stat("Still standing", fmtHa(land.standing_ha), stages));
   }
-  if (land.flags) tiles.push(stat("Today", `${fmtNum(land.flags.act_now ?? 0)} act now`, `${fmtNum(land.flags.watch ?? 0)} watch · ${fmtNum(land.flags.fine ?? 0)} fine`));
+  if (land.flags) tiles.push(stat("Today", `${fmtNum(land.flags.act_now ?? 0)} act now`, `${fmtNum(land.flags.watch ?? 0)} watch / ${fmtNum(land.flags.fine ?? 0)} fine`));
   if (tiles.length) sections.push(h("div", { class: "section" }, h("div", { class: "milestones" }, ...tiles)));
 
   const progress = land.harvest_progress && typeof land.harvest_progress === "object" ? land.harvest_progress : null;
@@ -299,7 +299,7 @@ export function renderSeason(el, ctx) {
       h(
         "div",
         { class: "section" },
-        h("div", { class: "section-title" }, "Combining the next two weeks"),
+        h("div", { class: "section-title" }, "Combining the two weeks ahead"),
         h("p", { class: "muted small", style: { marginBottom: "6px" } }, "Machine-days of combining the standing crop asks for each day, against the simulated depot capacity."),
         demand,
       ),
