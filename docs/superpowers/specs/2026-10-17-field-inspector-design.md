@@ -4,7 +4,7 @@ Date: 2026-10-17
 
 Harvest Radar is an autonomous field inspector for small family farms. An extension officer and the farmer are both full users. The satellite season does the visiting. People get a morning plan, and a call or a text when something needs action.
 
-The product is for small family farms in general. Sangrur, Punjab is the default demo landscape. It stays the landscape when the season run produces at least four clear frames, which is the minimum the Perceptron probe needs. Below that, the same pipeline runs on the smallholder area with the clearer season. The pitch stays about small family farms.
+The product is for small family farms in general. The demo landscape is Story County, Iowa, and `data/mock` stays the Sangrur stand-in. The pitch stays about small family farms.
 
 ## What people receive
 

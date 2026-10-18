@@ -7,8 +7,7 @@ If anything here disagrees with the spec, the spec wins. Background, sources and
 
 ## Product (summary of the spec)
 An autonomous field inspector for small family farms. The satellite season does the visiting; an extension officer
-and each farmer get a morning plan, and a call or text when something needs action. Sangrur, Punjab is the default
-demo landscape (`config/region.json`), as long as the season run yields at least 4 clear frames.
+and each farmer get a morning plan, and a call or text when something needs action. The demo landscape is Story County, Iowa (`config/region.json`); `data/mock` stays the Sangrur stand-in.
 
 - Every farm gets a plan **every morning**, quiet days included, with all 8 checks and their status
   (`clear` / `watch` / `act_now`): `harvest_ready`, `harvest_before_rain`, `establishment`, `burn_scar`, `fire`,

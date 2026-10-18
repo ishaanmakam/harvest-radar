@@ -1,6 +1,6 @@
 {
-  "name": "Sangrur, Punjab (demo AOI)",
-  "bbox": [75.78, 30.20, 75.88, 30.29],
+  "name": "Story County, Iowa (demo AOI)",
+  "bbox": [-93.52, 41.98, -93.42, 42.07],
   "season_start": "2026-06-01",
   "as_of": "2026-10-17",
   "crs_processing": "EPSG:4326",
