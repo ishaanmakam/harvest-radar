@@ -1,23 +1,23 @@
 #!/usr/bin/env python3
-"""Ishaan's Grok Bot: listens in Slack, reads the thread + repo state, replies with Grok.
+"""Ishaan's Grok Bot: team-coordination bot for Ishaan's workstream on Harvest Radar.
 
 Run from the repo root and leave the window open:
     pip install -r bots/requirements.txt
     python bots/grok_bot.py
 
-Replies when:
-  - someone @mentions the bot anywhere it's invited, or
-  - a message in #bot-channel concerns Ishaan / workstream B (models + optimization) and
-    Grok decides a reply is useful (it answers SKIP otherwise).
-Never replies to itself or to Ishaan's own human messages (unless @mentioned), max 3 replies
-per thread and 30 per hour, so bot-to-bot threads can't spiral.
+What it does (mirrors the team's Grok Bot rules, adapted for Ishaan):
+  1. Ishaan DMs the bot what his agent built -> bot posts DONE / FILES / CONTRACT IMPACT / NEEDS in #bot-channel.
+     Ishaan can also DM questions ("what's blocking us?") and gets answers from the team log.
+  2. Reads every message in #bot-channel and keeps a running team log (bots/team_log.jsonl, not committed).
+  3. When another workstream's update affects Ishaan's work (contracts/, config/, data/out inputs, plans/route/deliveries),
+     it acknowledges in that thread and DMs Ishaan. Questions for Ishaan's workstream get answered if the log/repo
+     covers it, otherwise "checking with Ishaan" + a DM.
+  4. Flags blockers and contradictions between workstreams without picking a side.
+Never agrees to contract/config/spec changes or commits Ishaan to times or work; those go to Ishaan by DM.
+Guardrails: never replies to itself, max 3 replies per thread, 30 posts per hour.
 
-.env needs:
-  SLACK_BOT_TOKEN   xoxb-...  (OAuth & Permissions page of the Slack app)
-  SLACK_APP_TOKEN   xapp-...  (Socket Mode / app-level token with connections:write)
-  XAI_API_KEY       Grok API key
-  XAI_MODEL         optional, default grok-4.7
-  BOT_CHANNEL       optional, default bot-channel
+.env needs: SLACK_BOT_TOKEN (xoxb-), SLACK_APP_TOKEN (xapp-), XAI_API_KEY.
+Optional: XAI_MODEL (default grok-4.7), BOT_CHANNEL (default bot-channel), OWNER_NAME (default "Ishaan").
 """
 import json
 import os
@@ -26,6 +26,7 @@ import subprocess
 import time
 import urllib.request
 from collections import defaultdict, deque
+from datetime import datetime
 from pathlib import Path
 
 from slack_bolt import App
@@ -39,21 +40,30 @@ if env.exists():
             k, v = line.split("=", 1)
             os.environ.setdefault(k.strip(), v.strip())
 
-PREFIX = "[Ishaan's Grok Bot]"
-OWNER_NAME = "ishaan"
+OWNER = os.environ.get("OWNER_NAME", "Ishaan")
+PREFIX = f"[{OWNER}'s Grok Bot]"
 BOT_CHANNEL = os.environ.get("BOT_CHANNEL", "bot-channel")
 MODEL = os.environ.get("XAI_MODEL", "grok-4.7")
-MAX_PER_THREAD, MAX_PER_HOUR, MIN_GAP_S = 3, 30, 20
-TOPIC_WORDS = re.compile(r"\b(ishaan|intelligence|intel|model|models|optimi[sz]\w*|routing|dispatch|milp|demand|harvest model|"
-                         r"status\.json|demand\.json|routing\.json|evaluate|baseline|b/intel|person b)\b", re.I)
+LOG = ROOT / "bots" / "team_log.jsonl"
+SPEC = "docs/superpowers/specs/2026-10-17-field-inspector-design.md"
+MAX_PER_THREAD, MAX_PER_HOUR = 3, 30
 
-PERSONA = f"""You are "Ishaan's Grok Bot", the coordination bot for Ishaan on team Harvest Radar (DubHacks 2026, due Sun Oct 18 10:30 AM PT).
-Project: satellite imagery of Punjab rice fields -> per-field harvest prediction -> residue-machine demand forecast -> dispatch plan
-that beats first-come-first-served, plus Perceptron reading the satellite time-lapse, shown on a web map.
-Ownership: Niranjan = satellite pipeline (pipeline/ -> data/out/*). Ishaan = models + optimization (intelligence/: harvest_model,
-demand, routing/MILP, evaluate.py). Srikar = Perceptron vision (vision/) AND the web map (confirmed by Ishaan).
-You speak for Ishaan's workstream. Be concise (1-4 sentences), factual, and only use facts from the context below.
-If something needs Ishaan's personal decision, say you'll flag it for him. Always start your reply with "{PREFIX}"."""
+PERSONA = f"""You are "{PREFIX[1:-1]}", the project-planning and team-coordination bot for {OWNER}'s workstream on Harvest Radar
+(DubHacks 2026, submissions due Sun Oct 18 10:30 AM PT). You do not write code, place calls, or send texts.
+
+Project (source of truth: {SPEC}): an autonomous field inspector for small family farms. Sentinel-2 imagery, rainfall and the
+forecast go in; Perceptron Mk1.5 reads the season time-lapse; a decision layer writes one plan per farm in plans.json (8 checks
+every morning, clear ones included: harvest_ready, harvest_before_rain, establishment, burn_scar, fire, flood, stress,
+visible_change; flag fine/watch/act_now) plus one officer route in route.json; Grok Voice calls and Photon SMS/iMessage deliver
+it (deliveries.json); a Vite+MapLibre map shows it. Repo: github.com/ishaanmakam/harvest-radar.
+
+Workstreams:
+- Niranjan: season pipeline in pipeline/ -> fields, zones, timeseries, frames, weather, fires in data/out/.
+- {OWNER}: intelligence -> decision layer (plans.json, route.json), morning queue, Grok Voice and Photon texts.
+- Srikar: vision (Perceptron) and the web map.
+Rules: each person edits only their own folder; shared contracts/config/spec change only after the team agrees.
+When talking about farms, use plans.json / route.json facts only; never invent measurements. Keep messages short and plain.
+You post from a bot account; every message you post must start with "{PREFIX}"."""
 
 
 def sh(*args):
@@ -62,30 +72,54 @@ def sh(*args):
 
 def repo_facts():
     sh("git", "fetch", "--quiet", "origin", "+refs/heads/*:refs/remotes/origin/*")
-    facts = {
-        "main_recent": sh("git", "log", "origin/main", "-5", "--pretty=%cr %an: %s"),
-        "b_intel_recent": sh("git", "log", "origin/main..origin/b/intel", "-5", "--pretty=%cr: %s"),
-        "real_data_on_main": sh("git", "ls-tree", "--name-only", "origin/main", "data/out/"),
-    }
-    for d in ("data/out", "data/mock"):
-        p = ROOT / d / "routing.json"
-        if p.exists():
-            s = json.loads(p.read_text())["summary"]
-            facts["hero_metric"] = (f"{d}: optimized {s['optimized']['pct_served']}% vs baseline "
-                                    f"{s['baseline']['pct_served']}% of machine-dependent area served in the window")
-            break
+    facts = {"main_recent": sh("git", "log", "origin/main", "-6", "--pretty=%cr %an: %s")}
+    for b in sh("git", "branch", "-r", "--format=%(refname:short)").splitlines():
+        if b.endswith("/main") or b.endswith("/HEAD"):
+            continue
+        log = sh("git", "log", f"origin/main..{b}", "-4", "--pretty=%cr: %s")
+        if log:
+            facts[f"branch {b}"] = log
+    files = sh("git", "ls-tree", "--name-only", "origin/main", "data/out/", "contracts/")
+    facts["shared_files_on_main"] = files
+    for name in ("plans.json", "route.json"):
+        for d in ("data/out", "data/mock"):
+            raw = sh("git", "show", f"origin/main:{d}/{name}")
+            if raw:
+                facts[f"{d}/{name}"] = raw[:3000]
+                break
     return facts
+
+
+def team_log(n=40):
+    if not LOG.exists():
+        return ""
+    lines = LOG.read_text().splitlines()[-n:]
+    out = []
+    for l in lines:
+        try:
+            e = json.loads(l)
+            out.append(f"{e['t']} {e['who']}: {e['text'][:400]}")
+        except Exception:
+            pass
+    return "\n".join(out)
+
+
+def log_event(who, text):
+    LOG.parent.mkdir(parents=True, exist_ok=True)
+    with LOG.open("a") as f:
+        f.write(json.dumps({"t": datetime.now().strftime("%H:%M"), "who": who, "text": text}) + "\n")
 
 
 def grok(prompt):
     key = os.environ.get("XAI_API_KEY")
     if not key:
+        print("  no XAI_API_KEY")
         return None
     headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
 
     def post(url, data):
         req = urllib.request.Request(url, data=json.dumps(data).encode(), headers=headers)
-        with urllib.request.urlopen(req, timeout=60) as r:
+        with urllib.request.urlopen(req, timeout=90) as r:
             return json.loads(r.read().decode())
 
     try:
@@ -105,13 +139,30 @@ def grok(prompt):
         return None
 
 
+def grok_json(prompt):
+    out = grok(prompt + "\n\nRespond with ONLY a JSON object, no code fences.")
+    if not out:
+        return None
+    m = re.search(r"\{.*\}", out, re.S)
+    try:
+        return json.loads(m.group(0)) if m else None
+    except Exception:
+        print(f"  could not parse Grok JSON: {out[:200]}")
+        return None
+
+
+def tag(text):
+    text = (text or "").strip()
+    return text if text.startswith(PREFIX) else f"{PREFIX} {text}"
+
+
 app = App(token=os.environ["SLACK_BOT_TOKEN"])
 AUTH = app.client.auth_test()
 BOT_USER_ID, BOT_ID = AUTH["user_id"], AUTH.get("bot_id")
 _names, _channels = {}, {}
+_owner = {"id": None, "dm": None}
 replies_in_thread = defaultdict(int)
-recent_replies = deque()
-last_reply_at = defaultdict(float)
+recent_posts = deque()
 
 
 def name_of(user_id):
@@ -126,92 +177,166 @@ def name_of(user_id):
     return _names[user_id]
 
 
+def owner_id():
+    if not _owner["id"]:
+        for page in app.client.users_list(limit=200)["members"]:
+            if OWNER.lower() in (page.get("real_name") or page.get("name") or "").lower() and not page.get("is_bot"):
+                _owner["id"] = page["id"]
+                break
+    return _owner["id"]
+
+
+def dm_owner(text):
+    oid = owner_id()
+    if not oid:
+        print("  could not find owner to DM")
+        return
+    if not _owner["dm"]:
+        _owner["dm"] = app.client.conversations_open(users=oid)["channel"]["id"]
+    app.client.chat_postMessage(channel=_owner["dm"], text=text)
+
+
 def channel_name(cid):
     if cid not in _channels:
         try:
-            _channels[cid] = app.client.conversations_info(channel=cid)["channel"]["name"]
+            _channels[cid] = app.client.conversations_info(channel=cid)["channel"].get("name", cid)
         except Exception:
             _channels[cid] = cid
     return _channels[cid]
 
 
-def transcript(channel, thread_ts):
-    if thread_ts:
-        msgs = app.client.conversations_replies(channel=channel, ts=thread_ts, limit=30)["messages"]
-    else:
-        msgs = list(reversed(app.client.conversations_history(channel=channel, limit=15)["messages"]))
-    lines = []
-    for m in msgs:
-        who = "Ishaan's Grok Bot (you)" if (m.get("user") == BOT_USER_ID or m.get("bot_id") == BOT_ID) else name_of(m.get("user"))
-        text = re.sub(r"<@(\w+)>", lambda x: "@" + name_of(x.group(1)), m.get("text", ""))
-        lines.append(f"{who}: {text}")
-    return "\n".join(lines)
+def bot_channel_id():
+    for c in app.client.conversations_list(limit=200, types="public_channel")["channels"]:
+        if c["name"] == BOT_CHANNEL:
+            return c["id"]
+    return None
 
 
-def can_reply(thread_key):
+def thread_text(channel, thread_ts):
+    if not thread_ts:
+        return ""
+    msgs = app.client.conversations_replies(channel=channel, ts=thread_ts, limit=30)["messages"]
+    return "\n".join(f"{'you' if m.get('bot_id') == BOT_ID else name_of(m.get('user'))}: {m.get('text', '')}" for m in msgs)
+
+
+def allowed(thread_key):
     now = time.time()
-    while recent_replies and now - recent_replies[0] > 3600:
-        recent_replies.popleft()
-    return (replies_in_thread[thread_key] < MAX_PER_THREAD and len(recent_replies) < MAX_PER_HOUR
-            and now - last_reply_at[thread_key] > MIN_GAP_S)
+    while recent_posts and now - recent_posts[0] > 3600:
+        recent_posts.popleft()
+    return replies_in_thread[thread_key] < MAX_PER_THREAD and len(recent_posts) < MAX_PER_HOUR
 
 
-def handle(event, mentioned):
-    if event.get("subtype") not in (None, "thread_broadcast"):
-        return
-    if event.get("user") == BOT_USER_ID or (BOT_ID and event.get("bot_id") == BOT_ID):
-        return
+def posted(thread_key):
+    replies_in_thread[thread_key] += 1
+    recent_posts.append(time.time())
+
+
+def context_block(extra=""):
+    return (f"{PERSONA}\n\nTeam log (most recent last):\n{team_log() or '(empty)'}\n\n"
+            f"Repo state:\n{json.dumps(repo_facts(), indent=1)}\n{extra}")
+
+
+def on_owner_dm(event):
     text = event.get("text", "")
-    if text.startswith(PREFIX):
-        return
-    author = name_of(event.get("user"))
-    if not mentioned:
-        if channel_name(event["channel"]) != BOT_CHANNEL:
-            return
-        if OWNER_NAME in author.lower() and "[" not in text[:3]:
-            return  # Ishaan's own human messages: don't talk over him
-        if not TOPIC_WORDS.search(text):
-            return
-    channel = event["channel"]
-    thread_ts = event.get("thread_ts") or event["ts"]
-    if not can_reply(thread_ts):
-        print("  rate-limited, skipping")
-        return
+    decision = grok_json(context_block() + f"""
 
-    convo = transcript(channel, event.get("thread_ts"))
-    facts = repo_facts()
-    rule = ("You were @mentioned, so reply." if mentioned else
-            "Reply ONLY if this message asks Ishaan / his bot something, needs an answer about workstream B, or makes a "
-            "claim about B that needs correcting. Do not reply to acknowledgements, thanks, or intros that need nothing. "
-            "If no reply is needed, output exactly SKIP.")
-    prompt = (f"{PERSONA}\n\nRepo state (JSON):\n{json.dumps(facts, indent=1)}\n\n"
-              f"Conversation in #{channel_name(channel)}:\n{convo}\n\nNewest message, from {author}:\n{text}\n\n{rule}")
-    reply = grok(prompt)
-    if not reply or reply.strip().upper().startswith("SKIP"):
-        print(f"  no reply ({'grok unavailable' if not reply else 'SKIP'})")
+{OWNER} just DMed you:
+\"\"\"{text}\"\"\"
+
+Decide:
+- If it describes work his agent built or finished, write a #bot-channel update in exactly this format (plain text):
+  {PREFIX}
+  DONE: what works now
+  FILES: what changed
+  CONTRACT IMPACT: none, or which shared file/schema is affected
+  NEEDS: anything needed from another workstream
+  Only use facts from his message and the repo state. Put it in "post".
+- If it's a question, answer it from the team log and repo state in "reply" (say plainly if you don't know).
+- If he asks you to post something specific, put it in "post".
+JSON keys: "post" (string, may be empty), "reply" (string for {OWNER}, may be empty).""")
+    if not decision:
+        app.client.chat_postMessage(channel=event["channel"], text="Grok is unavailable right now (check the bot window for the error).")
         return
-    if not reply.startswith(PREFIX):
-        reply = f"{PREFIX} {reply}"
-    app.client.chat_postMessage(channel=channel, thread_ts=thread_ts, text=reply)
-    replies_in_thread[thread_ts] += 1
-    last_reply_at[thread_ts] = time.time()
-    recent_replies.append(time.time())
-    print(f"  replied in #{channel_name(channel)}")
+    if decision.get("post"):
+        cid = bot_channel_id()
+        if cid and allowed("dm-post"):
+            msg = tag(decision["post"])
+            app.client.chat_postMessage(channel=cid, text=msg)
+            posted("dm-post")
+            log_event(PREFIX[1:-1], msg)
+            app.client.chat_postMessage(channel=event["channel"], text=f"Posted to #{BOT_CHANNEL}:\n{msg}")
+    if decision.get("reply"):
+        app.client.chat_postMessage(channel=event["channel"], text=decision["reply"])
+
+
+def on_channel_message(event, mentioned):
+    text = event.get("text", "")
+    author = name_of(event.get("user"))
+    channel = event["channel"]
+    log_event(author, text)
+    if not mentioned and channel_name(channel) != BOT_CHANNEL:
+        return
+    thread_ts = event.get("thread_ts") or event["ts"]
+    if not allowed(thread_ts):
+        print("  rate limit, skipping")
+        return
+    decision = grok_json(context_block(f"\nThread so far:\n{thread_text(channel, event.get('thread_ts'))}") + f"""
+
+New message in #{channel_name(channel)} from {author}{' (they @mentioned you)' if mentioned else ''}:
+\"\"\"{text}\"\"\"
+
+Decide what to do, following these rules:
+- If you were @mentioned, always answer in the thread.
+- If it asks {OWNER}'s workstream something answerable from the log/repo, answer in the thread.
+- If it affects {OWNER}'s work (contracts/, config/, the spec, data/out inputs, plans/route/deliveries, voice/texts), acknowledge
+  in the thread and say what it means for the decision layer, and notify {OWNER}.
+- If it reveals a blocker or two workstreams contradicting each other, say so in the thread without picking a side, and notify {OWNER}.
+- If answering would agree to change a shared contract/config/spec, commit {OWNER} to a time, or you don't know: thread reply
+  "checking with {OWNER}" and put the question in "notify".
+- Acknowledgements, thanks, intros that need nothing: no thread reply.
+- {OWNER}'s own human messages: never reply in the thread; notify only if something needs his attention.
+JSON keys: "thread_reply" (string, may be empty), "notify" (string for {OWNER}'s DM, may be empty).""")
+    if not decision:
+        return
+    if decision.get("thread_reply"):
+        reply = tag(decision["thread_reply"])
+        app.client.chat_postMessage(channel=channel, thread_ts=thread_ts, text=reply)
+        posted(thread_ts)
+        log_event(PREFIX[1:-1], reply)
+        print(f"  replied in #{channel_name(channel)}")
+    if decision.get("notify"):
+        dm_owner(f"{decision['notify']}\n(from #{channel_name(channel)}, {author})")
+        print("  notified owner")
+
+
+def skip(event):
+    if event.get("subtype") not in (None, "thread_broadcast"):
+        return True
+    if event.get("user") == BOT_USER_ID or (BOT_ID and event.get("bot_id") == BOT_ID):
+        return True
+    return event.get("text", "").startswith(PREFIX)
 
 
 @app.event("app_mention")
 def on_mention(event):
+    if skip(event):
+        return
     print(f"mention from {name_of(event.get('user'))}")
-    handle(event, mentioned=True)
+    on_channel_message(event, mentioned=True)
 
 
 @app.event("message")
 def on_message(event):
-    if f"<@{BOT_USER_ID}>" in event.get("text", ""):
-        return  # handled by app_mention
-    handle(event, mentioned=False)
+    if skip(event) or f"<@{BOT_USER_ID}>" in event.get("text", ""):
+        return
+    if event.get("channel_type") == "im":
+        if event.get("user") == owner_id():
+            print("DM from owner")
+            on_owner_dm(event)
+        return
+    on_channel_message(event, mentioned=False)
 
 
 if __name__ == "__main__":
-    print(f"Ishaan's Grok Bot online as {AUTH['user']} ({MODEL}). Watching #{BOT_CHANNEL}. Ctrl+C to stop.")
+    print(f"{PREFIX} online as {AUTH['user']} ({MODEL}). Watching #{BOT_CHANNEL}; DM me your updates. Ctrl+C to stop.")
     SocketModeHandler(app, os.environ["SLACK_APP_TOKEN"]).start()

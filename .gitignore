@@ -7,3 +7,4 @@ __pycache__/
 node_modules/
 web/dist/
 .DS_Store
+bots/team_log.jsonl
