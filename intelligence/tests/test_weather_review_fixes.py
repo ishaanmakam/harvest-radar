@@ -255,6 +255,11 @@ class TestFrostIsInformation:
         fc = [(D("2026-10-17"), 0.0, 6.0), (D("2026-10-18"), 0.0, -3.0)]
         assert "hard freeze" in check(decide.farm_plan(rec(**READY), QUIET_PASSES, fc, [], None, TODAY), "harvest_before_rain")["detail"]
 
+    def test_a_half_degree_frost_is_not_printed_as_minus_zero(self):
+        fc = [(D("2026-10-17"), 0.0, -0.5), (D("2026-10-18"), 0.0, 4.0)]
+        detail = check(decide.farm_plan(rec(**READY), QUIET_PASSES, fc, [], None, TODAY), "harvest_before_rain")["detail"]
+        assert "(-0.5 °C)" in detail and "-0 °C" not in detail
+
     def test_frost_on_a_maturing_crop_is_information(self):
         fc = [(D("2026-10-17"), 0.0, 6.0), (D("2026-10-18"), 0.0, -1.0)]
         c = check(decide.farm_plan(rec(), QUIET_PASSES, fc, [], None, TODAY), "harvest_before_rain")
