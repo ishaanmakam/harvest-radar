@@ -29,6 +29,9 @@ jobs:
         working-directory: web
       - run: npm run build
         working-directory: web
+        env:
+          # Repository variable SIGNUP_URL: the public sign-up page of the inbound server, once it has one.
+          VITE_SIGNUP_URL: ${{ vars.SIGNUP_URL }}
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

@@ -5,7 +5,7 @@ import { CHANNEL_LABEL, ROLE_LABEL, chip, fmtDate, fmtNum, titleCase } from "../
 function explainer(ctx) {
   return h(
     "div",
-    { class: "explainer" },
+    { class: "explainer", id: ctx.explainerId || "signup-explainer", tabindex: "-1" },
     h("div", { class: "section-title" }, "How a farmer gets this"),
     h(
       "ul",
@@ -15,7 +15,9 @@ function explainer(ctx) {
       h("li", {}, "A farmer can call or text back about their own farm; replying STOP ends the messages."),
       h("li", {}, "Sends go only to numbers in the roster, and the queue is dry-run before every real send."),
     ),
-    h("a", { class: "btn btn-primary", href: ctx.signupUrl, target: "_blank", rel: "noopener" }, "Get your farm's morning plan"),
+    ctx.signupUrl
+      ? h("a", { class: "btn btn-primary", href: ctx.signupUrl, target: "_blank", rel: "noopener" }, "Get your farm's morning plan")
+      : h("p", { class: "muted small", style: { margin: 0 } }, "Sign-up opens here once the Overfield inbound server is public."),
   );
 }
 
