@@ -202,3 +202,72 @@ The spec has the full rules; this is the reasoning to give judges.
 - Climate Change AI / NeurIPS 2024 (burn detection with geospatial foundation model): https://www.climatechange.ai/papers/neurips2024/97
 - CGAP Smallholder Household Survey, Mozambique (weather as top risk): https://microdata.fao.org/index.php/catalog/1476/variable/F3/V830?name=A60
 - Satellite pasture biomass pilot (data alone doesn't drive uptake): https://core.ac.uk/works/38561630
+
+
+## Beyond Earth: Mars
+
+Overfield reads orbital data, runs a fixed set of checks on every place, and explains its pick in plain words. On
+Earth that is a morning plan for 136 farms. On Mars the question is where Starship should land. SpaceX has been asking
+it too: in 2019 HiRISE photographed six sites titled "Candidate Landing Site for SpaceX Starship" (five in Arcadia
+Planitia and Erebus Montes, one at Phlegra Montes). Independent analysis from public NASA, USGS and PSI data. Not
+affiliated with or endorsed by SpaceX.
+
+**The line:** SpaceX scouted six sites in 2019. We graded them on what SpaceX doesn't publicly screen for, then
+searched the whole ice belt for alternatives.
+
+### 30-second demo
+
+1. On the opening globe, right-click (or press the right arrow): the camera slides from Earth to Mars. The legend
+   switches to "Watching Mars" and the copy reads Mars, open.
+2. "Open Mars map". The whole planet between 60 S and 60 N with the score overlay, our ten sites numbered, SpaceX's six
+   sites as white rings.
+3. Click M01 (52 N, 167 E): the THEMIS frame, then the four checks as go, watch, no-go rows, the same visual language as
+   a farm's eight checks.
+4. Scroll the dock to "SpaceX's 2019 sites", click ESP_060811_2205: no-go on our science-reach check with everything
+   SpaceX screens for passing, and "best within 200 km" with a Fly there button.
+5. End on the footer line: "Independent analysis from public NASA, USGS and PSI data. Not affiliated with or endorsed
+   by SpaceX."
+
+### The four checks
+
+| check | from | dataset | why |
+|---|---|---|---|
+| Ice within reach | SpaceX | SWIM 2025 ice consistency, 0-1 m and 1-5 m (PSI) | Water for propellant, air and crops. |
+| Low ground | SpaceX | MOLA MEGDR 16 ppd (NASA PDS) | More atmosphere to slow the ship. |
+| Plume-safe ground | ours | MGS TES nighttime thermal inertia (Putzig and Mellon, PSI) | Firm soil the engines will not dig out: very low inertia is loose dust, very high is rock. |
+| Science reach | ours | USGS SIM 3292 geologic units within about 100 km | More kinds of rock within a rover's range, and rock from the wet early eras. |
+
+Weights 0.35 / 0.20 / 0.25 / 0.20. A cell's status is its worst check, the same rule as a farm's flag. Shown on every
+card but not scored: regional slope, latitude, albedo. Every cutoff lives in `pipeline/mars/config.json` and is drawn
+on the map's "How we rank" block from `sites.json`.
+
+### What the data said (run of 2026-10-18)
+
+- 2,764,800 cells scored between 60 S and 60 N; 1.4 percent go, 24.2 percent watch, 74.4 percent no-go. Ice is the
+  binding factor: the go cells sit in the two ice belts, poleward of about 40 degrees.
+- Top three: M01 at 52.3 N, 167.4 E (go, 0.955: firm ground; few rock types within reach); M02 at 49.4 S, 86.1 E (go, 0.945: thick air to brake in; few rock types within reach); M03 at 52.1 S, 78.3 E (go, 0.942: thick air to brake in; few rock types within reach).
+- SpaceX's six: one lands in the go band (ESP_060707_2160, Phlegra Montes), four in watch, one in no-go
+  (ESP_060811_2205, a single geologic unit within reach). All six pass the ice check, the low-ground check and our plume
+  check; the watch and no-go verdicts come entirely from science reach. Arcadia holds up on what SpaceX screens for; our
+  factors add the reason to prefer the Phlegra site or to look 50 to 200 km away.
+
+### Blind spots
+
+No sunlight or power factor (SpaceX screens for it; we leave it to them). No rock-hazard factor at landing scale
+(HiRISE work). 7 km cells are far coarser than a landing ellipse. SWIM covers 60 S to 60 N only. Thermal inertia is a
+regional average; local boulders are invisible at this scale, and about 15 percent of the map is the authors'
+interpolated fill.
+
+### Likely judge questions
+
+- *Why only two of SpaceX's factors?* We wanted an independent second opinion, not a copy of their screen. Their other
+  two factors, sunlight and flat rock-free ground, are shown on every card as context, labelled not scored.
+- *How sure is the ice?* SWIM combines neutron, radar, thermal and landform evidence into a consistency value from -1 to
+  +1. It is not a measured depth or an amount; a go means the evidence agrees, not that a drill has hit ice.
+- *Why thermal inertia for landing safety?* It separates loose dust from firm ground and rock at regional scale, which is
+  what a plume digs into. Boulders at landing scale need HiRISE, which is exactly what SpaceX used.
+- *Is any of this mission-ready?* No. 7 km cells; it is a screen that says where to point HiRISE next.
+- *Where's the business?* The same engine: read orbital data, run fixed checks, explain the pick. Earth farms today,
+  landing sites tomorrow, and the same honesty rules for both.
+
+Slide: `data/out/mars/score_map.png`. Pipeline and terms: `pipeline/mars/README.md`.

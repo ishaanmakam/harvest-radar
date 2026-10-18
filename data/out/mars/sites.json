@@ -1,0 +1,1447 @@
+{
+ "generated_at": "2026-10-18T11:45:25Z",
+ "title": "Where Starship should land",
+ "method": "Every 0.125 degree cell between -60 and 60 degrees latitude (about 7 km) gets four checks from public orbital data: ice within reach and low ground from SpaceX's stated criteria, plume-safe ground and science reach from us. Each check is go, watch or no-go with a 0 to 1 goodness; a cell's status is its worst check, the same rule as a farm's flag on Earth; the score is the weighted mean of goodness (ice 0.35, low_elevation 0.20, plume_safe_ground 0.25, science_reach 0.20). Sunlight, latitude and landing-scale rock hazards are shown but not scored: SpaceX screens for them and HiRISE is the right tool. Sites are the best go cells at least 300 km apart.",
+ "grid": {
+  "cell_deg": 0.125,
+  "lat_min": -60,
+  "lat_max": 60,
+  "lon_convention": "east-positive, -180..180",
+  "latitude": "planetocentric",
+  "rows": 960,
+  "cols": 2880
+ },
+ "factors": [
+  {
+   "id": "ice",
+   "name": "Ice within reach",
+   "from": "spacex",
+   "dataset": "SWIM ice consistency, 0-1 m and 1-5 m (PSI)",
+   "why": "Water for propellant, air and crops.",
+   "go": "0-1 m consistency >= 0.25, or 1-5 m consistency >= 0.5",
+   "watch": "0-1 m consistency >= 0, or 1-5 m consistency >= 0.25",
+   "no_go": "otherwise",
+   "goodness_rule": "max((c01 + 1) / 2, 0.85 x (c15 + 1) / 2)",
+   "weight": 0.35
+  },
+  {
+   "id": "low_elevation",
+   "name": "Low ground",
+   "from": "spacex",
+   "dataset": "MOLA MEGDR elevation, 16 pixels per degree (NASA PDS)",
+   "why": "More atmosphere to slow the ship.",
+   "go": "elevation <= -2,500 m",
+   "watch": "elevation <= 0 m",
+   "no_go": "above 0 m",
+   "goodness_rule": "1 at -4,000 m or lower, 0 at +1,000 m or higher, linear between",
+   "weight": 0.2
+  },
+  {
+   "id": "plume_safe_ground",
+   "name": "Plume-safe ground",
+   "from": "ours",
+   "dataset": "MGS TES nighttime thermal inertia, 20 pixels per degree (Putzig and Mellon, PSI)",
+   "why": "Firm soil the engines will not dig out: very low inertia is loose dust, very high is rock and bedrock.",
+   "go": "180 <= TI <= 500",
+   "watch": "120 <= TI < 180, or 500 < TI <= 700",
+   "no_go": "TI < 120 (loose dust) or TI > 700 (rock, bedrock)",
+   "goodness_rule": "trapezoid: 0 at 80, 1 from 180 to 500, 0 at 800",
+   "weight": 0.25
+  },
+  {
+   "id": "science_reach",
+   "name": "Science reach",
+   "from": "ours",
+   "dataset": "USGS Mars Global Geologic Map, SIM 3292 (Tanaka et al. 2014)",
+   "why": "More kinds of rock within a rover's range, and rock from the wet early eras.",
+   "go": ">= 4 distinct units within about 100 km, including a Noachian or Hesperian one",
+   "watch": ">= 2 units",
+   "no_go": "1 unit (a uniform plain)",
+   "goodness_rule": "0.7 x min(1, units / 6) + 0.3 x (1 if an old unit is within reach else 0)",
+   "weight": 0.2
+  }
+ ],
+ "shown_not_scored": [
+  {
+   "id": "slope",
+   "name": "Regional slope",
+   "why": "Flat, rock-free ground is SpaceX's own screen and needs HiRISE at landing scale; a 20 km slope is context, not a verdict."
+  },
+  {
+   "id": "latitude",
+   "name": "Latitude",
+   "why": "Sunlight and power are SpaceX's own screen (within about 40 degrees of the equator); we show it and leave it to them."
+  },
+  {
+   "id": "albedo",
+   "name": "Dust (albedo)",
+   "why": "Bright ground usually means a dust cover; thermal inertia already scores the firmness, so albedo stays context."
+  }
+ ],
+ "blind_spots": [
+  "no sunlight or power factor (SpaceX screens for it; we leave it to them)",
+  "no rock-hazard factor at landing scale (HiRISE work)",
+  "7 km cells are far coarser than a landing ellipse",
+  "SWIM covers 60 S to 60 N only",
+  "thermal inertia is a regional average; local boulders are invisible at this scale",
+  "about 15 percent of the thermal inertia map between 60 S and 60 N is the authors' interpolated fill (TES mask); those cells are flagged in the detail text"
+ ],
+ "stats": {
+  "cells_scored": 2764800,
+  "go": 37798,
+  "watch": 670362,
+  "no_go": 2056640,
+  "no_data": 0,
+  "correlations": {
+   "ice vs low_elevation": 0.393,
+   "ice vs plume_safe_ground": 0.322,
+   "ice vs science_reach": -0.061,
+   "low_elevation vs plume_safe_ground": 0.347,
+   "low_elevation vs science_reach": -0.117,
+   "plume_safe_ground vs science_reach": -0.003
+  },
+  "weights": {
+   "ice": 0.35,
+   "low_elevation": 0.2,
+   "plume_safe_ground": 0.25,
+   "science_reach": 0.2
+  }
+ },
+ "sites": [
+  {
+   "lat": 52.3125,
+   "lon": 167.4375,
+   "status": "go",
+   "score": 0.955,
+   "checks": [
+    {
+     "factor": "ice",
+     "status": "go",
+     "value": 0.889,
+     "unit": "consistency 0-1 m",
+     "goodness": 0.945,
+     "detail": "Ice within 1 m (consistency +0.89 at 0-1 m, +0.55 at 1-5 m)"
+    },
+    {
+     "factor": "low_elevation",
+     "status": "go",
+     "value": -3932.25,
+     "unit": "m",
+     "goodness": 0.986,
+     "detail": "-3,932 m: thick air to brake in"
+    },
+    {
+     "factor": "plume_safe_ground",
+     "status": "go",
+     "value": 261.08,
+     "unit": "J m^-2 K^-1 s^-1/2",
+     "goodness": 1.0,
+     "detail": "Thermal inertia 261: firm, packed ground (from the map's interpolated fill, not a direct TES measurement)"
+    },
+    {
+     "factor": "science_reach",
+     "status": "go",
+     "value": 5.0,
+     "unit": "units within 100 km",
+     "goodness": 0.883,
+     "detail": "5 rock units within about 100 km, one from the wet early eras"
+    }
+   ],
+   "context": {
+    "slope_deg": 0.12,
+    "abs_latitude": 52.31,
+    "albedo": 0.183
+   },
+   "geology": {
+    "unit": "mAl",
+    "age": "Amazonian",
+    "units_within_100km": 5,
+    "oldest_within_100km": "Noachian or Hesperian"
+   },
+   "id": "M01",
+   "rank": 1,
+   "reason": "Firm ground; few rock types within reach.",
+   "nearest_spacex": {
+    "id": "ESP_060707_2160",
+    "km": 1008
+   },
+   "thumb": "thumbs/M01.jpg",
+   "thumb_source": "THEMIS day IR controlled mosaic (mc07_cebrenia_nir) via USGS Astrogeology STAC"
+  },
+  {
+   "lat": -49.4375,
+   "lon": 86.0625,
+   "status": "go",
+   "score": 0.945,
+   "checks": [
+    {
+     "factor": "ice",
+     "status": "go",
+     "value": 0.817,
+     "unit": "consistency 0-1 m",
+     "goodness": 0.908,
+     "detail": "Ice within 1 m (consistency +0.82 at 0-1 m, +0.63 at 1-5 m)"
+    },
+    {
+     "factor": "low_elevation",
+     "status": "go",
+     "value": -5600.0,
+     "unit": "m",
+     "goodness": 1.0,
+     "detail": "-5,600 m: thick air to brake in"
+    },
+    {
+     "factor": "plume_safe_ground",
+     "status": "go",
+     "value": 283.56,
+     "unit": "J m^-2 K^-1 s^-1/2",
+     "goodness": 1.0,
+     "detail": "Thermal inertia 284: firm, packed ground (from the map's interpolated fill, not a direct TES measurement)"
+    },
+    {
+     "factor": "science_reach",
+     "status": "go",
+     "value": 5.0,
+     "unit": "units within 100 km",
+     "goodness": 0.883,
+     "detail": "5 rock units within about 100 km, one from the wet early eras"
+    }
+   ],
+   "context": {
+    "slope_deg": 2.21,
+    "abs_latitude": 49.44,
+    "albedo": 0.193
+   },
+   "geology": {
+    "unit": "mNh",
+    "age": "Noachian",
+    "units_within_100km": 5,
+    "oldest_within_100km": "Noachian or Hesperian"
+   },
+   "id": "M02",
+   "rank": 2,
+   "reason": "Thick air to brake in; few rock types within reach.",
+   "nearest_spacex": {
+    "id": "ESP_060707_2160",
+    "km": 6453
+   },
+   "thumb": "thumbs/M02.jpg",
+   "thumb_source": "THEMIS day IR controlled mosaic (mc28_hellas_nir) via USGS Astrogeology STAC"
+  },
+  {
+   "lat": -52.0625,
+   "lon": 78.3125,
+   "status": "go",
+   "score": 0.942,
+   "checks": [
+    {
+     "factor": "ice",
+     "status": "go",
+     "value": 0.803,
+     "unit": "consistency 0-1 m",
+     "goodness": 0.902,
+     "detail": "Ice within 1 m (consistency +0.80 at 0-1 m, +0.43 at 1-5 m)"
+    },
+    {
+     "factor": "low_elevation",
+     "status": "go",
+     "value": -5634.75,
+     "unit": "m",
+     "goodness": 1.0,
+     "detail": "-5,635 m: thick air to brake in"
+    },
+    {
+     "factor": "plume_safe_ground",
+     "status": "go",
+     "value": 278.12,
+     "unit": "J m^-2 K^-1 s^-1/2",
+     "goodness": 1.0,
+     "detail": "Thermal inertia 278: firm, packed ground"
+    },
+    {
+     "factor": "science_reach",
+     "status": "go",
+     "value": 5.0,
+     "unit": "units within 100 km",
+     "goodness": 0.883,
+     "detail": "5 rock units within about 100 km, one from the wet early eras"
+    }
+   ],
+   "context": {
+    "slope_deg": 0.55,
+    "abs_latitude": 52.06,
+    "albedo": 0.165
+   },
+   "geology": {
+    "unit": "lNv",
+    "age": "Noachian",
+    "units_within_100km": 5,
+    "oldest_within_100km": "Noachian or Hesperian"
+   },
+   "id": "M03",
+   "rank": 3,
+   "reason": "Thick air to brake in; few rock types within reach.",
+   "nearest_spacex": {
+    "id": "ESP_060707_2160",
+    "km": 6782
+   },
+   "thumb": "thumbs/M03.jpg",
+   "thumb_source": "THEMIS day IR controlled mosaic (mc28_hellas_nir) via USGS Astrogeology STAC"
+  },
+  {
+   "lat": 59.9375,
+   "lon": -82.3125,
+   "status": "go",
+   "score": 0.933,
+   "checks": [
+    {
+     "factor": "ice",
+     "status": "go",
+     "value": 0.878,
+     "unit": "consistency 0-1 m",
+     "goodness": 0.939,
+     "detail": "Ice within 1 m (consistency +0.88 at 0-1 m, +0.59 at 1-5 m)"
+    },
+    {
+     "factor": "low_elevation",
+     "status": "go",
+     "value": -3447.5,
+     "unit": "m",
+     "goodness": 0.89,
+     "detail": "-3,448 m: thick air to brake in"
+    },
+    {
+     "factor": "plume_safe_ground",
+     "status": "go",
+     "value": 211.68,
+     "unit": "J m^-2 K^-1 s^-1/2",
+     "goodness": 1.0,
+     "detail": "Thermal inertia 212: firm, packed ground (from the map's interpolated fill, not a direct TES measurement)"
+    },
+    {
+     "factor": "science_reach",
+     "status": "go",
+     "value": 5.0,
+     "unit": "units within 100 km",
+     "goodness": 0.883,
+     "detail": "5 rock units within about 100 km, one from the wet early eras"
+    }
+   ],
+   "context": {
+    "slope_deg": 0.14,
+    "abs_latitude": 59.94,
+    "albedo": 0.207
+   },
+   "geology": {
+    "unit": "AHi",
+    "age": "Amazonian-Hesperian transition",
+    "units_within_100km": 5,
+    "oldest_within_100km": "Noachian or Hesperian"
+   },
+   "id": "M04",
+   "rank": 4,
+   "reason": "Firm ground; few rock types within reach.",
+   "nearest_spacex": {
+    "id": "ESP_060811_2205",
+    "km": 2881
+   },
+   "thumb": "thumbs/M04.jpg",
+   "thumb_source": "THEMIS day IR controlled mosaic (mc03_arcadia_nir) via USGS Astrogeology STAC"
+  },
+  {
+   "lat": -49.1875,
+   "lon": 64.8125,
+   "status": "go",
+   "score": 0.924,
+   "checks": [
+    {
+     "factor": "ice",
+     "status": "go",
+     "value": 0.832,
+     "unit": "consistency 0-1 m",
+     "goodness": 0.916,
+     "detail": "Ice within 1 m (consistency +0.83 at 0-1 m, +0.67 at 1-5 m)"
+    },
+    {
+     "factor": "low_elevation",
+     "status": "go",
+     "value": -6298.5,
+     "unit": "m",
+     "goodness": 1.0,
+     "detail": "-6,298 m: thick air to brake in"
+    },
+    {
+     "factor": "plume_safe_ground",
+     "status": "go",
+     "value": 221.12,
+     "unit": "J m^-2 K^-1 s^-1/2",
+     "goodness": 1.0,
+     "detail": "Thermal inertia 221: firm, packed ground"
+    },
+    {
+     "factor": "science_reach",
+     "status": "go",
+     "value": 4.0,
+     "unit": "units within 100 km",
+     "goodness": 0.767,
+     "detail": "4 rock units within about 100 km, one from the wet early eras"
+    }
+   ],
+   "context": {
+    "slope_deg": 0.87,
+    "abs_latitude": 49.19,
+    "albedo": 0.162
+   },
+   "geology": {
+    "unit": "lNv",
+    "age": "Noachian",
+    "units_within_100km": 4,
+    "oldest_within_100km": "Noachian or Hesperian"
+   },
+   "id": "M05",
+   "rank": 5,
+   "reason": "Thick air to brake in; few rock types within reach.",
+   "nearest_spacex": {
+    "id": "ESP_060707_2160",
+    "km": 7181
+   },
+   "thumb": "thumbs/M05.jpg",
+   "thumb_source": "THEMIS day IR controlled mosaic (mc28_hellas_nir) via USGS Astrogeology STAC"
+  },
+  {
+   "lat": -38.0625,
+   "lon": 95.6875,
+   "status": "go",
+   "score": 0.913,
+   "checks": [
+    {
+     "factor": "ice",
+     "status": "go",
+     "value": 0.093,
+     "unit": "consistency 0-1 m",
+     "goodness": 0.753,
+     "detail": "Ice 1 to 5 m down (consistency +0.09 at 0-1 m, +0.77 at 1-5 m)"
+    },
+    {
+     "factor": "low_elevation",
+     "status": "go",
+     "value": -4861.0,
+     "unit": "m",
+     "goodness": 1.0,
+     "detail": "-4,861 m: thick air to brake in"
+    },
+    {
+     "factor": "plume_safe_ground",
+     "status": "go",
+     "value": 222.8,
+     "unit": "J m^-2 K^-1 s^-1/2",
+     "goodness": 1.0,
+     "detail": "Thermal inertia 223: firm, packed ground"
+    },
+    {
+     "factor": "science_reach",
+     "status": "go",
+     "value": 6.0,
+     "unit": "units within 100 km",
+     "goodness": 1.0,
+     "detail": "6 rock units within about 100 km, one from the wet early eras"
+    }
+   ],
+   "context": {
+    "slope_deg": 1.28,
+    "abs_latitude": 38.06,
+    "albedo": 0.155
+   },
+   "geology": {
+    "unit": "ANa",
+    "age": "Amazonian-Noachian transition",
+    "units_within_100km": 6,
+    "oldest_within_100km": "Noachian or Hesperian"
+   },
+   "id": "M06",
+   "rank": 6,
+   "reason": "Thick air to brake in; ice is uncertain.",
+   "nearest_spacex": {
+    "id": "ESP_060707_2160",
+    "km": 5722
+   },
+   "thumb": "thumbs/M06.jpg",
+   "thumb_source": "THEMIS day IR controlled mosaic (mc28_hellas_nir) via USGS Astrogeology STAC"
+  },
+  {
+   "lat": 53.3125,
+   "lon": -71.1875,
+   "status": "go",
+   "score": 0.905,
+   "checks": [
+    {
+     "factor": "ice",
+     "status": "go",
+     "value": 0.591,
+     "unit": "consistency 0-1 m",
+     "goodness": 0.795,
+     "detail": "Ice within 1 m (consistency +0.59 at 0-1 m, +0.46 at 1-5 m)"
+    },
+    {
+     "factor": "low_elevation",
+     "status": "go",
+     "value": -4044.0,
+     "unit": "m",
+     "goodness": 1.0,
+     "detail": "-4,044 m: thick air to brake in"
+    },
+    {
+     "factor": "plume_safe_ground",
+     "status": "go",
+     "value": 265.88,
+     "unit": "J m^-2 K^-1 s^-1/2",
+     "goodness": 1.0,
+     "detail": "Thermal inertia 266: firm, packed ground"
+    },
+    {
+     "factor": "science_reach",
+     "status": "go",
+     "value": 5.0,
+     "unit": "units within 100 km",
+     "goodness": 0.883,
+     "detail": "5 rock units within about 100 km, one from the wet early eras"
+    }
+   ],
+   "context": {
+    "slope_deg": 0.33,
+    "abs_latitude": 53.31,
+    "albedo": 0.212
+   },
+   "geology": {
+    "unit": "lHl",
+    "age": "Hesperian",
+    "units_within_100km": 5,
+    "oldest_within_100km": "Noachian or Hesperian"
+   },
+   "id": "M07",
+   "rank": 7,
+   "reason": "Thick air to brake in; ice is uncertain.",
+   "nearest_spacex": {
+    "id": "ESP_060811_2205",
+    "km": 3343
+   },
+   "thumb": "thumbs/M07.jpg",
+   "thumb_source": "THEMIS day IR controlled mosaic (mc03_arcadia_nir) via USGS Astrogeology STAC"
+  },
+  {
+   "lat": -29.6875,
+   "lon": 65.4375,
+   "status": "go",
+   "score": 0.903,
+   "checks": [
+    {
+     "factor": "ice",
+     "status": "go",
+     "value": 0.353,
+     "unit": "consistency 0-1 m",
+     "goodness": 0.724,
+     "detail": "Ice within 1 m (consistency +0.35 at 0-1 m, +0.70 at 1-5 m)"
+    },
+    {
+     "factor": "low_elevation",
+     "status": "go",
+     "value": -6008.5,
+     "unit": "m",
+     "goodness": 1.0,
+     "detail": "-6,008 m: thick air to brake in"
+    },
+    {
+     "factor": "plume_safe_ground",
+     "status": "go",
+     "value": 262.56,
+     "unit": "J m^-2 K^-1 s^-1/2",
+     "goodness": 1.0,
+     "detail": "Thermal inertia 263: firm, packed ground"
+    },
+    {
+     "factor": "science_reach",
+     "status": "go",
+     "value": 7.0,
+     "unit": "units within 100 km",
+     "goodness": 1.0,
+     "detail": "7 rock units within about 100 km, one from the wet early eras"
+    }
+   ],
+   "context": {
+    "slope_deg": 1.7,
+    "abs_latitude": 29.69,
+    "albedo": 0.148
+   },
+   "geology": {
+    "unit": "mNh",
+    "age": "Noachian",
+    "units_within_100km": 7,
+    "oldest_within_100km": "Noachian or Hesperian"
+   },
+   "id": "M08",
+   "rank": 8,
+   "reason": "Thick air to brake in; ice is uncertain.",
+   "nearest_spacex": {
+    "id": "ESP_060707_2160",
+    "km": 6676
+   },
+   "thumb": "thumbs/M08.jpg",
+   "thumb_source": "THEMIS day IR controlled mosaic (mc21_iapygia_nir) via USGS Astrogeology STAC"
+  },
+  {
+   "lat": 52.3125,
+   "lon": 51.4375,
+   "status": "go",
+   "score": 0.902,
+   "checks": [
+    {
+     "factor": "ice",
+     "status": "go",
+     "value": 0.671,
+     "unit": "consistency 0-1 m",
+     "goodness": 0.835,
+     "detail": "Ice within 1 m (consistency +0.67 at 0-1 m, +0.65 at 1-5 m)"
+    },
+    {
+     "factor": "low_elevation",
+     "status": "go",
+     "value": -3584.0,
+     "unit": "m",
+     "goodness": 0.917,
+     "detail": "-3,584 m: thick air to brake in"
+    },
+    {
+     "factor": "plume_safe_ground",
+     "status": "go",
+     "value": 279.44,
+     "unit": "J m^-2 K^-1 s^-1/2",
+     "goodness": 1.0,
+     "detail": "Thermal inertia 279: firm, packed ground (from the map's interpolated fill, not a direct TES measurement)"
+    },
+    {
+     "factor": "science_reach",
+     "status": "go",
+     "value": 5.0,
+     "unit": "units within 100 km",
+     "goodness": 0.883,
+     "detail": "5 rock units within about 100 km, one from the wet early eras"
+    }
+   ],
+   "context": {
+    "slope_deg": 0.44,
+    "abs_latitude": 52.31,
+    "albedo": 0.236
+   },
+   "geology": {
+    "unit": "lHt",
+    "age": "Hesperian",
+    "units_within_100km": 5,
+    "oldest_within_100km": "Noachian or Hesperian"
+   },
+   "id": "M09",
+   "rank": 9,
+   "reason": "Firm ground; ice is uncertain.",
+   "nearest_spacex": {
+    "id": "ESP_060707_2160",
+    "km": 4392
+   },
+   "thumb": "thumbs/M09.jpg",
+   "thumb_source": "THEMIS day IR controlled mosaic (mc05_ismenius_lacus_nir) via USGS Astrogeology STAC"
+  },
+  {
+   "lat": -28.9375,
+   "lon": 72.0625,
+   "status": "go",
+   "score": 0.893,
+   "checks": [
+    {
+     "factor": "ice",
+     "status": "go",
+     "value": 0.344,
+     "unit": "consistency 0-1 m",
+     "goodness": 0.698,
+     "detail": "Ice within 1 m (consistency +0.34 at 0-1 m, +0.64 at 1-5 m)"
+    },
+    {
+     "factor": "low_elevation",
+     "status": "go",
+     "value": -3972.0,
+     "unit": "m",
+     "goodness": 0.994,
+     "detail": "-3,972 m: thick air to brake in"
+    },
+    {
+     "factor": "plume_safe_ground",
+     "status": "go",
+     "value": 421.2,
+     "unit": "J m^-2 K^-1 s^-1/2",
+     "goodness": 1.0,
+     "detail": "Thermal inertia 421: firm, packed ground"
+    },
+    {
+     "factor": "science_reach",
+     "status": "go",
+     "value": 6.0,
+     "unit": "units within 100 km",
+     "goodness": 1.0,
+     "detail": "6 rock units within about 100 km, one from the wet early eras"
+    }
+   ],
+   "context": {
+    "slope_deg": 2.74,
+    "abs_latitude": 28.94,
+    "albedo": 0.146
+   },
+   "geology": {
+    "unit": "mNh",
+    "age": "Noachian",
+    "units_within_100km": 6,
+    "oldest_within_100km": "Noachian or Hesperian"
+   },
+   "id": "M10",
+   "rank": 10,
+   "reason": "Firm ground; ice is uncertain.",
+   "nearest_spacex": {
+    "id": "ESP_060707_2160",
+    "km": 6358
+   },
+   "thumb": "thumbs/M10.jpg",
+   "thumb_source": "THEMIS day IR controlled mosaic (mc21_iapygia_nir) via USGS Astrogeology STAC"
+  }
+ ],
+ "spacex_candidates": [
+  {
+   "id": "ESP_060706_2195",
+   "name": "Candidate Landing Site for SpaceX Starship Near Arcadia Planitia",
+   "region": "Arcadia Planitia / Erebus Montes",
+   "url": "https://hirise.lpl.arizona.edu/ESP_060706_2195",
+   "acquired": "09 July 2019",
+   "lat": 39.09,
+   "lon": -170.21,
+   "status": "watch",
+   "score": 0.809,
+   "checks": [
+    {
+     "factor": "ice",
+     "status": "go",
+     "value": 0.311,
+     "unit": "consistency 0-1 m",
+     "goodness": 0.655,
+     "detail": "Ice within 1 m (consistency +0.31 at 0-1 m, +0.33 at 1-5 m)"
+    },
+    {
+     "factor": "low_elevation",
+     "status": "go",
+     "value": -3991.5,
+     "unit": "m",
+     "goodness": 0.998,
+     "detail": "-3,992 m: thick air to brake in"
+    },
+    {
+     "factor": "plume_safe_ground",
+     "status": "go",
+     "value": 271.8,
+     "unit": "J m^-2 K^-1 s^-1/2",
+     "goodness": 1.0,
+     "detail": "Thermal inertia 272: firm, packed ground (from the map's interpolated fill, not a direct TES measurement)"
+    },
+    {
+     "factor": "science_reach",
+     "status": "watch",
+     "value": 3.0,
+     "unit": "units within 100 km",
+     "goodness": 0.65,
+     "detail": "3 rock units within about 100 km, one from the wet early eras"
+    }
+   ],
+   "context": {
+    "slope_deg": 0.26,
+    "abs_latitude": 39.06,
+    "albedo": 0.251
+   },
+   "geology": {
+    "unit": "Av",
+    "age": "Amazonian",
+    "units_within_100km": 3,
+    "oldest_within_100km": "Noachian or Hesperian"
+   },
+   "percentile": 91.3,
+   "best_within_200km": {
+    "lat": 42.1875,
+    "lon": -171.5625,
+    "status": "watch",
+    "score": 0.845,
+    "km": 193,
+    "bearing": "N"
+   },
+   "thumb": "thumbs/ESP_060706_2195.jpg",
+   "thumb_source": "THEMIS day IR controlled mosaic (mc02_diacria_nir) via USGS Astrogeology STAC",
+   "missing": false
+  },
+  {
+   "id": "ESP_060429_2200",
+   "name": "Candidate Landing Site for SpaceX Starship in Arcadia Region",
+   "region": "Arcadia Planitia / Erebus Montes",
+   "url": "https://hirise.lpl.arizona.edu/ESP_060429_2200",
+   "acquired": "18 June 2019",
+   "lat": 39.822,
+   "lon": -167.942,
+   "status": "watch",
+   "score": 0.832,
+   "checks": [
+    {
+     "factor": "ice",
+     "status": "go",
+     "value": 0.454,
+     "unit": "consistency 0-1 m",
+     "goodness": 0.727,
+     "detail": "Ice within 1 m (consistency +0.45 at 0-1 m, +0.34 at 1-5 m)"
+    },
+    {
+     "factor": "low_elevation",
+     "status": "go",
+     "value": -3938.75,
+     "unit": "m",
+     "goodness": 0.988,
+     "detail": "-3,939 m: thick air to brake in"
+    },
+    {
+     "factor": "plume_safe_ground",
+     "status": "go",
+     "value": 226.32,
+     "unit": "J m^-2 K^-1 s^-1/2",
+     "goodness": 1.0,
+     "detail": "Thermal inertia 226: firm, packed ground (from the map's interpolated fill, not a direct TES measurement)"
+    },
+    {
+     "factor": "science_reach",
+     "status": "watch",
+     "value": 3.0,
+     "unit": "units within 100 km",
+     "goodness": 0.65,
+     "detail": "3 rock units within about 100 km, one from the wet early eras"
+    }
+   ],
+   "context": {
+    "slope_deg": 0.54,
+    "abs_latitude": 39.81,
+    "albedo": 0.241
+   },
+   "geology": {
+    "unit": "Av",
+    "age": "Amazonian",
+    "units_within_100km": 3,
+    "oldest_within_100km": "Noachian or Hesperian"
+   },
+   "percentile": 94.0,
+   "best_within_200km": {
+    "lat": 42.5625,
+    "lon": -170.4375,
+    "status": "watch",
+    "score": 0.845,
+    "km": 197,
+    "bearing": "NW"
+   },
+   "thumb": "thumbs/ESP_060429_2200.jpg",
+   "thumb_source": "THEMIS day IR controlled mosaic (mc02_diacria_nir) via USGS Astrogeology STAC",
+   "missing": false
+  },
+  {
+   "id": "ESP_060719_2200",
+   "name": "Candidate Landing Site for SpaceX Starship in Arcadia Region",
+   "region": "Arcadia Planitia / Erebus Montes",
+   "url": "https://hirise.lpl.arizona.edu/ESP_060719_2200",
+   "acquired": "10 July 2019",
+   "lat": 39.809,
+   "lon": -164.385,
+   "status": "watch",
+   "score": 0.824,
+   "checks": [
+    {
+     "factor": "ice",
+     "status": "go",
+     "value": 0.398,
+     "unit": "consistency 0-1 m",
+     "goodness": 0.699,
+     "detail": "Ice within 1 m (consistency +0.40 at 0-1 m, +0.44 at 1-5 m)"
+    },
+    {
+     "factor": "low_elevation",
+     "status": "go",
+     "value": -3977.75,
+     "unit": "m",
+     "goodness": 0.996,
+     "detail": "-3,978 m: thick air to brake in"
+    },
+    {
+     "factor": "plume_safe_ground",
+     "status": "go",
+     "value": 207.56,
+     "unit": "J m^-2 K^-1 s^-1/2",
+     "goodness": 1.0,
+     "detail": "Thermal inertia 208: firm, packed ground"
+    },
+    {
+     "factor": "science_reach",
+     "status": "watch",
+     "value": 3.0,
+     "unit": "units within 100 km",
+     "goodness": 0.65,
+     "detail": "3 rock units within about 100 km, one from the wet early eras"
+    }
+   ],
+   "context": {
+    "slope_deg": 1.58,
+    "abs_latitude": 39.81,
+    "albedo": 0.243
+   },
+   "geology": {
+    "unit": "Av",
+    "age": "Amazonian",
+    "units_within_100km": 3,
+    "oldest_within_100km": "Noachian or Hesperian"
+   },
+   "percentile": 93.1,
+   "best_within_200km": {
+    "lat": 39.0625,
+    "lon": -164.9375,
+    "status": "watch",
+    "score": 0.84,
+    "km": 51,
+    "bearing": "SW"
+   },
+   "thumb": "thumbs/ESP_060719_2200.jpg",
+   "thumb_source": "THEMIS day IR controlled mosaic (mc02_diacria_nir) via USGS Astrogeology STAC",
+   "missing": false
+  },
+  {
+   "id": "ESP_060732_2195",
+   "name": "Candidate Landing Site for SpaceX Starship East of Arcadia Planitia",
+   "region": "Arcadia Planitia / Erebus Montes",
+   "url": "https://hirise.lpl.arizona.edu/ESP_060732_2195",
+   "acquired": "11 July 2019",
+   "lat": 39.095,
+   "lon": -163.295,
+   "status": "watch",
+   "score": 0.814,
+   "checks": [
+    {
+     "factor": "ice",
+     "status": "go",
+     "value": 0.368,
+     "unit": "consistency 0-1 m",
+     "goodness": 0.684,
+     "detail": "Ice within 1 m (consistency +0.37 at 0-1 m, +0.33 at 1-5 m)"
+    },
+    {
+     "factor": "low_elevation",
+     "status": "go",
+     "value": -3855.25,
+     "unit": "m",
+     "goodness": 0.971,
+     "detail": "-3,855 m: thick air to brake in"
+    },
+    {
+     "factor": "plume_safe_ground",
+     "status": "go",
+     "value": 187.4,
+     "unit": "J m^-2 K^-1 s^-1/2",
+     "goodness": 1.0,
+     "detail": "Thermal inertia 187: firm, packed ground"
+    },
+    {
+     "factor": "science_reach",
+     "status": "watch",
+     "value": 3.0,
+     "unit": "units within 100 km",
+     "goodness": 0.65,
+     "detail": "3 rock units within about 100 km, one from the wet early eras"
+    }
+   ],
+   "context": {
+    "slope_deg": 0.27,
+    "abs_latitude": 39.06,
+    "albedo": 0.246
+   },
+   "geology": {
+    "unit": "Av",
+    "age": "Amazonian",
+    "units_within_100km": 3,
+    "oldest_within_100km": "Noachian or Hesperian"
+   },
+   "percentile": 91.9,
+   "best_within_200km": {
+    "lat": 39.0625,
+    "lon": -164.9375,
+    "status": "watch",
+    "score": 0.84,
+    "km": 75,
+    "bearing": "W"
+   },
+   "thumb": "thumbs/ESP_060732_2195.jpg",
+   "thumb_source": "THEMIS day IR controlled mosaic (mc02_diacria_nir) via USGS Astrogeology STAC",
+   "missing": false
+  },
+  {
+   "id": "ESP_060811_2205",
+   "name": "Candidate Landing Site for SpaceX Starship East of Arcadia Planitia",
+   "region": "Arcadia Planitia / Erebus Montes",
+   "url": "https://hirise.lpl.arizona.edu/ESP_060811_2205",
+   "acquired": "17 July 2019",
+   "lat": 40.024,
+   "lon": -156.669,
+   "status": "no_go",
+   "score": 0.747,
+   "checks": [
+    {
+     "factor": "ice",
+     "status": "go",
+     "value": 0.585,
+     "unit": "consistency 0-1 m",
+     "goodness": 0.792,
+     "detail": "Ice within 1 m (consistency +0.58 at 0-1 m, +0.55 at 1-5 m)"
+    },
+    {
+     "factor": "low_elevation",
+     "status": "go",
+     "value": -3900.25,
+     "unit": "m",
+     "goodness": 0.98,
+     "detail": "-3,900 m: thick air to brake in"
+    },
+    {
+     "factor": "plume_safe_ground",
+     "status": "go",
+     "value": 270.92,
+     "unit": "J m^-2 K^-1 s^-1/2",
+     "goodness": 1.0,
+     "detail": "Thermal inertia 271: firm, packed ground"
+    },
+    {
+     "factor": "science_reach",
+     "status": "no_go",
+     "value": 1.0,
+     "unit": "units within 100 km",
+     "goodness": 0.117,
+     "detail": "1 rock unit within about 100 km"
+    }
+   ],
+   "context": {
+    "slope_deg": 0.03,
+    "abs_latitude": 40.06,
+    "albedo": 0.237
+   },
+   "geology": {
+    "unit": "Av",
+    "age": "Amazonian",
+    "units_within_100km": 1,
+    "oldest_within_100km": "Amazonian only"
+   },
+   "percentile": 81.6,
+   "best_within_200km": {
+    "lat": 42.5625,
+    "lon": -153.9375,
+    "status": "watch",
+    "score": 0.876,
+    "km": 193,
+    "bearing": "NE"
+   },
+   "thumb": "thumbs/ESP_060811_2205.jpg",
+   "thumb_source": "THEMIS day IR controlled mosaic (mc02_diacria_nir) via USGS Astrogeology STAC",
+   "missing": false
+  },
+  {
+   "id": "ESP_060707_2160",
+   "name": "Candidate Landing Site for SpaceX Starship at Phlegra Montes",
+   "region": "Phlegra Montes",
+   "url": "https://hirise.lpl.arizona.edu/ESP_060707_2160",
+   "acquired": "09 July 2019",
+   "lat": 35.493,
+   "lon": 163.619,
+   "status": "go",
+   "score": 0.805,
+   "checks": [
+    {
+     "factor": "ice",
+     "status": "go",
+     "value": 0.228,
+     "unit": "consistency 0-1 m",
+     "goodness": 0.654,
+     "detail": "Ice 1 to 5 m down (consistency +0.23 at 0-1 m, +0.54 at 1-5 m)"
+    },
+    {
+     "factor": "low_elevation",
+     "status": "go",
+     "value": -3303.5,
+     "unit": "m",
+     "goodness": 0.861,
+     "detail": "-3,304 m: thick air to brake in"
+    },
+    {
+     "factor": "plume_safe_ground",
+     "status": "go",
+     "value": 300.84,
+     "unit": "J m^-2 K^-1 s^-1/2",
+     "goodness": 1.0,
+     "detail": "Thermal inertia 301: firm, packed ground (from the map's interpolated fill, not a direct TES measurement)"
+    },
+    {
+     "factor": "science_reach",
+     "status": "go",
+     "value": 4.0,
+     "unit": "units within 100 km",
+     "goodness": 0.767,
+     "detail": "4 rock units within about 100 km, one from the wet early eras"
+    }
+   ],
+   "context": {
+    "slope_deg": 0.61,
+    "abs_latitude": 35.44,
+    "albedo": 0.26
+   },
+   "geology": {
+    "unit": "eHt",
+    "age": "Hesperian",
+    "units_within_100km": 4,
+    "oldest_within_100km": "Noachian or Hesperian"
+   },
+   "percentile": 90.6,
+   "best_within_200km": {
+    "lat": 33.9375,
+    "lon": 165.3125,
+    "status": "go",
+    "score": 0.859,
+    "km": 123,
+    "bearing": "SE"
+   },
+   "thumb": "thumbs/ESP_060707_2160.jpg",
+   "thumb_source": "THEMIS day IR controlled mosaic (mc07_cebrenia_nir) via USGS Astrogeology STAC",
+   "missing": false
+  }
+ ],
+ "spacex_summary": "Of SpaceX's 6 2019 sites, 1 lands in the go band, 4 in watch and 1 in no-go on our screen: all 6 pass the ice check; all 6 pass the low-ground check; all 6 pass our plume check; 1 of 6 fail our science-reach check.",
+ "tradeoff": {
+  "x": "ice goodness",
+  "y": "our factors goodness (plume-safe ground and science reach)",
+  "bins": 10,
+  "counts": [
+   [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   [
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0,
+    0
+   ],
+   [
+    0,
+    0,
+    0,
+    165,
+    907,
+    4422,
+    20069,
+    102761,
+    74655,
+    5859
+   ],
+   [
+    0,
+    0,
+    0,
+    31,
+    412,
+    2543,
+    19444,
+    118921,
+    120594,
+    5461
+   ],
+   [
+    0,
+    0,
+    0,
+    14,
+    114,
+    575,
+    5192,
+    43900,
+    42312,
+    3229
+   ],
+   [
+    0,
+    0,
+    0,
+    0,
+    20,
+    298,
+    1562,
+    65719,
+    27685,
+    755
+   ],
+   [
+    0,
+    0,
+    0,
+    0,
+    0,
+    8,
+    138,
+    31972,
+    8213,
+    210
+   ]
+  ],
+  "points": [
+   {
+    "id": "M01",
+    "x": 0.945,
+    "y": 0.942,
+    "kind": "ours"
+   },
+   {
+    "id": "M02",
+    "x": 0.908,
+    "y": 0.942,
+    "kind": "ours"
+   },
+   {
+    "id": "M03",
+    "x": 0.902,
+    "y": 0.942,
+    "kind": "ours"
+   },
+   {
+    "id": "M04",
+    "x": 0.939,
+    "y": 0.942,
+    "kind": "ours"
+   },
+   {
+    "id": "M05",
+    "x": 0.916,
+    "y": 0.883,
+    "kind": "ours"
+   },
+   {
+    "id": "M06",
+    "x": 0.753,
+    "y": 1.0,
+    "kind": "ours"
+   },
+   {
+    "id": "M07",
+    "x": 0.795,
+    "y": 0.942,
+    "kind": "ours"
+   },
+   {
+    "id": "M08",
+    "x": 0.724,
+    "y": 1.0,
+    "kind": "ours"
+   },
+   {
+    "id": "M09",
+    "x": 0.835,
+    "y": 0.942,
+    "kind": "ours"
+   },
+   {
+    "id": "M10",
+    "x": 0.698,
+    "y": 1.0,
+    "kind": "ours"
+   },
+   {
+    "id": "ESP_060706_2195",
+    "x": 0.655,
+    "y": 0.825,
+    "kind": "spacex"
+   },
+   {
+    "id": "ESP_060429_2200",
+    "x": 0.727,
+    "y": 0.825,
+    "kind": "spacex"
+   },
+   {
+    "id": "ESP_060719_2200",
+    "x": 0.699,
+    "y": 0.825,
+    "kind": "spacex"
+   },
+   {
+    "id": "ESP_060732_2195",
+    "x": 0.684,
+    "y": 0.825,
+    "kind": "spacex"
+   },
+   {
+    "id": "ESP_060811_2205",
+    "x": 0.792,
+    "y": 0.558,
+    "kind": "spacex"
+   },
+   {
+    "id": "ESP_060707_2160",
+    "x": 0.654,
+    "y": 0.883,
+    "kind": "spacex"
+   }
+  ]
+ },
+ "landmarks": [
+  {
+   "name": "Jezero Crater (Perseverance)",
+   "lat": 18.44,
+   "lon": 77.45
+  },
+  {
+   "name": "Gale Crater (Curiosity)",
+   "lat": -4.59,
+   "lon": 137.44
+  },
+  {
+   "name": "Olympus Mons summit",
+   "lat": 18.65,
+   "lon": -133.8
+  },
+  {
+   "name": "Hellas Planitia floor",
+   "lat": -42.4,
+   "lon": 70.5
+  }
+ ],
+ "assets": {
+  "globe_color": "mars_color_2k.jpg",
+  "globe_bump": "mars_bump_2k.png",
+  "map_base": "mars_base_merc.jpg",
+  "map_score": "mars_score_merc.png",
+  "map_corners": [
+   [
+    -180,
+    70
+   ],
+   [
+    180,
+    70
+   ],
+   [
+    180,
+    -70
+   ],
+   [
+    -180,
+    -70
+   ]
+  ],
+  "slide": "score_map.png",
+  "thumb_sources": "THEMIS where the STAC search returned a frame, else a MOLA hillshade crop; listed per site"
+ },
+ "sources": [
+  {
+   "name": "MOLA MEGDR 16 pixels per degree",
+   "url": "https://pds-geosciences.wustl.edu/mgs/urn-nasa-pds-mgs_mola_topography_derived/meg016/megt90n000eb.img",
+   "citation": "Smith et al., MGS MOLA Mission Experiment Gridded Data Record, NASA PDS Geosciences Node",
+   "terms": "NASA data, public domain"
+  },
+  {
+   "name": "SWIM 2025 (SWIM4MIM) ice consistency maps",
+   "url": "https://swim.psi.edu/SWIM4MIMProducts.php",
+   "citation": "Subsurface Water Ice Mapping project, Planetary Science Institute, NASA-funded",
+   "terms": "Public products from the SWIM project pages; cite the SWIM team (PSI)"
+  },
+  {
+   "name": "MGS TES nighttime thermal inertia, 20 pixels per degree",
+   "url": "https://se.psi.edu/inertia/nmap2003.bin",
+   "citation": "Putzig, Mellon, Kretke and Arvidson, Icarus 173, 2005",
+   "terms": "Public map from the authors (PSI); cite the paper"
+  },
+  {
+   "name": "MGS TES albedo mosaic 7410 m",
+   "url": "https://planetarymaps.usgs.gov/mosaic/Mars_MGS_TES_Albedo_mosaic_global_7410m.tif",
+   "citation": "USGS Astrogeology Science Center",
+   "terms": "USGS data, public domain"
+  },
+  {
+   "name": "USGS Mars Global Geologic Map, SIM 3292",
+   "url": "https://astrogeology.usgs.gov/pygeoapi/collections/mars/sim3292_global_geologic_map/units",
+   "citation": "Tanaka et al. 2014, USGS Scientific Investigations Map 3292",
+   "terms": "USGS data, public domain"
+  },
+  {
+   "name": "HiRISE candidate landing site pages",
+   "url": "https://hirise.lpl.arizona.edu/ESP_060706_2195",
+   "citation": "NASA/JPL/University of Arizona, 2019",
+   "terms": "Public web pages; NASA imagery is public domain"
+  },
+  {
+   "name": "Space.com, SpaceX Studying Landing Sites for Mars Missions",
+   "url": "https://www.space.com/36142-spacex-studying-mars-landing-sites.html",
+   "citation": "Space.com, March 2017 (Paul Wooster's stated criteria)",
+   "terms": "News article, cited for the criteria only"
+  }
+ ],
+ "next": [
+  "magnetic shelter layer",
+  "HiRISE rock counts for the top 3",
+  "CTX 20 m terrain for the top 3",
+  "SWIM uncertainty as a fifth factor",
+  "a sunlight factor once a power model exists"
+ ]
+}

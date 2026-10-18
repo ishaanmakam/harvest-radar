@@ -1,6 +1,6 @@
 {
  "generated": "2026-10-18",
- "note": "Every entry was checked against the code at the listed file and line. Starlink is drawn on the globe for connectivity context; it is not a data source.",
+ "note": "Every entry was checked against the code at the listed file and line. Starlink is drawn on the globe for connectivity context; it is not a data source. The Mars entries feed pipeline/mars and the worlds view; SpaceX and the HiRISE sites are referenced from public records only.",
  "sources": [
   {
    "name": "Sentinel-2 L2A surface reflectance",
@@ -1501,6 +1501,165 @@
     "intelligence/validate_usda.py:44",
     "intelligence/yield_train.py:40",
     "web/README.md:55"
+   ]
+  },
+  {
+   "name": "MOLA MEGDR elevation, 16 pixels per degree",
+   "provider": "NASA PDS Geosciences Node (MGS MOLA)",
+   "url": "https://pds-geosciences.wustl.edu/mgs/urn-nasa-pds-mgs_mola_topography_derived/meg016/megt90n000eb.img",
+   "kind": "mars",
+   "used_for": "Elevation for the low-ground check, the regional slope shown on every Mars site card, the hillshade behind the painted globe and maps, and the thumbnail fallback.",
+   "why": "Low ground means more atmosphere to slow the ship; it is one of the two SpaceX criteria we score.",
+   "cadence": "static (1999 to 2001 mission data)",
+   "resolution": "3.7 km (16 pixels per degree)",
+   "licence": "NASA data, public domain",
+   "key_required": false,
+   "live_or_offline": "downloaded once and cached",
+   "where_in_code": [
+    "pipeline/mars/m01_fetch.py:24",
+    "pipeline/mars/m01_fetch.py:93",
+    "pipeline/mars/m02_score.py:76",
+    "pipeline/mars/m03_assets.py:66"
+   ]
+  },
+  {
+   "name": "SWIM 2025 ice consistency maps (0-1 m, 1-5 m, >5 m)",
+   "provider": "Subsurface Water Ice Mapping project, Planetary Science Institute",
+   "url": "https://swim.psi.edu/SWIM4MIMProducts.php",
+   "kind": "mars",
+   "used_for": "The ice check: consistency of neutron, radar, thermal and landform evidence with shallow ice, at 0-1 m and 1-5 m depth.",
+   "why": "Water within reach is the first criterion SpaceX stated: propellant, air and crops.",
+   "cadence": "2025 release",
+   "resolution": "3 km",
+   "licence": "Public SWIM products; cite the SWIM team (PSI)",
+   "key_required": false,
+   "live_or_offline": "downloaded once through the product page form and cached",
+   "where_in_code": [
+    "pipeline/mars/m01_fetch.py:129",
+    "pipeline/mars/m02_score.py:117"
+   ]
+  },
+  {
+   "name": "MGS TES nighttime thermal inertia, 20 pixels per degree",
+   "provider": "Putzig and Mellon (Icarus 2005), Planetary Science Institute",
+   "url": "https://se.psi.edu/inertia/nmap2003.bin",
+   "kind": "mars",
+   "used_for": "The plume-safe-ground check: very low inertia is loose dust, very high is rock and bedrock, in between is firm packed soil.",
+   "why": "A landing and launching rocket blasts the ground under it; thermal inertia from orbit measures how firm that ground is.",
+   "cadence": "static (1999 to 2001 mission data)",
+   "resolution": "3 km (20 pixels per degree)",
+   "licence": "Public map from the authors; cite the paper",
+   "key_required": false,
+   "live_or_offline": "downloaded once and cached",
+   "where_in_code": [
+    "pipeline/mars/m01_fetch.py:26",
+    "pipeline/mars/m01_fetch.py:109",
+    "pipeline/mars/m02_score.py:129"
+   ]
+  },
+  {
+   "name": "MGS TES albedo mosaic, 7410 m",
+   "provider": "USGS Astrogeology Science Center",
+   "url": "https://planetarymaps.usgs.gov/mosaic/Mars_MGS_TES_Albedo_mosaic_global_7410m.tif",
+   "kind": "mars",
+   "used_for": "The dust context shown on every Mars site card, and the colour of the painted globe and map.",
+   "why": "Bright ground usually means a dust cover; it is context next to the firmness check, not a score.",
+   "cadence": "static",
+   "resolution": "7.4 km",
+   "licence": "USGS data, public domain",
+   "key_required": false,
+   "live_or_offline": "downloaded once and cached",
+   "where_in_code": [
+    "pipeline/mars/m01_fetch.py:28",
+    "pipeline/mars/m02_score.py:142",
+    "pipeline/mars/m03_assets.py:67"
+   ]
+  },
+  {
+   "name": "USGS Mars Global Geologic Map, SIM 3292",
+   "provider": "USGS Astrogeology (Tanaka et al. 2014), OGC API Features",
+   "url": "https://astrogeology.usgs.gov/pygeoapi/collections/mars/sim3292_global_geologic_map/units",
+   "kind": "mars",
+   "used_for": "The science-reach check: distinct geologic units within about 100 km of each cell, and whether any date from the Noachian or Hesperian.",
+   "why": "A base is also a science station; more kinds of rock within a rover range means more science per trip.",
+   "cadence": "static (2014 map)",
+   "resolution": "1:20,000,000 map units",
+   "licence": "USGS data, public domain",
+   "key_required": false,
+   "live_or_offline": "downloaded once (paged API) and cached",
+   "where_in_code": [
+    "pipeline/mars/m01_fetch.py:30",
+    "pipeline/mars/m01_fetch.py:184",
+    "pipeline/mars/m02_score.py:97"
+   ]
+  },
+  {
+   "name": "THEMIS daytime infrared controlled mosaics",
+   "provider": "NASA/USGS (Mars Odyssey THEMIS), USGS Astrogeology STAC",
+   "url": "https://stac.astrogeology.usgs.gov/api",
+   "kind": "mars",
+   "used_for": "The orbital thumbnail of every Mars site and SpaceX candidate, found with the same STAC search Overfield runs for Sentinel-2 over Iowa.",
+   "why": "A judge should see the ground, not a number; the frames are real orbital images, with a MOLA hillshade crop as the fallback.",
+   "cadence": "static mosaics",
+   "resolution": "100 m",
+   "licence": "NASA/USGS data, public domain",
+   "key_required": false,
+   "live_or_offline": "windowed reads from the public bucket, cached as thumbnails",
+   "where_in_code": [
+    "pipeline/mars/m03_assets.py:151",
+    "pipeline/mars/m03_assets.py:168"
+   ]
+  },
+  {
+   "name": "HiRISE candidate landing site pages (ESP_060706_2195 and five more)",
+   "provider": "NASA/JPL/University of Arizona",
+   "url": "https://hirise.lpl.arizona.edu/ESP_060706_2195",
+   "kind": "mars",
+   "used_for": "The six 2019 observations titled Candidate Landing Site for SpaceX Starship: their centred latitude, east longitude and acquisition date, parsed from the pages.",
+   "why": "These are the sites SpaceX had photographed; we grade them on what SpaceX does not publicly screen for.",
+   "cadence": "2019 observations",
+   "resolution": "30 cm per pixel (image); site coordinates used here",
+   "licence": "Public web pages; NASA imagery is public domain",
+   "key_required": false,
+   "live_or_offline": "pages fetched once and cached",
+   "where_in_code": [
+    "pipeline/mars/m01_fetch.py:31",
+    "pipeline/mars/m01_fetch.py:236",
+    "pipeline/mars/m02_score.py:276"
+   ]
+  },
+  {
+   "name": "Space.com, SpaceX Studying Landing Sites for Mars Missions (2017)",
+   "provider": "Space.com (the criteria Paul Wooster stated)",
+   "url": "https://www.space.com/36142-spacex-studying-mars-landing-sites.html",
+   "kind": "mars",
+   "used_for": "The source of the two SpaceX criteria we score (ice within reach, low elevation) and the two we show but do not score (latitude, flat ground).",
+   "why": "The comparison is only honest if the SpaceX criteria are quoted from a public record.",
+   "cadence": "2017 article",
+   "resolution": "",
+   "licence": "News article, cited for the criteria only",
+   "key_required": false,
+   "live_or_offline": "cited, not fetched at run time",
+   "where_in_code": [
+    "pipeline/mars/config.json:13",
+    "pipeline/mars/m02_score.py:45"
+   ]
+  },
+  {
+   "name": "NASA Exoplanet Archive, pscomppars",
+   "provider": "NASA Exoplanet Archive (Caltech/IPAC)",
+   "url": "https://exoplanetarchive.ipac.caltech.edu/",
+   "kind": "mars",
+   "used_for": "The fifteen exoplanets on the worlds view: distance, radius, mass, temperature, insolation, period, discovery year and method, from one TAP query.",
+   "why": "No number about the planet of another star is typed by hand; the archive answers or the world is dropped.",
+   "cadence": "continuous (archive)",
+   "resolution": "",
+   "licence": "Public; the archive asks to be acknowledged",
+   "key_required": false,
+   "live_or_offline": "fetched once and cached",
+   "where_in_code": [
+    "pipeline/mars/m04_worlds.py:21",
+    "pipeline/mars/m04_worlds.py:51"
    ]
   },
   {

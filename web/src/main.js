@@ -12,6 +12,7 @@ import { renderDeliveries } from "./views/deliveries.js";
 import { renderSeason } from "./views/season.js";
 import { renderYield } from "./views/yield.js";
 import { initPages } from "./pages.js";
+import { createMarsView } from "./mars/marsmap.js";
 import { createGlobe } from "./globe/globe.js";
 import { h, skeleton } from "./dom.js";
 import { CROP_LABEL, FLAG_LABEL, chip, fmtDate, fmtHa, isPhone, titleCase } from "./format.js";
@@ -134,6 +135,13 @@ async function start() {
     const expanded = dock.classList.toggle("is-expanded");
     event.currentTarget.setAttribute("aria-expanded", String(expanded));
   });
+
+  let globe = null;
+  let worldsDoc = null;
+  const marsView = createMarsView({ host: $("mars-view"), onBack: backToWorlds });
+  // A deep link opens the Mars view at once; it does not wait for the Earth season to load.
+  const wantedWorld = new URLSearchParams(window.location.search).get("world");
+  if (wantedWorld === "mars" || window.location.hash === "#mars") openMars();
 
   const dataPromise = loadData();
   // Account, developers, admin and data pages open over the map from the header and from #hash routes.
@@ -388,7 +396,6 @@ async function start() {
   // Everything below is the orbit intro and its hand-off to the imagery map.
   const cardBody =
     "Sentinel-2 passes over this place every ~5 days, so Overfield can inspect farms here the same way. Our live demo landscape is Story County, Iowa: real imagery, real farm plans.";
-  let globe = null;
   let moveToken = 0;
   let toastTimer = 0;
   let revealTimer = 0;
@@ -497,13 +504,54 @@ async function start() {
     globe.flyOut();
   }
 
+
+  function openMars() {
+    if (!intro.classList.contains("is-hidden")) {
+      intro.classList.add("is-leaving");
+      window.setTimeout(() => intro.classList.add("is-hidden"), 500);
+    }
+    globe?.stop();
+    marsView.open();
+  }
+
+  function backToWorlds() {
+    marsView.close();
+    intro.classList.remove("is-hidden", "is-leaving");
+    enterBtn.disabled = false;
+    globe?.start();
+    globe?.showWorld("mars");
+  }
+
   try {
     globe = createGlobe($("globe"), {
       bounds: frameBounds,
       onEnter: handoff,
       onToast: showToast,
+      worldsHosts: { copyHost: $("intro-copy"), navHost: $("world-nav") },
+      onOpenMars: openMars,
+      introVisible: () => !intro.classList.contains("is-hidden") && !marsView.isOpen(),
+      orbiters: () => worldsDoc?.orbiters || [],
     });
     globe.start();
+    if (marsView.isOpen()) globe.stop();
+    // Worlds beyond Earth load lazily; without the file the globe shows Earth alone and hides the controls.
+    (async () => {
+      try {
+        const res = await fetch("out/worlds.json", { cache: "no-cache" });
+        if (!res.ok || !(res.headers.get("content-type") || "").includes("json")) return;
+        worldsDoc = await res.json();
+        let sites = null;
+        try {
+          const sr = await fetch("out/mars/sites.json", { cache: "no-cache" });
+          if (sr.ok && (sr.headers.get("content-type") || "").includes("json")) sites = await sr.json();
+        } catch {
+          sites = null;
+        }
+        globe.setWorlds(worldsDoc, sites, "out/mars/");
+      } catch (err) {
+        console.warn("worlds.json not loaded", err);
+      }
+    })();
   } catch (err) {
     console.error(err);
     intro.classList.add("is-hidden");
@@ -531,6 +579,7 @@ async function start() {
   window.addEventListener("resize", () => {
     tooltip.hidden = true;
   });
+
 }
 
 start();

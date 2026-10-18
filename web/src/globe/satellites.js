@@ -193,6 +193,7 @@ export function createSatellites({ earth, overlay, legendHost, reduced }) {
   let passSearching = false;
   let passCheckedAt = 0;
   let disposed = false;
+  let visible = true;
   let s2Satrecs = [];
   const tmp = new THREE.Vector3();
   const tmpCam = new THREE.Vector3();
@@ -496,6 +497,7 @@ export function createSatellites({ earth, overlay, legendHost, reduced }) {
 
   /** Called every frame from the globe loop with the wall-clock delta in seconds. */
   function update(delta, camera, width, height) {
+    if (!visible) return;
     simMs += delta * 1000 * speed;
     const date = new Date(simMs);
     gmst = gstime(date);
@@ -570,6 +572,19 @@ export function createSatellites({ earth, overlay, legendHost, reduced }) {
     return best ? { position: best.group.position, angle: bestAngle } : null;
   }
 
+  /** Off Earth the satellites, their tracks, labels and legend go away and the propagation pauses. */
+  function setVisible(on) {
+    visible = on;
+    for (const sat of imaging) {
+      sat.group.visible = on;
+      sat.line.visible = on;
+      sat.drop.visible = on;
+      if (!on) sat.label.hidden = true;
+    }
+    if (starlink.points) starlink.points.visible = on;
+    legend.hidden = !on;
+  }
+
   function setViewport(width, height) {
     viewportHeight = height;
     if (starlink.points) starlink.points.material.uniforms.uScale.value = height / 2;
@@ -596,5 +611,5 @@ export function createSatellites({ earth, overlay, legendHost, reduced }) {
     legend.remove();
   }
 
-  return { update, nearestSentinel, setViewport, setSpeed, now: () => new Date(simMs), dispose, legend };
+  return { update, nearestSentinel, setViewport, setVisible, setSpeed, now: () => new Date(simMs), dispose, legend };
 }
