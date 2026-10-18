@@ -212,16 +212,27 @@ def thumbnails(doc):
     hashes = {}
     places = [(s["id"], s["lat"], s["lon"]) for s in doc["sites"]] + [(c["id"], c["lat"], c["lon"]) for c in doc["spacex_candidates"] if not c.get("missing")]
     sources = {}
+    cache_dir = CACHE / "thumbs"
+    cache_dir.mkdir(parents=True, exist_ok=True)
     for pid, lat, lon in places:
-        got = themis.thumb(lat, lon, k["size_px"], k["view_deg"])
-        if got is not None:
-            img, source = got
-            image = Image.fromarray(img, "L").convert("RGB")
-        else:
-            rgb, source = hillshade_thumb(lat, lon, k["size_px"], k["view_deg"])
-            image = Image.fromarray(rgb, "RGB")
         path = OUT / "thumbs" / f"{pid}.jpg"
-        image.save(path, "JPEG", quality=80, optimize=True)
+        cached = cache_dir / f"{pid}_{lat:.3f}_{lon:.3f}.jpg"
+        cached_src = cached.with_suffix(".txt")
+        if cached.exists() and cached_src.exists():
+            path.write_bytes(cached.read_bytes())
+            source = cached_src.read_text(encoding="utf-8")
+        else:
+            got = themis.thumb(lat, lon, k["size_px"], k["view_deg"])
+            if got is not None:
+                img, source = got
+                image = Image.fromarray(img, "L").convert("RGB")
+            else:
+                rgb, source = hillshade_thumb(lat, lon, k["size_px"], k["view_deg"])
+                image = Image.fromarray(rgb, "RGB")
+            image.save(path, "JPEG", quality=80, optimize=True)
+            if "THEMIS" in source:                      # only a real frame is worth keeping; a fallback is retried next run
+                cached.write_bytes(path.read_bytes())
+                cached_src.write_text(source, encoding="utf-8")
         h = hashlib.sha256(path.read_bytes()).hexdigest()
         if h in hashes:
             raise SystemExit(f"  thumbnail {pid} is identical to {hashes[h]}: refusing to ship duplicate images")

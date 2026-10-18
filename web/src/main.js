@@ -136,6 +136,13 @@ async function start() {
     event.currentTarget.setAttribute("aria-expanded", String(expanded));
   });
 
+  let globe = null;
+  let worldsDoc = null;
+  const marsView = createMarsView({ host: $("mars-view"), onBack: backToWorlds });
+  // A deep link opens the Mars view at once; it does not wait for the Earth season to load.
+  const wantedWorld = new URLSearchParams(window.location.search).get("world");
+  if (wantedWorld === "mars" || window.location.hash === "#mars") openMars();
+
   const dataPromise = loadData();
   // Account, developers, admin and data pages open over the map from the header and from #hash routes.
   initPages({ dataPromise });
@@ -389,7 +396,6 @@ async function start() {
   // Everything below is the orbit intro and its hand-off to the imagery map.
   const cardBody =
     "Sentinel-2 passes over this place every ~5 days, so Overfield can inspect farms here the same way. Our live demo landscape is Story County, Iowa: real imagery, real farm plans.";
-  let globe = null;
   let moveToken = 0;
   let toastTimer = 0;
   let revealTimer = 0;
@@ -498,8 +504,6 @@ async function start() {
     globe.flyOut();
   }
 
-  let worldsDoc = null;
-  const marsView = createMarsView({ host: $("mars-view"), onBack: backToWorlds });
 
   function openMars() {
     if (!intro.classList.contains("is-hidden")) {
@@ -529,6 +533,7 @@ async function start() {
       orbiters: () => worldsDoc?.orbiters || [],
     });
     globe.start();
+    if (marsView.isOpen()) globe.stop();
     // Worlds beyond Earth load lazily; without the file the globe shows Earth alone and hides the controls.
     (async () => {
       try {
@@ -575,8 +580,6 @@ async function start() {
     tooltip.hidden = true;
   });
 
-  const wanted = new URLSearchParams(window.location.search).get("world");
-  if (wanted === "mars" || window.location.hash === "#mars") openMars();
 }
 
 start();

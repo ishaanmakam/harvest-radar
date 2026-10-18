@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-10-18T11:28:30Z",
+ "generated_at": "2026-10-18T11:45:25Z",
  "title": "Where Starship should land",
  "method": "Every 0.125 degree cell between -60 and 60 degrees latitude (about 7 km) gets four checks from public orbital data: ice within reach and low ground from SpaceX's stated criteria, plume-safe ground and science reach from us. Each check is go, watch or no-go with a 0 to 1 goodness; a cell's status is its worst check, the same rule as a farm's flag on Earth; the score is the weighted mean of goodness (ice 0.35, low_elevation 0.20, plume_safe_ground 0.25, science_reach 0.20). Sunlight, latitude and landing-scale rock hazards are shown but not scored: SpaceX screens for them and HiRISE is the right tool. Sites are the best go cells at least 300 km apart.",
  "grid": {
