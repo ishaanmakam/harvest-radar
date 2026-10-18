@@ -1,7 +1,7 @@
 import { h } from "../dom.js";
 import { CHANNEL_LABEL, chip, titleCase } from "../format.js";
 import { MAX_MATCH_KM, geocode, matchField, parseLatLon } from "../geo.js";
-import { NOT_CONFIGURED, configured, deleteMyAccount, demoText, myDeliveries, signIn, signUp, updateMyProfile } from "../backend.js";
+import { NOT_CONFIGURED, configured, deleteMyAccount, demoLine, demoText, myDeliveries, signIn, signUp, updateMyProfile } from "../backend.js";
 import { card, errorNote, field, fmtDateTime, fmtDay, loading, notice, select, statusLine } from "../ui.js";
 
 // Mirrors LANGUAGE_NAMES in intelligence/providers.py.
@@ -215,6 +215,15 @@ function demoSection(ctx, profile, current) {
   const farm = h("input", { class: "input mono", type: "text", value: profile?.farm_id || "", placeholder: "Farm, or the matched field", "aria-label": "Farm id", style: { maxWidth: "200px" } });
   const status = statusLine();
   const button = h("button", { class: "btn btn-primary", type: "button" }, "Text me today's plan");
+  const lineNote = h("p", { class: "small muted" }, "");
+  if (profile?.phone) {
+    demoLine().then((r) => {
+      if (!r?.line) return;
+      lineNote.textContent = r.inbound_first
+        ? `Overfield texts you over iMessage from ${r.line}. Send that number one message first, from your phone, so it can reply; after that the plan arrives on its own.`
+        : `Overfield texts you from ${r.line}.`;
+    }).catch(() => {});
+  }
   button.addEventListener("click", async () => {
     button.disabled = true;
     status.set("Sending the plan.");
@@ -232,6 +241,7 @@ function demoSection(ctx, profile, current) {
   return h("div", { class: "section" },
     h("div", { class: "section-title" }, "Demo: the morning text"),
     h("p", { class: "small" }, "Every morning the plan goes out by text at the time above. Send today's plan now to see it: the phone that should receive it, and the farm whose plan to send (your matched field by default)."),
+    lineNote,
     h("div", { class: "row row-wrap", style: { gap: "8px", margin: "8px 0" } }, phone, farm, button),
     status.el);
 }

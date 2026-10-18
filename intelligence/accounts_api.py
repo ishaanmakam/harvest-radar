@@ -289,6 +289,28 @@ def handles(path):
 
 
 
+
+def _demo_line(ctx, method, headers, body):
+    """GET: the line Overfield texts this account from, so the page can say which number to message first. On Photon's
+    shared iMessage lines the number is assigned to the farmer's phone here (a farmer must text it once before it may
+    reply); the body or query may name another phone."""
+    if method != "GET":
+        raise Reply(405, "GET only")
+    acc = _need_account(ctx, headers)
+    phone = str(acc.get("phone") or "").strip()
+    if not phone:
+        return 200, {"line": None, "platform": None, "reason": "no phone on the profile yet"}
+    import providers
+    photon = providers.photon_from_env()
+    if photon is None:
+        return 200, {"line": None, "platform": None, "reason": "Photon is not configured on this server"}
+    try:
+        line = photon.line_for(phone)
+    except Exception as e:
+        raise Reply(502, f"Photon did not assign a line: {e}")
+    return 200, {"line": line, "platform": photon.platform, "to": phone,
+                 "inbound_first": photon.platform == "imessage"}
+
 def _demo_text(ctx, method, headers, body):
     """Send the morning plan for one farm to one phone, now, through Photon: the demo of the 08:00 text.
     The signed-in account's phone and farm are the defaults; the body may name a phone and a farm id."""
@@ -349,6 +371,8 @@ def dispatch(method, raw_path, headers, body, ctx, client_ip="?"):
             status, out = _keys(ctx, method, path, headers, body)
         elif path == "/demo/text":
             status, out = _demo_text(ctx, method, headers, body)
+        elif path == "/demo/line":
+            status, out = _demo_line(ctx, method, headers, body)
         elif path.startswith("/admin/"):
             status, out = _admin(ctx, method, path, query, headers, body)
         elif path.startswith("/v1/"):

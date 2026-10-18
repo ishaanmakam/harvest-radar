@@ -265,3 +265,25 @@ class TestDemoText:
         token, _ = signed_up(ctx)
         status, doc, _ = call(ctx, "POST", "/demo/text", {"phone": "+15155550100", "farm": "F0001"}, token=token)
         assert status == 503 and "Photon" in doc["error"]
+
+
+class TestDemoLine:
+    class _Photon:
+        platform = "imessage"
+
+        def line_for(self, handle):
+            return "+16283160001"
+
+    def test_line_for_the_profile_phone(self, ctx, monkeypatch):
+        import providers
+        monkeypatch.setattr(providers, "photon_from_env", lambda env=None, http=None: self._Photon())
+        token, _ = signed_up(ctx)
+        status, doc, _ = call(ctx, "GET", "/demo/line", token=token)
+        assert status == 200 and doc["line"] is None and "no phone" in doc["reason"]
+        call(ctx, "PATCH", "/me", {"phone": "+15155550100"}, token=token)
+        status, doc, _ = call(ctx, "GET", "/demo/line", token=token)
+        assert status == 200 and doc == {"line": "+16283160001", "platform": "imessage", "to": "+15155550100", "inbound_first": True}
+
+    def test_needs_a_session(self, ctx):
+        status, _, _ = call(ctx, "GET", "/demo/line")
+        assert status == 401
