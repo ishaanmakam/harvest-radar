@@ -5,6 +5,7 @@ import os
 import sys
 import time
 from datetime import date, datetime, timedelta
+from zoneinfo import ZoneInfo
 
 import requests
 from jsonschema import Draft202012Validator
@@ -14,6 +15,14 @@ from common import CACHE, OUT, ROOT, load_region, log, write_json
 STEP = "s06"
 POWER_URL = "https://power.larc.nasa.gov/api/temporal/daily/point"
 METEO_URL = "https://api.open-meteo.com/v1/forecast"
+PREV_URL = "https://previous-runs-api.open-meteo.com/v1/forecast"
+ARCHIVE_BASES = (
+    "precipitation",
+    "temperature_2m",
+    "relative_humidity_2m",
+    "wind_gusts_10m",
+    "precipitation_probability",
+)
 POWER_PARAMS = ("PRECTOTCORR", "T2M_MAX", "T2M_MIN")
 FILL_FLOOR = -999
 
@@ -375,6 +384,169 @@ def report(doc, filled_days, raw_meteo):
     log(STEP, f"next 3 days max wind_gust_ms {gust_text}; min rh_mean_pct {rh_text}")
 
 
+def load_previous_runs(lat, lon, start, end):
+    path = CACHE / f"openmeteo_prevruns_{start.isoformat()}_{end.isoformat()}.json"
+    if path.exists():
+        log(STEP, f"reused {path.name}")
+        return json.loads(path.read_text())
+    names = [f"{base}_previous_day{lead}" for base in ARCHIVE_BASES for lead in range(8)]
+    raw = fetch_json(
+        PREV_URL,
+        {
+            "latitude": lat,
+            "longitude": lon,
+            "timezone": "America/Chicago",
+            "wind_speed_unit": "ms",
+            "start_date": start.isoformat(),
+            "end_date": end.isoformat(),
+            "hourly": ",".join(names),
+        },
+        timeout=90,
+    )
+    hourly = raw.get("hourly") if isinstance(raw, dict) else None
+    if not isinstance(hourly, dict) or "time" not in hourly or "precipitation" not in hourly:
+        log(STEP, "ERROR previous-runs response has no hourly precipitation for this window")
+        if isinstance(raw, dict):
+            log(STEP, f"top-level keys {list(raw)[:12]}")
+        sys.exit(1)
+    write_json(path, raw)
+    log(STEP, f"cached {path}")
+    return raw
+
+
+def _hours_on(times, day):
+    text = iso(day)
+    return [index for index, stamp in enumerate(times) if str(stamp)[:10] == text]
+
+
+def _reduce(values, indexes, how):
+    if not values:
+        return None
+    numbers = []
+    for index in indexes:
+        if index >= len(values):
+            continue
+        number = as_number(values[index])
+        if number is not None:
+            numbers.append(number)
+    if not numbers:
+        return None
+    if how == "sum":
+        return round(sum(numbers), 1)
+    if how == "min":
+        return round(min(numbers), 1)
+    if how == "max":
+        return round(max(numbers), 1)
+    if how == "mean":
+        return round(sum(numbers) / len(numbers), 1)
+    return int(round(max(numbers)))
+
+
+def issued_day(raw, issue, target):
+    """Forecast for target that was already published before 6 am Central on issue.
+
+    `_previous_dayN` is the run made 24*N hours before that hour. Lead 0, the unsuffixed
+    series, is the current run, and for a past date that is close to what actually fell.
+    Reading archive lead (lead + 1) puts every hour on a run from the day before issue,
+    including the evening hours, so none of it was published on the morning itself.
+    The archive keeps only 7 days, so a target more than 6 days after issue is null.
+    """
+    empty = {
+        "precip_mm": None,
+        "precip_prob": None,
+        "tmin_c": None,
+        "tmax_c": None,
+        "rh_mean_pct": None,
+        "wind_gust_ms": None,
+    }
+    lead = (target - issue).days
+    if lead < 0 or lead > 6:
+        return empty
+    series_lead = lead + 1
+    hourly = raw["hourly"]
+    indexes = _hours_on(hourly["time"], target)
+    if not indexes:
+        return empty
+    return {
+        "precip_mm": _reduce(hourly.get(f"precipitation_previous_day{series_lead}"), indexes, "sum"),
+        "precip_prob": _reduce(hourly.get(f"precipitation_probability_previous_day{series_lead}"), indexes, "prob"),
+        "tmin_c": _reduce(hourly.get(f"temperature_2m_previous_day{series_lead}"), indexes, "min"),
+        "tmax_c": _reduce(hourly.get(f"temperature_2m_previous_day{series_lead}"), indexes, "max"),
+        "rh_mean_pct": _reduce(hourly.get(f"relative_humidity_2m_previous_day{series_lead}"), indexes, "mean"),
+        "wind_gust_ms": _reduce(hourly.get(f"wind_gusts_10m_previous_day{series_lead}"), indexes, "max"),
+    }
+
+
+def archive_source(as_of):
+    """Name the run that was published before 6 am Central on as_of, which is the previous day's run."""
+    issued = as_of - timedelta(days=1)
+    return (
+        f"Open-Meteo previous-runs archive: forecast issued {issued.isoformat()}, "
+        f"published before 6 am Central on {as_of.isoformat()}"
+    )
+
+
+def build_replay_weather(region, power, archive):
+    """Observed days from NASA POWER only. Forecast is the run published before that morning; days after as_of+6 are null."""
+    fill, parameter = require_power(power)
+    season_start = parse_day(region["season_start"])
+    as_of = parse_day(region["as_of"])
+    observed_days = days_inclusive(season_start, as_of - timedelta(days=1))
+    if not observed_days:
+        log(STEP, "ERROR observed range is empty")
+        sys.exit(1)
+    precip, tmax, tmin = [], [], []
+    for day in observed_days:
+        key = ymd(day)
+        precip.append(clean_power(parameter["PRECTOTCORR"].get(key), fill))
+        tmax.append(clean_power(parameter["T2M_MAX"].get(key), fill))
+        tmin.append(clean_power(parameter["T2M_MIN"].get(key), fill))
+    horizon = int(region["forecast_horizon_days"])
+    forecast_days = [as_of + timedelta(days=offset) for offset in range(horizon)]
+    rows = [issued_day(archive, as_of, day) for day in forecast_days]
+    return {
+        "observed": {
+            "source": "NASA POWER daily (community AG)",
+            "dates": [iso(day) for day in observed_days],
+            "precip_mm": precip,
+            "tmax_c": tmax,
+            "tmin_c": tmin,
+        },
+        "forecast": {
+            "source": archive_source(as_of),
+            "dates": [iso(day) for day in forecast_days],
+            "precip_mm": [row["precip_mm"] for row in rows],
+            "precip_prob": [row["precip_prob"] for row in rows],
+            "tmin_c": [row["tmin_c"] for row in rows],
+            "tmax_c": [row["tmax_c"] for row in rows],
+            "rh_mean_pct": [row["rh_mean_pct"] for row in rows],
+            "wind_gust_ms": [row["wind_gust_ms"] for row in rows],
+        },
+    }
+
+
+def publish_replay(region, lat, lon):
+    as_of = parse_day(region["as_of"])
+    today = datetime.now(ZoneInfo("America/Chicago")).date()
+    if as_of >= today:
+        log(STEP, f"ERROR replay as_of {iso(as_of)} is not before today {iso(today)} (America/Chicago)")
+        sys.exit(1)
+    power_path = CACHE / "power_raw.json"
+    if not power_path.exists():
+        log(STEP, f"ERROR missing cache {power_path}")
+        sys.exit(1)
+    power = json.loads(power_path.read_text())
+    horizon = int(region["forecast_horizon_days"])
+    archive = load_previous_runs(lat, lon, as_of, as_of + timedelta(days=horizon - 1))
+    doc = build_replay_weather(region, power, archive)
+    validate(doc)
+    publish(doc)
+    forecast = doc["forecast"]
+    log(STEP, f"replay forecast {forecast['source']}")
+    log(STEP, f"next 3 days precip_mm {forecast['precip_mm'][:3]}")
+    log(STEP, "no Open-Meteo gap fill; observed is NASA POWER through the day before as_of")
+
+
 def load_cached():
     power_path = CACHE / "power_raw.json"
     meteo_path = CACHE / "openmeteo_raw.json"
@@ -392,10 +564,15 @@ def load_cached():
 def main():
     parser = argparse.ArgumentParser(description="Write observed weather and the rain forecast")
     parser.add_argument("--from-cache", action="store_true")
+    parser.add_argument("--replay", action="store_true")
     args = parser.parse_args()
     region = load_region()
     lon, lat = centre(region["bbox"])
     log(STEP, f"centre lon={lon:.5f} lat={lat:.5f}")
+    if args.replay:
+        log(STEP, "replay: forecast as issued that morning, no gap fill")
+        publish_replay(region, lat, lon)
+        return
     if args.from_cache:
         log(STEP, "rebuilding from cache, no network")
         power, meteo = load_cached()
