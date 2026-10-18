@@ -2676,7 +2676,7 @@ body.has-page {
 .world-nav-foot {
   position: absolute;
   left: 24%;
-  right: 0;
+  right: 332px; /* clear of the satellite panel in the bottom-right corner */
   bottom: 18px;
   display: flex;
   flex-direction: column;
@@ -3104,6 +3104,7 @@ body.has-page {
 @media (max-width: 767px) {
   .world-nav-foot {
     left: 0;
+    right: 0;
     bottom: calc(34% + 8px);
   }
 
@@ -3117,5 +3118,117 @@ body.has-page {
 
   #mars-dock.dock {
     width: auto;
+  }
+}
+
+/* ---------- World regions: the card in the copy slot when a green dot is clicked ---------- */
+
+.region-copy {
+  max-height: calc(100vh - 48px);
+  overflow: auto;
+  padding-right: 6px;
+}
+
+.region-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.region-back {
+  border: 0;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.75);
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+  padding: 0;
+}
+
+.region-back:hover {
+  color: #fff;
+}
+
+.region-lines {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 5px 12px;
+  margin: 14px 0 0;
+  font-size: 13px;
+}
+
+.region-lines dt {
+  opacity: 0.6;
+}
+
+.region-lines dd {
+  margin: 0;
+}
+
+.region-lines dd.is-alert {
+  color: #f2a93b;
+  font-weight: 600;
+}
+
+.region-thumb {
+  margin: 14px 0 0;
+}
+
+.region-thumb img {
+  display: block;
+  width: 100%;
+  max-width: 320px;
+  border-radius: 12px;
+}
+
+.region-thumb figcaption {
+  margin-top: 4px;
+  font-size: 11px;
+  opacity: 0.55;
+}
+
+.region-note {
+  margin: 12px 0 0;
+  font-size: 12px;
+  opacity: 0.6;
+}
+
+.region-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 14px;
+  margin-top: 18px;
+}
+
+.region-actions .world-open {
+  margin-top: 0;
+  display: inline-block;
+  text-decoration: none;
+}
+
+.world-line.is-pick {
+  color: #b9f0c9;
+}
+
+.mars-region {
+  margin-left: 6px;
+  font-size: 12px;
+  color: #b9f0c9;
+}
+
+#mars-map {
+  background: #120a07;
+}
+
+@media (max-width: 767px) {
+  .region-copy {
+    max-height: 62vh;
+    overflow: auto;
+  }
+
+  .region-thumb img {
+    max-width: 200px;
   }
 }

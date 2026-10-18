@@ -25,6 +25,7 @@ export function createWorlds({ scene, camera, controls, domElement, earth, label
   const disposables = [];
   let focused = 0;
   let mars = null;
+  let marsSites = null;
   let move = null;                     // { fromT, toT, fromC, toC, t0 }
   let elapsedNow = 0;
   let enabled = true;
@@ -141,10 +142,21 @@ export function createWorlds({ scene, camera, controls, domElement, earth, label
   }
 
   // ---------- copy, legend, switch ----------
+  function topPickLine() {
+    const top = marsSites?.sites?.[0];
+    if (!top?.region) return null;
+    const n = (marsSites.spacex_candidates || []).filter((c) => !c.missing && /arcadia/i.test(c.region || "")).length;
+    const words = ["none", "one", "two", "three", "four", "five", "six"];
+    const where = /arcadia/i.test(top.region) && n ? `, where ${words[n] || n} of SpaceX's six 2019 sites sit` : "";
+    return h("p", { class: "world-line is-pick" }, `Our top pick, ${top.id}, is in ${top.region}${where}.`);
+  }
+
   function renderCopy(entry) {
     const earthCopy = copyHost.querySelector("#earth-copy");
     if (entry.def.kind === "home") {
-      if (earthCopy) earthCopy.hidden = false;
+      // An open region card keeps the Earth copy out of the slot until its Back.
+      const regionOpen = Boolean(copyHost.querySelector(".region-copy:not([hidden])"));
+      if (earthCopy) earthCopy.hidden = regionOpen;
       copy.hidden = true;
       return;
     }
@@ -155,6 +167,7 @@ export function createWorlds({ scene, camera, controls, domElement, earth, label
       h("h1", {}, "The next home"),
       h("p", { class: "tagline" }, "A city on Mars starts with one landing: near water, through enough air to slow down, on ground that holds."),
       h("p", { class: "world-line" }, "Every 7 km of Mars between 60 S and 60 N, checked against four rules from public orbital data."),
+      topPickLine(),
       h("ul", { class: "world-facts" }, ...(entry.def.facts || []).map((f) => h("li", {}, f))),
       h("button", { class: "world-open", type: "button", onclick: () => hooks.onOpenMars?.() }, "Open Mars map"),
     ].filter(Boolean));
@@ -292,6 +305,7 @@ export function createWorlds({ scene, camera, controls, domElement, earth, label
     /** worlds.json (and sites.json plus the assets base, when Mars data exists) put Mars next to Earth. */
     setWorlds(doc, sites, assetsBase) {
       const list = frontWorlds(doc?.worlds);
+      marsSites = sites || marsSites;
       worlds.length = 0;
       worlds.push({ def: list[0], group: earth, radius: 1, center: new THREE.Vector3(0, 0, 0), markers: [] });
       const marsDef = list.find((w) => w.id === "mars");
