@@ -1,0 +1,4 @@
+pre-commit:
+  commands:
+    slop-check:
+      run: bash scripts/slop-check.sh

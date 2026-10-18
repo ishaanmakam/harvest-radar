@@ -1,0 +1,17 @@
+Overfield (harvest-radar)
+Copyright 2026 the Overfield contributors (https://github.com/ishaanmakam/harvest-radar)
+
+Licensed under the Apache License, Version 2.0 (the "License"); you may not use the code in this
+repository except in compliance with the License. You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software distributed under the License is
+distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and limitations under the License.
+
+The licence above covers the code and documentation written for Overfield. Data files under data/ and
+web/public/data/ are derived from third-party sources that keep their own terms; each source and its
+licence is listed in docs/DATA_SOURCES.md. In particular the county yield tables from the CropNet dataset
+are CC BY-NC 4.0 (research use), and Open-Meteo data is CC BY 4.0 with the free API limited to
+non-commercial use. Plans and analytics published by Overfield are offered under CC BY 4.0.

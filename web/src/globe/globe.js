@@ -1,7 +1,9 @@
 import * as THREE from "three";
 import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { makeAtmosphere } from "./atmosphere.js";
-import { latLngFromVector3, latLngToVector3 } from "./geo.js";
+import { latLngFromVector3, latLngToVector3, subsolarPoint } from "./geo.js";
+import { createSatellites } from "./satellites.js";
+import { createWorlds } from "./worlds.js";
 import { FEATURED } from "../places.js";
 import colorUrl from "../assets/earth/earth_atmos_2048.jpg";
 import normalUrl from "../assets/earth/earth_normal_2048.jpg";
@@ -9,13 +11,15 @@ import specUrl from "../assets/earth/earth_specular_2048.jpg";
 import lightsUrl from "../assets/earth/earth_lights_2048.png";
 
 const RADIUS = 1;
-const ORBIT_RADIUS = 1.18;
-const ORBIT_PERIOD = 12;
 const ARC_ANGLE = THREE.MathUtils.degToRad(25);
 const ARC_REVEAL = 0.6;
 const ARC_FADE = 0.45;
 const HOME = new THREE.Vector3(0.22, 0.62, 3.12);
 const Y_AXIS = new THREE.Vector3(0, 1, 0);
+const SPIN_RATE = 0.05; // rad/s of the slow spin
+const SPIN_RESUME_AFTER = 6; // seconds after the last interaction
+const SPIN_RAMP = 1.5; // seconds to ease the spin back in
+const STAR_COUNT = 4500;
 
 const lightsVertex = `
   varying vec2 vUv;
@@ -27,15 +31,44 @@ const lightsVertex = `
   }
 `;
 
+// City lights come up across the terminator and sit on the night side only.
 const lightsFragment = `
   uniform sampler2D map;
   uniform vec3 uSun;
   varying vec2 vUv;
   varying vec3 vNormal;
   void main() {
-    float day = clamp(dot(normalize(vNormal), normalize(uSun)), 0.0, 1.0);
-    vec3 col = texture2D(map, vUv).rgb;
-    gl_FragColor = vec4(col * (1.0 - day), 1.0);
+    float sunDot = dot(normalize(vNormal), normalize(uSun));
+    float night = 1.0 - smoothstep(-0.2, 0.1, sunDot);
+    vec3 col = texture2D(map, vUv).rgb * vec3(1.0, 0.88, 0.7);
+    gl_FragColor = vec4(col * night * 1.2, 1.0);
+  }
+`;
+
+const starVertex = `
+  attribute float aSize;
+  attribute float aPhase;
+  attribute vec3 aColor;
+  uniform float uScale;
+  uniform float uTime;
+  varying vec3 vColor;
+  varying float vTwinkle;
+  void main() {
+    vColor = aColor;
+    vTwinkle = 0.82 + 0.18 * sin(uTime * (0.5 + fract(aPhase) * 1.3) + aPhase);
+    vec4 mv = modelViewMatrix * vec4(position, 1.0);
+    gl_PointSize = max(1.0, aSize * uScale * vTwinkle / -mv.z);
+    gl_Position = projectionMatrix * mv;
+  }
+`;
+
+const starFragment = `
+  varying vec3 vColor;
+  varying float vTwinkle;
+  void main() {
+    float d = length(gl_PointCoord - 0.5);
+    float a = smoothstep(0.5, 0.1, d);
+    gl_FragColor = vec4(vColor * vTwinkle, a);
   }
 `;
 
@@ -60,10 +93,62 @@ function insideBounds(lat, lng, bounds) {
   return lng >= west && lng <= east && lat >= south && lat <= north;
 }
 
-export function createGlobe(container, { bounds, onEnter, onToast }) {
+/**
+ * A procedural sky: a few thousand points, no texture. Four in ten sit in a tilted band with a
+ * roughly normal spread off its plane, which reads as the Milky Way; the rest are uniform. A few
+ * are bright, most are faint, and the tint runs from blue-white to warm.
+ */
+function makeStars() {
+  const positions = new Float32Array(STAR_COUNT * 3);
+  const colors = new Float32Array(STAR_COUNT * 3);
+  const sizes = new Float32Array(STAR_COUNT);
+  const phases = new Float32Array(STAR_COUNT);
+  const bandNormal = new THREE.Vector3(0.35, 0.8, 0.5).normalize();
+  const u = new THREE.Vector3().crossVectors(bandNormal, new THREE.Vector3(1, 0, 0)).normalize();
+  const v = new THREE.Vector3().crossVectors(bandNormal, u).normalize();
+  const dir = new THREE.Vector3();
+  for (let i = 0; i < STAR_COUNT; i += 1) {
+    if (i < STAR_COUNT * 0.4) {
+      const along = Math.random() * Math.PI * 2;
+      const off = (Math.random() + Math.random() + Math.random() - 1.5) * 0.24;
+      dir.copy(u).multiplyScalar(Math.cos(along)).addScaledVector(v, Math.sin(along)).addScaledVector(bandNormal, Math.tan(off)).normalize();
+    } else {
+      dir.randomDirection();
+    }
+    dir.multiplyScalar(45 + Math.random() * 10);
+    positions.set([dir.x, dir.y, dir.z], i * 3);
+    const tint = Math.random();
+    const base = tint < 0.12 ? [0.7, 0.8, 1.0] : tint < 0.22 ? [1.0, 0.85, 0.7] : [0.92, 0.95, 1.0];
+    const mag = Math.random();
+    const bright = mag ** 3;
+    const k = 0.42 + 0.58 * bright;
+    colors.set([base[0] * k, base[1] * k, base[2] * k], i * 3);
+    sizes[i] = 0.14 + 0.36 * bright + (mag > 0.985 ? 0.32 : 0);
+    phases[i] = Math.random() * Math.PI * 2;
+  }
+  const geometry = new THREE.BufferGeometry();
+  geometry.setAttribute("position", new THREE.BufferAttribute(positions, 3));
+  geometry.setAttribute("aColor", new THREE.BufferAttribute(colors, 3));
+  geometry.setAttribute("aSize", new THREE.BufferAttribute(sizes, 1));
+  geometry.setAttribute("aPhase", new THREE.BufferAttribute(phases, 1));
+  const material = new THREE.ShaderMaterial({
+    uniforms: { uScale: { value: 400 }, uTime: { value: 0 } },
+    vertexShader: starVertex,
+    fragmentShader: starFragment,
+    transparent: true,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+  });
+  const points = new THREE.Points(geometry, material);
+  points.frustumCulled = false;
+  return points;
+}
+
+export function createGlobe(container, { bounds, onEnter, onToast, worldsHosts = null, onOpenMars = null, onRegion = null, introVisible = null, orbiters = null }) {
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
-  renderer.setPixelRatio(Math.min(window.devicePixelRatio || 1, 2));
+  const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
+  renderer.setPixelRatio(pixelRatio);
   renderer.setClearColor(0x000000, 0);
   renderer.outputColorSpace = THREE.SRGBColorSpace;
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
@@ -85,19 +170,26 @@ export function createGlobe(container, { bounds, onEnter, onToast }) {
   controls.minDistance = 1.6;
   controls.maxDistance = 6;
   controls.autoRotate = false;
+  // CAD-style: the right mouse button orbits the view around the planet in focus, as the left one does; the wheel or
+  // the middle button zooms. Pan stays off, so the planets never leave the frame.
+  controls.mouseButtons = { LEFT: THREE.MOUSE.ROTATE, MIDDLE: THREE.MOUSE.DOLLY, RIGHT: THREE.MOUSE.ROTATE };
+  controls.touches = { ONE: THREE.TOUCH.ROTATE, TWO: THREE.TOUCH.DOLLY_ROTATE };
   controls.target.set(0, 0, 0);
 
+  // The slow spin pauses on any drag, wheel or touch and eases back in six seconds after the last one.
   let dragging = false;
+  let idleSince = -SPIN_RESUME_AFTER;
   controls.addEventListener("start", () => {
     dragging = true;
   });
   controls.addEventListener("end", () => {
     dragging = false;
+    idleSince = elapsed;
   });
 
-  const sun = new THREE.DirectionalLight(0xffffff, 2.2);
+  const sun = new THREE.DirectionalLight(0xffffff, 2.4);
   scene.add(sun);
-  scene.add(new THREE.AmbientLight(0xffffff, 0.35));
+  scene.add(new THREE.AmbientLight(0x8fa6c8, 0.22));
 
   const earth = new THREE.Group();
   scene.add(earth);
@@ -109,14 +201,17 @@ export function createGlobe(container, { bounds, onEnter, onToast }) {
   const lightsMap = loader.load(lightsUrl);
   colorMap.colorSpace = THREE.SRGBColorSpace;
   lightsMap.colorSpace = THREE.SRGBColorSpace;
+  colorMap.anisotropy = Math.min(8, renderer.capabilities.getMaxAnisotropy());
   const textures = [colorMap, normalMap, specMap, lightsMap];
 
   const earthGeo = new THREE.SphereGeometry(RADIUS, 96, 96);
   const earthMat = new THREE.MeshPhongMaterial({
     map: colorMap,
     normalMap,
+    normalScale: new THREE.Vector2(0.6, 0.6),
     specularMap: specMap,
-    shininess: 12,
+    specular: new THREE.Color(0x2b2b2b),
+    shininess: 16,
   });
   const earthMesh = new THREE.Mesh(earthGeo, earthMat);
   earth.add(earthMesh);
@@ -137,7 +232,10 @@ export function createGlobe(container, { bounds, onEnter, onToast }) {
   earth.add(lights);
 
   const atmosphere = makeAtmosphere(RADIUS);
-  earth.add(atmosphere);
+  earth.add(atmosphere.group);
+
+  const stars = makeStars();
+  scene.add(stars);
 
   const story = FEATURED.find((place) => place.id === "story");
   const aoiLocal = latLngToVector3(story.lat, story.lng, 1.002);
@@ -145,6 +243,7 @@ export function createGlobe(container, { bounds, onEnter, onToast }) {
 
   const pickMeshes = [];
   const pulses = [];
+  const markerGroups = [];
   for (const place of FEATURED) {
     const local = latLngToVector3(place.lat, place.lng, 1.012);
     const group = new THREE.Group();
@@ -185,41 +284,47 @@ export function createGlobe(container, { bounds, onEnter, onToast }) {
     group.add(pick);
     pickMeshes.push(pick);
     earth.add(group);
+    markerGroups.push(group);
   }
 
-  const north = new THREE.Vector3(0, 1, 0);
-  const orbitNormal = new THREE.Vector3().crossVectors(north, aoiDir);
-  if (orbitNormal.lengthSq() < 1e-8) orbitNormal.set(1, 0, 0);
-  orbitNormal.normalize();
-  const cosLat = Math.sqrt(Math.max(0, 1 - north.dot(aoiDir) ** 2));
-  const tilt = Math.asin(THREE.MathUtils.clamp(Math.cos(THREE.MathUtils.degToRad(98)) / (cosLat || 1), -1, 1));
-  orbitNormal.applyAxisAngle(aoiDir, tilt);
-  const orbitSide = new THREE.Vector3().crossVectors(orbitNormal, aoiDir).normalize();
+  // World regions (data/global/regions.json): a green dot anywhere on Earth; a click turns the globe to it and opens
+  // its card. Once they arrive the plain featured places give way to them; the live county keeps its pulse.
+  const regionGroups = [];
+  function setRegions(regions) {
+    for (const g of regionGroups) earth.remove(g);
+    regionGroups.length = 0;
+    for (let i = pickMeshes.length - 1; i >= 0; i -= 1) if (pickMeshes[i].userData.region) pickMeshes.splice(i, 1);
+    for (const r of regions || []) {
+      if (r.lat == null || r.lon == null || r.id === "us-ia-story") continue;
+      const local = latLngToVector3(r.lat, r.lon, 1.012);
+      const group = new THREE.Group();
+      group.position.copy(local);
+      group.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), local.clone().normalize());
+      group.add(new THREE.Mesh(new THREE.SphereGeometry(0.011, 14, 14), new THREE.MeshBasicMaterial({ color: 0x3bb273 })));
+      const pick = new THREE.Mesh(new THREE.SphereGeometry(0.04, 10, 10), new THREE.MeshBasicMaterial({ visible: false }));
+      pick.userData.place = { name: `${r.name}${r.country ? `, ${r.country}` : ""}` };
+      pick.userData.region = r;
+      group.add(pick);
+      pickMeshes.push(pick);
+      earth.add(group);
+      regionGroups.push(group);
+    }
+    const hasRegions = regionGroups.length > 0;
+    for (const [i, g] of markerGroups.entries()) g.visible = !hasRegions || FEATURED[i].live === true;
+  }
 
-  const orbitPoint = (angle) => aoiDir.clone().multiplyScalar(Math.cos(angle) * ORBIT_RADIUS)
-    .addScaledVector(orbitSide, Math.sin(angle) * ORBIT_RADIUS);
-
-  const ringPositions = [];
-  const ringSteps = 160;
-  for (let i = 0; i <= ringSteps; i += 1) ringPositions.push(...orbitPoint((i / ringSteps) * Math.PI * 2).toArray());
-  const orbitGeom = new THREE.BufferGeometry();
-  orbitGeom.setAttribute("position", new THREE.Float32BufferAttribute(ringPositions, 3));
-  const orbitLine = new THREE.Line(
-    orbitGeom,
-    new THREE.LineBasicMaterial({ color: 0x9ec9ff, transparent: true, opacity: 0.25 }),
-  );
-  earth.add(orbitLine);
-
-  const satellite = new THREE.Mesh(
-    new THREE.SphereGeometry(0.014, 12, 12),
-    new THREE.MeshBasicMaterial({ color: 0xe8f6ff }),
-  );
-  earth.add(satellite);
+  // Real satellites from the CelesTrak snapshot; the visit arc below fires when a Sentinel-2 nears the farms.
+  const sats = createSatellites({
+    earth,
+    overlay: container,
+    legendHost: container.parentElement || container,
+    reduced,
+  });
 
   const arcPositions = new Float32Array(49 * 3);
   const arcGeom = new THREE.BufferGeometry();
   arcGeom.setAttribute("position", new THREE.BufferAttribute(arcPositions, 3));
-  const arcMat = new THREE.LineBasicMaterial({ color: 0xb7dcff, transparent: true, opacity: 0 });
+  const arcMat = new THREE.LineBasicMaterial({ color: 0xb7ffd0, transparent: true, opacity: 0 });
   const arcLine = new THREE.Line(arcGeom, arcMat);
   arcLine.frustumCulled = false;
   arcLine.visible = false;
@@ -230,18 +335,25 @@ export function createGlobe(container, { bounds, onEnter, onToast }) {
   glow.visible = false;
   earth.add(arcLine, glow);
 
-  const starPositions = new Float32Array(2500 * 3);
-  for (let i = 0; i < 2500; i += 1) {
-    const point = new THREE.Vector3().randomDirection().multiplyScalar(40 + Math.random() * 20);
-    starPositions.set([point.x, point.y, point.z], i * 3);
-  }
-  const starGeom = new THREE.BufferGeometry();
-  starGeom.setAttribute("position", new THREE.BufferAttribute(starPositions, 3));
-  scene.add(new THREE.Points(starGeom, new THREE.PointsMaterial({
-    color: 0xffffff,
-    size: 0.045,
-    sizeAttenuation: true,
-  })));
+  // Mars shares the scene with Earth; the camera orbits whichever planet is in focus and only the legend follows the focus.
+  const worlds = createWorlds({
+    scene, camera, controls, domElement: renderer.domElement, earth, label, reduced,
+    legendHost: container.parentElement || container,
+    copyHost: worldsHosts?.copyHost || container, navHost: worldsHosts?.navHost || container,
+    hooks: {
+      onOpenMars,
+      introVisible: introVisible || (() => true),
+      orbiters: () => orbiters?.() || [],
+      sunWorld: () => sunWorld,
+      viewSize: () => ({ width: viewWidth, height: viewHeight }),
+      onFocus(def) {
+        sats.legend.hidden = def.kind !== "home";
+        hovered = null;
+        label.hidden = true;
+      },
+    },
+  });
+  if (!worldsHosts) worlds.setEnabled(false);
 
   let specCanvas = null;
   let specCtx = null;
@@ -275,10 +387,20 @@ export function createGlobe(container, { bounds, onEnter, onToast }) {
     raycaster.setFromCamera(pointer, camera);
   }
 
-  function beginAim(dir, duration, done) {
+  /** Turn the globe to a world region (by id) and open its card: what a click on its dot does, also for ?region= links. */
+  function focusRegion(id) {
+    const pick = pickMeshes.find((m) => m.userData.region?.id === id);
+    if (!pick || !worlds.isEarth() || fly.active) return false;
+    const region = pick.userData.region;
+    beginAim(latLngToVector3(region.lat, region.lon, 1).normalize(), 1.0, () => onRegion?.(region), { distance: camera.position.length(), mode: "turn" });
+    return true;
+  }
+
+  /** Turn Earth to face dir and move the camera onto that line: mode "in" dives to the farms, "turn" keeps the distance. */
+  function beginAim(dir, duration, done, { distance = 1.25, mode = "in" } = {}) {
     controls.enabled = false;
     fly.active = true;
-    fly.mode = "in";
+    fly.mode = mode;
     fly.start = elapsed;
     fly.dur = reduced ? 0 : duration;
     fly.yaw0 = earth.rotation.y;
@@ -287,7 +409,7 @@ export function createGlobe(container, { bounds, onEnter, onToast }) {
     const targetYaw = shortestYaw(earth.rotation.y, yawFacing(dir));
     fly.yaw1 = targetYaw;
     const aimed = dir.clone().applyAxisAngle(Y_AXIS, targetYaw);
-    fly.cam1.copy(aimed.normalize()).multiplyScalar(1.25);
+    fly.cam1.copy(aimed.normalize()).multiplyScalar(distance);
     if (reduced) finishFly();
   }
 
@@ -299,18 +421,53 @@ export function createGlobe(container, { bounds, onEnter, onToast }) {
   renderer.domElement.addEventListener("pointerdown", (event) => {
     pointerDown = { x: event.clientX, y: event.clientY };
   });
+  // Mars and its markers are always clickable, unless Earth is in front of them; Earth's markers only while Earth is
+  // the focus and they face the camera; the Earth sphere itself while Mars is the focus, to come back.
+  function marsUnderPointer() {
+    const hit = raycaster.intersectObjects(worlds.marsPickables(), false)
+      .find((h) => h.object.userData.body === "mars" || worlds.facing(h.object) > 0.05);
+    if (!hit) return null;
+    const earthHit = raycaster.intersectObject(earthMesh, false)[0];
+    return earthHit && earthHit.distance < hit.distance ? null : hit;
+  }
+
   renderer.domElement.addEventListener("pointermove", (event) => {
     if (fly.active) return;
     setRay(event);
-    const hits = raycaster.intersectObjects(pickMeshes, false);
-    hovered = hits.find((hit) => facingCamera(hit.object) > 0.08)?.object || null;
+    const marsHit = marsUnderPointer();
+    if (marsHit) {
+      hovered = marsHit.object;
+      if (hovered.userData.body === "mars") {
+        hovered.userData.place = { name: worlds.isEarth() ? "Mars · click to focus" : "Mars · click to open the landing map" };
+      }
+    } else if (worlds.isEarth()) {
+      hovered = raycaster.intersectObjects(pickMeshes, false).find((hit) => hit.object.parent.visible && facingCamera(hit.object) > 0.08)?.object || null;
+    } else {
+      hovered = raycaster.intersectObject(earthMesh, false).length ? earthMesh : null;
+      if (hovered) earthMesh.userData.place = { name: "Earth · click to focus" };
+    }
     renderer.domElement.style.cursor = hovered ? "pointer" : "";
   });
   renderer.domElement.addEventListener("click", (event) => {
-    if (fly.active || !pointerDown) return;
+    if (fly.active || !pointerDown || worlds.moving()) return;
     if (Math.hypot(event.clientX - pointerDown.x, event.clientY - pointerDown.y) > 5) return;
     setRay(event);
-    const markerHit = raycaster.intersectObjects(pickMeshes, false).find((hit) => facingCamera(hit.object) > 0.08);
+    // Mars: the first click focuses it; a click on the focused planet opens the landing map.
+    if (marsUnderPointer()) {
+      if (worlds.isEarth()) worlds.focusId("mars");
+      else if (onOpenMars) onOpenMars();
+      return;
+    }
+    if (!worlds.isEarth()) {
+      // From Mars, a click on Earth brings the camera home.
+      if (raycaster.intersectObject(earthMesh, false).length) worlds.focusId("earth");
+      return;
+    }
+    const markerHit = raycaster.intersectObjects(pickMeshes, false).find((hit) => hit.object.parent.visible && facingCamera(hit.object) > 0.08);
+    if (markerHit?.object.userData.region) {
+      focusRegion(markerHit.object.userData.region.id);
+      return;
+    }
     if (markerHit) {
       const place = markerHit.object.userData.place;
       const live = place.live === true || insideBounds(place.lat, place.lng, bounds);
@@ -333,12 +490,21 @@ export function createGlobe(container, { bounds, onEnter, onToast }) {
     });
   });
 
+  let viewWidth = 1;
+  let viewHeight = 1;
   const resize = () => {
-    const width = Math.max(1, container.clientWidth);
-    const height = Math.max(1, container.clientHeight);
-    camera.aspect = width / height;
+    viewWidth = Math.max(1, container.clientWidth);
+    viewHeight = Math.max(1, container.clientHeight);
+    camera.aspect = viewWidth / viewHeight;
+    // Portrait screens: keep the horizontal field of view, so the whole globe stays in frame on a phone.
+    const baseFov = 42;
+    camera.fov = camera.aspect < 1 ? (2 * Math.atan(Math.tan((baseFov * Math.PI) / 360) / camera.aspect) * 180) / Math.PI : baseFov;
     camera.updateProjectionMatrix();
-    renderer.setSize(width, height, false);
+    worlds.layout(camera.aspect);
+    renderer.setSize(viewWidth, viewHeight, false);
+    const scale = viewHeight * 0.5 * pixelRatio;
+    stars.material.uniforms.uScale.value = scale;
+    sats.setViewport(viewWidth * pixelRatio, viewHeight * pixelRatio);
   };
   const observer = new ResizeObserver(resize);
   observer.observe(container);
@@ -362,6 +528,8 @@ export function createGlobe(container, { bounds, onEnter, onToast }) {
     onDone: null,
   };
   const labelPos = new THREE.Vector3();
+  const sunLocal = new THREE.Vector3();
+  const sunWorld = new THREE.Vector3();
 
   function finishFly() {
     earth.rotation.y = fly.yaw1;
@@ -371,6 +539,7 @@ export function createGlobe(container, { bounds, onEnter, onToast }) {
     controls.update();
     fly.active = false;
     controls.enabled = fly.mode !== "in";
+    idleSince = elapsed;
     const done = fly.onDone;
     fly.onDone = null;
     if (done) done();
@@ -388,15 +557,17 @@ export function createGlobe(container, { bounds, onEnter, onToast }) {
     if (t >= 1) finishFly();
   }
 
-  function updateArc(satPos) {
-    const separation = satPos.clone().normalize().angleTo(aoiDir);
+  /** When a Sentinel-2 comes within 25° of the farms, an arc from it reaches down to them. */
+  function updateArc(nearest) {
+    const separation = nearest ? nearest.angle : Infinity;
     if (separation > ARC_ANGLE) passLatched = false;
     if (separation < ARC_ANGLE && !passLatched && !arc.active) {
       passLatched = true;
       arc.active = true;
       arc.start = elapsed;
     }
-    if (!arc.active) {
+    if (!arc.active || !nearest) {
+      arc.active = false;
       arcLine.visible = false;
       glow.visible = false;
       return;
@@ -412,6 +583,7 @@ export function createGlobe(container, { bounds, onEnter, onToast }) {
       glow.visible = false;
       return;
     }
+    const satPos = nearest.position;
     const mid = satPos.clone().lerp(aoiLocal, 0.5);
     const control = mid.clone().normalize().multiplyScalar(mid.length() + 0.2);
     const curve = new THREE.QuadraticBezierCurve3(satPos, control, aoiLocal);
@@ -429,12 +601,14 @@ export function createGlobe(container, { bounds, onEnter, onToast }) {
     glow.visible = true;
   }
 
-  function placeSun() {
-    camera.updateMatrixWorld();
-    const up = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 1);
-    const right = new THREE.Vector3().setFromMatrixColumn(camera.matrixWorld, 0);
-    sun.position.copy(camera.position).addScaledVector(right, -1.1).addScaledVector(up, 0.85);
-    lightsMat.uniforms.uSun.value.copy(sun.position).normalize();
+  /** The sun sits where it really is for the satellite clock's UTC time, so the terminator is honest. */
+  function placeSun(date) {
+    const { lat, lng } = subsolarPoint(date);
+    sunLocal.copy(latLngToVector3(lat, lng, 1));
+    sunWorld.copy(sunLocal).applyQuaternion(earth.quaternion);
+    sun.position.copy(sunWorld).multiplyScalar(10);
+    lightsMat.uniforms.uSun.value.copy(sunWorld);
+    atmosphere.update(sunWorld, camera.position);
   }
 
   function updateLabel() {
@@ -443,7 +617,7 @@ export function createGlobe(container, { bounds, onEnter, onToast }) {
       return;
     }
     hovered.getWorldPosition(labelPos);
-    const facing = labelPos.clone().normalize().dot(camera.position.clone().normalize());
+    const facing = pickMeshes.includes(hovered) ? labelPos.clone().normalize().dot(camera.position.clone().normalize()) : 1;
     const ndc = labelPos.clone().project(camera);
     if (facing < 0.05 || ndc.z > 1) {
       label.hidden = true;
@@ -451,8 +625,8 @@ export function createGlobe(container, { bounds, onEnter, onToast }) {
     }
     label.hidden = false;
     label.textContent = hovered.userData.place.name;
-    label.style.left = `${(ndc.x * 0.5 + 0.5) * container.clientWidth}px`;
-    label.style.top = `${(-ndc.y * 0.5 + 0.5) * container.clientHeight}px`;
+    label.style.left = `${(ndc.x * 0.5 + 0.5) * viewWidth}px`;
+    label.style.top = `${(-ndc.y * 0.5 + 0.5) * viewHeight}px`;
   }
 
   function frame(now) {
@@ -462,18 +636,26 @@ export function createGlobe(container, { bounds, onEnter, onToast }) {
     last = now;
     elapsed += delta;
     if (fly.active) stepFly();
-    else if (!dragging) earth.rotation.y += delta * (reduced ? 0.004 : 0.05);
-    const angle = (elapsed / ORBIT_PERIOD) * Math.PI * 2 - 0.8;
-    const satPos = orbitPoint(angle);
-    satellite.position.copy(satPos);
-    updateArc(satPos);
+    else if (!dragging) {
+      const idle = elapsed - idleSince;
+      if (idle > SPIN_RESUME_AFTER) {
+        const ramp = Math.min(1, (idle - SPIN_RESUME_AFTER) / SPIN_RAMP);
+        earth.rotation.y += delta * (reduced ? 0.004 : SPIN_RATE) * easeInOut(ramp);
+      }
+    }
+    worlds.update(delta, elapsed);
+    if (!fly.active && !worlds.moving()) controls.update();
+    camera.updateMatrixWorld();
+    earth.updateMatrixWorld();
+    sats.update(delta, camera, viewWidth, viewHeight);
+    updateArc(sats.nearestSentinel(aoiDir));
     const pulse = (elapsed % 2) / 2;
     for (const ring of pulses) {
       ring.scale.setScalar(1 + pulse * 2.4);
       ring.material.opacity = 0.85 * (1 - pulse);
     }
-    if (!fly.active) controls.update();
-    placeSun();
+    stars.material.uniforms.uTime.value = elapsed;
+    placeSun(sats.now());
     updateLabel();
     renderer.render(scene, camera);
   }
@@ -498,6 +680,13 @@ export function createGlobe(container, { bounds, onEnter, onToast }) {
   return {
     start,
     stop,
+    setWorlds: worlds.setWorlds,
+    setRegions,
+    focusRegion,
+    showWorld: (id) => worlds.focusId(id, { instant: true }),
+    stepWorld: worlds.step,
+    currentWorld: worlds.current,
+    onWorldChange: worlds.onChange,
     flyIn() {
       beginAim(aoiDir, 1.8, () => {
         if (onEnter) onEnter({ live: true, lat: story.lat, lng: story.lng, name: story.name });
@@ -519,12 +708,16 @@ export function createGlobe(container, { bounds, onEnter, onToast }) {
     dispose() {
       stop();
       observer.disconnect();
+      worlds.dispose();
       controls.dispose();
+      sats.dispose();
+      atmosphere.dispose();
       earth.traverse((obj) => {
         obj.geometry?.dispose();
         if (obj.material) disposeMaterial(obj.material);
       });
-      starGeom.dispose();
+      stars.geometry.dispose();
+      stars.material.dispose();
       textures.forEach((texture) => texture.dispose());
       renderer.dispose();
       renderer.domElement.remove();

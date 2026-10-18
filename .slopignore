@@ -1,0 +1,10 @@
+web/src/globe/globe.js
+web/src/globe/atmosphere.js
+web/src/globe/satellites.js
+web/src/globe/worlds.js
+web/src/globe/worlds-front.js
+web/src/globe/geo.js
+web/src/globe/no-wasm.js
+web/src/assets/**
+web/public/sats/**
+web/src/places.js

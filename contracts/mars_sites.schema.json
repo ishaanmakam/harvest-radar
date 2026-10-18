@@ -1,0 +1,437 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://overfield.example/contracts/mars_sites.schema.json",
+  "title": "mars/sites.json: Mars landing-site screen (optional file; pipeline/mars/m02_score.py)",
+  "type": "object",
+  "required": [
+    "generated_at",
+    "title",
+    "method",
+    "grid",
+    "factors",
+    "shown_not_scored",
+    "blind_spots",
+    "stats",
+    "sites",
+    "spacex_candidates",
+    "spacex_summary",
+    "landmarks",
+    "assets",
+    "sources",
+    "next"
+  ],
+  "$defs": {
+    "status": {
+      "enum": [
+        "go",
+        "watch",
+        "no_go"
+      ]
+    },
+    "check": {
+      "type": "object",
+      "required": [
+        "factor",
+        "status",
+        "goodness",
+        "detail"
+      ],
+      "properties": {
+        "factor": {
+          "type": "string"
+        },
+        "status": {
+          "$ref": "#/$defs/status"
+        },
+        "value": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "unit": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "goodness": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1
+        },
+        "detail": {
+          "type": "string"
+        }
+      }
+    },
+    "context": {
+      "type": "object",
+      "properties": {
+        "slope_deg": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "abs_latitude": {
+          "type": [
+            "number",
+            "null"
+          ]
+        },
+        "albedo": {
+          "type": [
+            "number",
+            "null"
+          ]
+        }
+      }
+    },
+    "geology": {
+      "type": "object",
+      "properties": {
+        "unit": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "age": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "units_within_100km": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "oldest_within_100km": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      }
+    },
+    "place": {
+      "type": "object",
+      "required": [
+        "lat",
+        "lon",
+        "status",
+        "score",
+        "checks",
+        "context",
+        "geology"
+      ],
+      "properties": {
+        "lat": {
+          "type": "number"
+        },
+        "lon": {
+          "type": "number",
+          "minimum": -180,
+          "maximum": 180
+        },
+        "status": {
+          "$ref": "#/$defs/status"
+        },
+        "score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "checks": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/check"
+          }
+        },
+        "context": {
+          "$ref": "#/$defs/context"
+        },
+        "geology": {
+          "$ref": "#/$defs/geology"
+        },
+        "thumb": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "thumb_source": {
+          "type": [
+            "string",
+            "null"
+          ]
+        },
+        "region": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "description": "IAU region name the point falls in (smallest containing region from the pipeline gazetteer, else the nearest); optional"
+        }
+      }
+    }
+  },
+  "properties": {
+    "generated_at": {
+      "type": "string"
+    },
+    "title": {
+      "type": "string"
+    },
+    "method": {
+      "type": "string"
+    },
+    "grid": {
+      "type": "object",
+      "required": [
+        "cell_deg",
+        "lat_min",
+        "lat_max",
+        "lon_convention",
+        "latitude"
+      ]
+    },
+    "factors": {
+      "type": "array",
+      "minItems": 4,
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "from",
+          "dataset",
+          "why",
+          "go",
+          "watch",
+          "no_go",
+          "goodness_rule",
+          "weight"
+        ],
+        "properties": {
+          "from": {
+            "enum": [
+              "spacex",
+              "ours"
+            ]
+          },
+          "weight": {
+            "type": "number"
+          }
+        }
+      }
+    },
+    "shown_not_scored": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "why"
+        ]
+      }
+    },
+    "blind_spots": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "stats": {
+      "type": "object",
+      "required": [
+        "cells_scored",
+        "go",
+        "watch",
+        "no_go",
+        "no_data"
+      ]
+    },
+    "sites": {
+      "type": "array",
+      "items": {
+        "allOf": [
+          {
+            "$ref": "#/$defs/place"
+          },
+          {
+            "type": "object",
+            "required": [
+              "id",
+              "rank",
+              "reason"
+            ],
+            "properties": {
+              "id": {
+                "type": "string"
+              },
+              "rank": {
+                "type": "integer"
+              },
+              "reason": {
+                "type": "string"
+              },
+              "nearest_spacex": {
+                "type": [
+                  "object",
+                  "null"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    },
+    "spacex_candidates": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "id",
+          "name",
+          "region",
+          "url",
+          "lat",
+          "lon"
+        ],
+        "properties": {
+          "id": {
+            "type": "string"
+          },
+          "name": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "region": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          },
+          "acquired": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "lat": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "lon": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "status": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "score": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "percentile": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "checks": {
+            "type": "array",
+            "items": {
+              "$ref": "#/$defs/check"
+            }
+          },
+          "context": {
+            "$ref": "#/$defs/context"
+          },
+          "geology": {
+            "$ref": "#/$defs/geology"
+          },
+          "best_within_200km": {
+            "type": [
+              "object",
+              "null"
+            ]
+          },
+          "thumb": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "thumb_source": {
+            "type": [
+              "string",
+              "null"
+            ]
+          },
+          "missing": {
+            "type": "boolean"
+          }
+        }
+      }
+    },
+    "spacex_summary": {
+      "type": "string"
+    },
+    "tradeoff": {
+      "type": [
+        "object",
+        "null"
+      ]
+    },
+    "landmarks": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "lat",
+          "lon"
+        ]
+      }
+    },
+    "assets": {
+      "type": "object"
+    },
+    "sources": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "name",
+          "url"
+        ]
+      }
+    },
+    "next": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    }
+  }
+}

@@ -1,5 +1,5 @@
 import { h, s } from "./dom.js";
-import { fmtDate, parseDate } from "./format.js";
+import { fmtDate, fmtNum, parseDate } from "./format.js";
 
 function timeScale(dates, x0, x1) {
   const times = dates.map((d) => parseDate(d)?.getTime()).filter((t) => t != null);
@@ -133,6 +133,68 @@ export function ndviSparkline({ dates, ndvi, clearFrac, status }) {
 
   svg.append(s("line", { class: "axis", x1: left, x2: W - right, y1: baseline, y2: baseline }));
   return svg;
+}
+
+/**
+ * County yield hindcast: measured against predicted by year, with the model's band around the
+ * prediction, and this season's estimate at the end.
+ */
+export function hindcastChart({ rows, rmse, target, targetYear }) {
+  const W = 620;
+  const H = 210;
+  const left = 44;
+  const right = 12;
+  const top = 16;
+  const bottom = 28;
+  const years = rows.map((r) => r.year);
+  const labels = [...years, targetYear || "now"];
+  const halfBand = rmse != null ? 1.64 * rmse : 0;
+  const values = rows.flatMap((r) => [r.actual, r.predicted - halfBand, r.predicted + halfBand]).filter((v) => typeof v === "number");
+  if (target != null) values.push(target - halfBand, target + halfBand);
+  const min = Math.floor(Math.min(...values) / 10) * 10;
+  const max = Math.ceil(Math.max(...values) / 10) * 10;
+  const slot = (W - left - right) / labels.length;
+  const x = (i) => left + slot * (i + 0.5);
+  const y = (v) => top + (1 - (v - min) / (max - min || 1)) * (H - top - bottom);
+  const baseline = H - bottom;
+
+  const svg = s("svg", { class: "chart chart-hindcast", viewBox: `0 0 ${W} ${H}`, role: "img", "aria-label": "County yield, measured against predicted, by year" });
+  const ticks = 4;
+  for (let i = 0; i <= ticks; i += 1) {
+    const level = min + ((max - min) * i) / ticks;
+    svg.append(s("line", { class: "grid", x1: left, x2: W - right, y1: y(level), y2: y(level) }));
+    svg.append(s("text", { class: "tick-label", x: left - 5, y: y(level) + 3, "text-anchor": "end" }, fmtNum(level)));
+  }
+  labels.forEach((label, i) => svg.append(s("text", { class: "tick-label", x: x(i), y: H - 10, "text-anchor": "middle" }, String(label))));
+
+  if (halfBand > 0) {
+    const upper = rows.map((r, i) => [x(i), y(r.predicted + halfBand)]);
+    const lower = rows.map((r, i) => [x(i), y(r.predicted - halfBand)]).reverse();
+    svg.append(s("path", { class: "band-model", d: `${pathFromPoints(upper)}${pathFromPoints(lower).replace(/^M/, "L")}Z` }));
+  }
+  svg.append(s("path", { class: "line-predicted", d: pathFromPoints(rows.map((r, i) => [x(i), y(r.predicted)])) }));
+  svg.append(s("path", { class: "line-actual", d: pathFromPoints(rows.map((r, i) => [x(i), y(r.actual)])) }));
+  rows.forEach((r, i) => svg.append(s("circle", { class: "dot-actual", cx: x(i), cy: y(r.actual), r: 3 })));
+
+  if (target != null) {
+    const i = rows.length;
+    if (halfBand > 0) {
+      svg.append(s("rect", { class: "band-model", x: x(i) - slot * 0.25, y: y(target + halfBand), width: slot * 0.5, height: Math.max(0, y(target - halfBand) - y(target + halfBand)), rx: 3 }));
+    }
+    svg.append(s("circle", { class: "peak", cx: x(i), cy: y(target), r: 4 }));
+    svg.append(s("text", { class: "label", x: x(i), y: y(target + halfBand) - 6, "text-anchor": "middle" }, `${fmtNum(target)} est.`));
+  }
+  svg.append(s("line", { class: "axis", x1: left, x2: W - right, y1: baseline, y2: baseline }));
+
+  const legend = h(
+    "div",
+    { class: "chart-legend" },
+    h("span", {}, h("span", { class: "key key-actual" }), "Measured county yield"),
+    h("span", {}, h("span", { class: "key key-projected" }), "Predicted, that year held out"),
+    halfBand > 0 ? h("span", {}, h("span", { class: "key key-band" }), "90 percent band") : null,
+    target != null ? h("span", {}, h("span", { class: "key key-peak" }), "This season's estimate") : null,
+  );
+  return h("div", {}, svg, legend);
 }
 
 /**

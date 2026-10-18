@@ -111,3 +111,17 @@ shower, a blocking rain, the act-now rain or a soaking on that day, frost and ha
 is present the plans say how many models agree ("16 mm of rain forecast on 2026-10-19 (6 of 8 weather models agree)")
 and the analytics use the ensemble median and shares instead of the single feed. The act-now rule itself stays on the
 pipeline's `weather.json`. Run it before the morning queue, or on a schedule; it takes one request.
+
+## 10. Accounts, the admin page and the developer API (our own backend)
+
+The same inbound server now serves sign-in, farm profiles, developer keys and the admin pages from one SQLite file
+(`ACCOUNTS_DB`, default `data/accounts.sqlite`, gitignored). The people who create an account on the site join the
+roster next to the CSV; the morning queue, the scheduler and STOP texts see them at once.
+
+1. `python intelligence/inbound_server.py --data data/out` (prints the accounts path).
+2. Expose it: `cloudflared tunnel --url http://localhost:8788` (no account; `winget install Cloudflare.cloudflared`).
+3. `python scripts/publish_backend_url.py https://<tunnel address>` sets the site's API_BASE and SIGNUP_URL and rebuilds it.
+4. Create your account on the site, then `python intelligence/accounts.py promote you@example.com admin`.
+
+Checks: `curl <address>/v1/health`; `python intelligence/accounts.py list`; the Admin page shows the roster, every
+morning run and key usage. Full reference: `backend/README.md`.

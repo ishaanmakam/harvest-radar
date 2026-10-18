@@ -1,0 +1,143 @@
+{
+  "note": "Stand-in seasons for the demo: fields, flags and checks are generated, not observed.",
+  "seasons": {
+    "us-il-champaign": {
+      "path": "global/seasons/us-il-champaign/",
+      "farms": 103,
+      "name": "Champaign County, Illinois",
+      "country": "USA"
+    },
+    "us-ks-sumner": {
+      "path": "global/seasons/us-ks-sumner/",
+      "farms": 105,
+      "name": "Sumner County, Kansas",
+      "country": "USA"
+    },
+    "us-ne-york": {
+      "path": "global/seasons/us-ne-york/",
+      "farms": 103,
+      "name": "York County, Nebraska",
+      "country": "USA"
+    },
+    "ca-sk-rosetown": {
+      "path": "global/seasons/ca-sk-rosetown/",
+      "farms": 97,
+      "name": "Rosetown, Saskatchewan",
+      "country": "Canada"
+    },
+    "mx-sinaloa": {
+      "path": "global/seasons/mx-sinaloa/",
+      "farms": 103,
+      "name": "Culiacan Valley, Sinaloa",
+      "country": "Mexico"
+    },
+    "br-mt-sorriso": {
+      "path": "global/seasons/br-mt-sorriso/",
+      "farms": 103,
+      "name": "Sorriso, Mato Grosso",
+      "country": "Brazil"
+    },
+    "br-pr-cascavel": {
+      "path": "global/seasons/br-pr-cascavel/",
+      "farms": 103,
+      "name": "Cascavel, Parana",
+      "country": "Brazil"
+    },
+    "ar-pergamino": {
+      "path": "global/seasons/ar-pergamino/",
+      "farms": 103,
+      "name": "Pergamino, Buenos Aires",
+      "country": "Argentina"
+    },
+    "fr-beauce": {
+      "path": "global/seasons/fr-beauce/",
+      "farms": 103,
+      "name": "Beauce",
+      "country": "France"
+    },
+    "ua-poltava": {
+      "path": "global/seasons/ua-poltava/",
+      "farms": 103,
+      "name": "Poltava Oblast",
+      "country": "Ukraine"
+    },
+    "ru-krasnodar": {
+      "path": "global/seasons/ru-krasnodar/",
+      "farms": 105,
+      "name": "Krasnodar Krai",
+      "country": "Russia"
+    },
+    "kz-akmola": {
+      "path": "global/seasons/kz-akmola/",
+      "farms": 97,
+      "name": "Akmola",
+      "country": "Kazakhstan"
+    },
+    "eg-nile-delta": {
+      "path": "global/seasons/eg-nile-delta/",
+      "farms": 110,
+      "name": "Kafr el-Sheikh, Nile Delta",
+      "country": "Egypt"
+    },
+    "ke-trans-nzoia": {
+      "path": "global/seasons/ke-trans-nzoia/",
+      "farms": 103,
+      "name": "Trans Nzoia",
+      "country": "Kenya"
+    },
+    "ng-kano": {
+      "path": "global/seasons/ng-kano/",
+      "farms": 103,
+      "name": "Kano",
+      "country": "Nigeria"
+    },
+    "za-free-state": {
+      "path": "global/seasons/za-free-state/",
+      "farms": 103,
+      "name": "Bothaville, Free State",
+      "country": "South Africa"
+    },
+    "in-punjab": {
+      "path": "global/seasons/in-punjab/",
+      "farms": 110,
+      "name": "Sangrur, Punjab",
+      "country": "India"
+    },
+    "pk-punjab": {
+      "path": "global/seasons/pk-punjab/",
+      "farms": 110,
+      "name": "Sahiwal, Punjab",
+      "country": "Pakistan"
+    },
+    "cn-shandong": {
+      "path": "global/seasons/cn-shandong/",
+      "farms": 103,
+      "name": "Dezhou, Shandong",
+      "country": "China"
+    },
+    "cn-heilongjiang": {
+      "path": "global/seasons/cn-heilongjiang/",
+      "farms": 103,
+      "name": "Suihua, Heilongjiang",
+      "country": "China"
+    },
+    "vn-mekong": {
+      "path": "global/seasons/vn-mekong/",
+      "farms": 117,
+      "name": "An Giang, Mekong Delta",
+      "country": "Vietnam"
+    },
+    "id-west-java": {
+      "path": "global/seasons/id-west-java/",
+      "farms": 117,
+      "name": "Karawang, West Java",
+      "country": "Indonesia"
+    },
+    "au-wa-merredin": {
+      "path": "global/seasons/au-wa-merredin/",
+      "farms": 110,
+      "name": "Merredin, Western Australia",
+      "country": "Australia"
+    }
+  }
+}

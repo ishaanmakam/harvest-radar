@@ -13,7 +13,7 @@ import sys
 
 from common import load_env
 from providers import EMAIL_VARS, PHOTON_VARS, VOICE_VARS, PhotonSMS, _basic, _ok, _payload, _urllib_http
-from tools import load_roster
+from tools import load_roster, roster_source
 
 
 def report(env, roster_path=None, http=None):
@@ -54,7 +54,8 @@ def report(env, roster_path=None, http=None):
 
     try:
         rows = load_roster(roster_path or env.get("ROSTER_PATH"))
-        rep["roster"] = {"ok": True, "rows": len(rows), "officers": sum(r["role"] == "officer" for r in rows),
+        rep["roster"] = {"ok": True, "source": roster_source(roster_path or env.get("ROSTER_PATH")), "rows": len(rows),
+                         "officers": sum(r["role"] == "officer" for r in rows),
                          "farmers": sum(r["role"] == "farmer" for r in rows), "languages": sorted({r["language"] for r in rows})}
     except Exception as e:
         rep["roster"] = {"ok": False, "error": str(e)}
@@ -99,7 +100,7 @@ def render(rep):
     else:
         lines.append(f"{mark(False)} Photon: set {', '.join(ph['missing'])} in .env")
     lines.append(f"{mark(xa['configured'])} xAI: {'XAI_API_KEY set' if xa['configured'] else 'XAI_API_KEY not set'} (model {xa['model']})")
-    lines.append(f"{mark(ro['ok'])} roster: " + (f"{ro['rows']} rows ({ro['officers']} officer, {ro['farmers']} farmers; languages {', '.join(ro['languages'])})"
+    lines.append(f"{mark(ro['ok'])} roster: " + (f"{ro['rows']} rows from {ro.get('source', 'csv')} ({ro['officers']} officer, {ro['farmers']} farmers; languages {', '.join(ro['languages'])})"
                                                  if ro["ok"] else ro["error"]))
     if pu["url"]:
         lines.append(f"{mark(pu['health'] is not None)} PUBLIC_URL {pu['url']}: " + (f"health {pu['health']}" if pu["health"] else f"not reachable: {pu['error']}"))

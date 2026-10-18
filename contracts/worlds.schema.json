@@ -1,0 +1,49 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://overfield.example/contracts/worlds.schema.json",
+  "title": "worlds.json: the worlds the opening globe can move between (optional file; pipeline/mars/m04_worlds.py)",
+  "type": "object",
+  "required": ["generated_at", "sources", "orbiters", "worlds"],
+  "properties": {
+    "generated_at": { "type": "string" },
+    "sources": {
+      "type": "array",
+      "items": { "type": "object", "required": ["name", "url"], "properties": { "name": { "type": "string" }, "url": { "type": "string" }, "citation": { "type": "string" }, "terms": { "type": "string" } } }
+    },
+    "orbiters": {
+      "type": "array",
+      "items": { "type": "object", "required": ["name", "years", "instruments", "used_for"], "properties": { "name": { "type": "string" }, "years": { "type": "string" }, "instruments": { "type": "string" }, "used_for": { "type": "string" } } }
+    },
+    "worlds": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "required": ["id", "name", "kind", "status", "order", "facts", "tagline"],
+        "properties": {
+          "id": { "type": "string" },
+          "name": { "type": "string" },
+          "kind": { "enum": ["home", "planet", "ocean_moon", "exoplanet"] },
+          "status": { "enum": ["live", "open", "coming_soon"] },
+          "order": { "type": "integer" },
+          "parent": { "type": ["string", "null"] },
+          "host_star": { "type": ["string", "null"] },
+          "spectral_type": { "type": ["string", "null"] },
+          "distance_ly": { "type": ["number", "null"] },
+          "radius_earth": { "type": ["number", "null"] },
+          "mass_earth": { "type": ["number", "null"] },
+          "eq_temp_k": { "type": ["number", "null"] },
+          "insolation_earth": { "type": ["number", "null"] },
+          "orbital_period_days": { "type": ["number", "null"] },
+          "discovered": { "type": ["integer", "null"] },
+          "method": { "type": ["string", "null"] },
+          "facts": { "type": "array", "items": { "type": "string" } },
+          "tagline": { "type": "string" },
+          "source": { "type": ["string", "null"] },
+          "sites": { "type": ["string", "null"] },
+          "illustration": { "type": "boolean" }
+        }
+      }
+    }
+  }
+}

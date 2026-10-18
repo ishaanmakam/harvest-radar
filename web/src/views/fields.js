@@ -139,15 +139,26 @@ export function renderFields(el, ctx) {
         checkSelect.value = "any";
       },
     },
-    "Reset",
+    "Reset filters",
   );
 
   const listTitle = h("div", { class: "section-title" }, "Farms", h("span", { class: "count" }));
   const list = h("ul", { class: "farm-list", id: "farm-list", "aria-label": "Farms in view" });
   const listNote = h("p", { class: "muted small", hidden: true });
 
+  const flagCounts = { act_now: 0, watch: 0 };
+  for (const plan of data.plans.plans || []) if (flagCounts[plan.flag] != null) flagCounts[plan.flag] += 1;
+  const stops = data.route?.stops?.length ?? 0;
+  const quick = h(
+    "div",
+    { class: "quick", role: "group", "aria-label": "Today" },
+    h("button", { class: "quick-btn quick-act", type: "button", onclick: () => ctx.go("route") }, h("strong", {}, String(flagCounts.act_now)), " act now"),
+    h("button", { class: "quick-btn quick-watch", type: "button", onclick: () => ctx.go("route") }, h("strong", {}, String(flagCounts.watch)), " watch"),
+    h("button", { class: "quick-btn", type: "button", onclick: () => ctx.go("route"), disabled: stops ? null : true }, h("strong", {}, String(stops)), stops === 1 ? " stop on the route" : " stops on the route"),
+  );
+
   el.replaceChildren(
-    h("div", { class: "section" }, search),
+    h("div", { class: "section" }, quick, h("div", { style: { marginTop: "10px" } }, search)),
     h(
       "div",
       { class: "section" },
@@ -209,7 +220,7 @@ export function renderFields(el, ctx) {
             h(
               "span",
               { style: { minWidth: 0 } },
-              h("div", { class: "row" }, h("span", { class: "farm-id" }, id), h("span", { class: "farm-meta" }, `${CROP_LABEL[props.crop] || titleCase(props.crop)} · ${fmtHa(props.area_ha)}`)),
+              h("div", { class: "row" }, h("span", { class: "farm-id" }, id), h("span", { class: "farm-meta" }, `${CROP_LABEL[props.crop] || titleCase(props.crop)} / ${fmtHa(props.area_ha)}`)),
               h("div", { class: "farm-today" }, plan?.today || "No plan for this farm."),
             ),
           ),

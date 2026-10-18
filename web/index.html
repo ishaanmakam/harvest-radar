@@ -4,20 +4,45 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#000000" />
     <meta name="description" content="Overfield: the satellite visits every farm and every farmer gets a morning plan." />
     <title>Overfield</title>
   </head>
   <body>
     <a class="skip-link" href="#dock-body">Skip to the farm list</a>
     <section id="intro">
-      <div id="globe"></div>
+      <div id="globe" data-globe></div>
       <p id="toast" hidden></p>
       <div id="intro-copy">
-        <h1>Overfield</h1>
-        <p class="tagline">The satellite visits every farm. Every farmer gets a morning plan.</p>
-        <p id="intro-stats"></p>
-        <button id="enter" type="button">Enter the season</button>
+        <div id="earth-copy">
+          <h1>Field inspection from orbit</h1>
+          <!-- {MISSION_LINE} -->
+          <p class="tagline">Overfield reads each new Sentinel-2 pass over a farm and turns it into a morning plan for the grower.</p>
+          <p id="intro-stats"></p>
+          <button id="enter" type="button">Open the season map</button>
+        </div>
       </div>
+      <div id="world-nav"></div>
+      <p class="source-strip">Sentinel-2 L2A via Earth Search / NASA FIRMS VIIRS / NASA POWER and Open-Meteo / CelesTrak GP / Contains modified Copernicus Sentinel data 2026</p>
+    </section>
+    <section id="mars-view" hidden aria-label="Mars landing-site map">
+      <div class="mars-top">
+        <button id="mars-back" type="button" class="btn btn-ghost">Return to the globe</button>
+        <div class="mars-title">
+          <h1>Landing sites for Starship</h1>
+          <p>Every 7 km of Mars between 60 degrees south and 60 degrees north, checked against four rules from NASA, USGS and PSI orbital data.</p>
+        </div>
+        <a class="btn btn-ghost mars-data-link" href="#data">Open the data sources</a>
+      </div>
+      <div class="mars-stage">
+        <div id="mars-map" class="map" aria-label="Mars map"></div>
+        <aside id="mars-dock" class="dock" aria-label="Sites">
+          <button id="mars-dock-handle" class="sheet-handle" type="button" aria-label="Expand panel" aria-expanded="false"><span></span></button>
+          <div id="mars-dock-body" class="dock-body" tabindex="-1"></div>
+        </aside>
+        <aside id="mars-drawer" class="drawer" aria-label="Site detail" hidden><div id="mars-drawer-body" class="drawer-body"></div></aside>
+      </div>
+      <p class="mars-foot">Independent analysis from public NASA, USGS and PSI data. Not affiliated with or endorsed by SpaceX. <a href="#data">Every source on the Data page.</a></p>
     </section>
     <div id="app">
       <header class="topbar">
@@ -29,32 +54,44 @@
           </svg>
           <span>Overfield</span>
         </a>
+        <div class="aspects" role="group" aria-label="Aspect">
+          <button class="aspect" type="button" data-aspect="health" aria-pressed="true">Crop health</button>
+          <button class="aspect" type="button" data-aspect="yield" aria-pressed="false">Crop yield</button>
+        </div>
         <nav class="tabs" aria-label="Views">
-          <button class="tab" type="button" data-view="fields" aria-current="page">Fields</button>
-          <button class="tab" type="button" data-view="timelapse">Time-lapse</button>
-          <button class="tab" type="button" data-view="route">Route</button>
-          <button class="tab" type="button" data-view="deliveries">Deliveries</button>
-          <button class="tab" type="button" data-view="season">Season</button>
+          <button class="tab" type="button" data-view="fields" data-aspect="health" aria-current="page">Fields</button>
+          <button class="tab" type="button" data-view="timelapse" data-aspect="health">Time-lapse</button>
+          <button class="tab" type="button" data-view="route" data-aspect="health">Route</button>
+          <button class="tab" type="button" data-view="deliveries" data-aspect="health">Deliveries</button>
+          <button class="tab" type="button" data-view="yield" data-aspect="yield" hidden>Yield</button>
+          <button class="tab" type="button" data-view="season" data-aspect="yield" hidden>Season</button>
         </nav>
         <div class="topbar-right">
+          <span id="run-badge" class="badge" hidden></span>
           <span id="badge" class="badge"></span>
-          <button id="orbit" type="button" class="btn btn-ghost">Orbit</button>
-          <a id="signup" class="signup" href="http://localhost:8788/signup" target="_blank" rel="noopener">Get your farm's morning plan</a>
+          <button id="orbit" type="button" class="btn btn-ghost">Show the globe</button>
+          <nav class="page-links" aria-label="Pages">
+            <a href="#regions">Regions</a>
+            <a href="#data">Data sources</a>
+            <a href="#developers">Developers</a>
+          </nav>
+          <div id="auth" class="auth-slot"></div>
+          <a id="signup" class="signup" href="#account">Create an account</a>
         </div>
       </header>
       <p id="error" class="error-banner" role="alert" hidden></p>
       <main class="stage">
         <div id="map" class="map" aria-label="Farm map"></div>
-        <section id="headline" class="headline" aria-label="Today at a glance" hidden></section>
+        <section id="headline" class="headline" aria-label="Today" hidden></section>
         <aside id="dock" class="dock" aria-label="View panel" data-view="fields" hidden>
           <button id="dock-handle" class="sheet-handle" type="button" aria-label="Expand panel" aria-expanded="false"><span></span></button>
           <div id="dock-body" class="dock-body" tabindex="-1"></div>
         </aside>
         <aside id="panel" class="drawer" aria-label="Farm plan" hidden></aside>
         <div id="timelapse" class="timelapse" hidden>
-          <button id="play" type="button" class="btn btn-primary">Play</button>
-          <button id="frame-prev" type="button" class="btn btn-icon" aria-label="Previous pass">‹</button>
-          <button id="frame-next" type="button" class="btn btn-icon" aria-label="Next pass">›</button>
+          <button id="play" type="button" class="btn btn-primary">Play the season</button>
+          <button id="frame-prev" type="button" class="btn btn-icon" aria-label="Earlier pass">Earlier pass</button>
+          <button id="frame-next" type="button" class="btn btn-icon" aria-label="Later pass">Later pass</button>
           <div class="tl-track">
             <input id="frame-slider" type="range" min="0" value="0" aria-label="Season date" />
             <div class="tl-readout"><strong id="frame-date"></strong><span id="frame-clear" class="muted"></span></div>
@@ -72,18 +109,38 @@
             <span>Opacity</span>
             <input id="frame-opacity" type="range" min="0" max="1" step="0.05" value="1" aria-label="Imagery opacity" />
           </label>
+          <p class="tl-help">Sentinel-2 sees 10 m per pixel; zoom in on the Fields view for the latest aerial basemap.</p>
         </div>
         <div id="tooltip" class="map-tooltip" role="tooltip" hidden></div>
       </main>
     </div>
+    <section id="page" class="page" hidden aria-labelledby="page-title">
+      <div class="page-bar">
+        <button id="page-back" type="button" class="btn btn-ghost page-back">Return to the map</button>
+        <nav class="page-nav" aria-label="Pages">
+          <a href="#regions">Regions</a>
+          <a href="#data">Data</a>
+          <a href="#developers">Developers</a>
+          <a href="#account">Account</a>
+          <a id="page-admin-link" href="#admin" hidden>Admin</a>
+        </nav>
+        <div id="page-auth" class="auth-slot"></div>
+      </div>
+      <div class="page-scroll">
+        <div class="page-inner">
+          <h1 id="page-title" class="page-title" tabindex="-1"></h1>
+          <div id="page-content" class="page-content"></div>
+        </div>
+      </div>
+    </section>
     <div id="place-card" hidden>
       <h2 id="place-title"></h2>
       <p id="place-body"></p>
       <div class="card-actions">
-        <button id="see-live" type="button">See a live farm landscape</button>
-        <button id="back-orbit" type="button">Back to orbit</button>
+        <button id="see-live" type="button">Open the Story County map</button>
+        <button id="back-orbit" type="button">Return to the globe</button>
       </div>
     </div>
-    <script type="module" src="/src/main.js"></script>
+    <script type="module" src="./src/main.js"></script>
   </body>
 </html>

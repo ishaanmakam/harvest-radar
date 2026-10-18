@@ -37,7 +37,7 @@ export function createTimelapse({ data, store, mapApi, els }) {
     els.date.textContent = fmtDate(current.date, "long");
     const parts = [`pass ${index + 1} of ${frames.length}`];
     if (current.clear_frac != null) parts.push(`${fmtPct(current.clear_frac * 100)} clear`);
-    els.clear.textContent = parts.join(" · ");
+    els.clear.textContent = parts.join(" / ");
     els.slider.value = String(index);
     els.slider.setAttribute("aria-valuetext", fmtDate(current.date, "long"));
     els.opacity.value = String(frame.opacity);
@@ -66,6 +66,7 @@ export function createTimelapse({ data, store, mapApi, els }) {
       active = true;
       els.box.hidden = false;
       mapApi.setDimmed(true);
+      mapApi.setFrameFade(false);
       apply();
       syncTimer();
     },
@@ -77,6 +78,7 @@ export function createTimelapse({ data, store, mapApi, els }) {
       els.box.hidden = true;
       if (store.get().frame.playing) store.setFrame({ playing: false });
       mapApi.setDimmed(false);
+      mapApi.setFrameFade(true);
       mapApi.setFrame(frames.length - 1, 1);
     },
     update(keys) {

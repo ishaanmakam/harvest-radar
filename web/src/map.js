@@ -6,6 +6,9 @@ import { reduceMotion } from "./format.js";
 const FLAG_COLOR = ["match", ["get", "flag"], "act_now", "#d7263d", "watch", "#f2a93b", "fine", "#43b36b", "#8d969e"];
 const IS_MATCH = ["boolean", ["get", "match"], true];
 const FIELD_LAYERS = ["fields-fill", "fields-line", "fields-hover", "fields-selected", "fields-selected-inner", "zones-line", "frame"];
+const YIELD_RAMP = ["#f6f0b5", "#c6e29a", "#8fd38a", "#49b36d", "#1b8a4d"];
+export const YIELD_COLORS = YIELD_RAMP;
+const YIELD_COLOR = ["match", ["get", "yield_bin"], 0, YIELD_RAMP[0], 1, YIELD_RAMP[1], 2, YIELD_RAMP[2], 3, YIELD_RAMP[3], 4, YIELD_RAMP[4], "#6b7378"];
 
 /**
  * The imagery map: Esri basemap, the latest satellite frame under the farm polygons, zone outlines,
@@ -39,9 +42,19 @@ export function createMap({ container, data, onSelect, onHover }) {
   let dimmed = false;
   let chromeVisible = false;
   let realOutlines = Boolean(data.realFields);
+  let ftwOutlines = false;
+  let fillMode = "flag";
+  let frameOpacity = 1;
+  // Outside the Time-lapse view the 10 m frame hands over to the sub-metre basemap between zoom
+  // 14.5 and 15.5, so a close look shows real detail under the field outlines instead of 10 m blocks.
+  let frameFade = true;
 
   function fieldOpacity() {
     return dimmed ? ["case", IS_MATCH, 0.22, 0.03] : ["case", IS_MATCH, 0.48, 0.06];
+  }
+
+  function framePaintOpacity() {
+    return frameFade ? ["interpolate", ["linear"], ["zoom"], 14.5, frameOpacity, 15.5, 0] : frameOpacity;
   }
 
   function addLayers() {
@@ -57,12 +70,13 @@ export function createMap({ container, data, onSelect, onHover }) {
           [west, south],
         ],
       });
+      // Nearest resampling keeps the Sentinel-2 pixels square and honest at every zoom.
       map.addLayer({
         id: "frame",
         type: "raster",
         source: "frame",
         layout: { visibility: "none" },
-        paint: { "raster-opacity": 1, "raster-fade-duration": 0, "raster-resampling": "nearest" },
+        paint: { "raster-opacity": framePaintOpacity(), "raster-fade-duration": 0, "raster-resampling": "nearest" },
       });
     }
 
@@ -94,6 +108,18 @@ export function createMap({ container, data, onSelect, onHover }) {
         source: "real-fields",
         layout: hidden,
         paint: { "line-color": "#ffffff", "line-width": 1, "line-opacity": 0.5 },
+      });
+    }
+
+    if (data.ftw?.features?.length) {
+      // Fields of The World, the open global field map: outlines only, for comparison, no click.
+      map.addSource("ftw", { type: "geojson", data: data.ftw });
+      map.addLayer({
+        id: "ftw-outlines",
+        type: "line",
+        source: "ftw",
+        layout: hidden,
+        paint: { "line-color": "#8fd3ff", "line-width": 1.3, "line-opacity": 0.85, "line-dasharray": [3, 2] },
       });
     }
 
@@ -194,7 +220,16 @@ export function createMap({ container, data, onSelect, onHover }) {
     if (!frames || !map.getSource("frame")) return;
     const clamped = Math.max(0, Math.min(frames.length - 1, index));
     map.getSource("frame").updateImage({ url: frameUrl(clamped) });
-    if (opacity != null) map.setPaintProperty("frame", "raster-opacity", opacity);
+    if (opacity != null) {
+      frameOpacity = opacity;
+      map.setPaintProperty("frame", "raster-opacity", framePaintOpacity());
+    }
+  }
+
+  /** On: the frame fades out past zoom 15 (Fields, Route, Yield). Off: the Time-lapse keeps it at every zoom. */
+  function setFrameFade(on) {
+    frameFade = Boolean(on);
+    if (map.getLayer("frame")) map.setPaintProperty("frame", "raster-opacity", framePaintOpacity());
   }
 
   function setRouteMarkers(stops) {
@@ -223,8 +258,24 @@ export function createMap({ container, data, onSelect, onHover }) {
   }
 
   function syncRealOutlines() {
-    if (!map.getLayer("real-outlines")) return;
-    map.setLayoutProperty("real-outlines", "visibility", chromeVisible && realOutlines ? "visible" : "none");
+    if (map.getLayer("real-outlines")) {
+      map.setLayoutProperty("real-outlines", "visibility", chromeVisible && realOutlines ? "visible" : "none");
+    }
+    if (map.getLayer("ftw-outlines")) {
+      map.setLayoutProperty("ftw-outlines", "visibility", chromeVisible && ftwOutlines ? "visible" : "none");
+    }
+  }
+
+  function setFtw(on) {
+    ftwOutlines = Boolean(on);
+    syncRealOutlines();
+    return ftwOutlines;
+  }
+
+  /** "flag" colours the farms by today's flag; "yield" by calibrated bushels an acre. */
+  function setFillMode(mode) {
+    fillMode = mode;
+    if (map.getLayer("fields-fill")) map.setPaintProperty("fields-fill", "fill-color", mode === "yield" ? YIELD_COLOR : FLAG_COLOR);
   }
 
   function setRealOutlines(on) {
@@ -245,5 +296,24 @@ export function createMap({ container, data, onSelect, onHover }) {
     for (const marker of markers.route) marker.getElement().hidden = !visible;
   }
 
-  return { map, ready, frames, fitAll, flyTo, select, setVisible, setDimmed, setFrame, setRouteMarkers, setChrome, setRealOutlines, realOutlinesOn: () => realOutlines };
+  return {
+    map,
+    ready,
+    frames,
+    fitAll,
+    flyTo,
+    select,
+    setVisible,
+    setDimmed,
+    setFrame,
+    setFrameFade,
+    setRouteMarkers,
+    setChrome,
+    setRealOutlines,
+    realOutlinesOn: () => realOutlines,
+    setFtw,
+    ftwOn: () => ftwOutlines,
+    setFillMode,
+    fillMode: () => fillMode,
+  };
 }

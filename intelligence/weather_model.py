@@ -189,6 +189,10 @@ def window_phrase(start, end, today):
         return f"today only ({start.isoformat()})"
     if start == today and n == 2:
         return f"today and tomorrow ({start.isoformat()} to {end.isoformat()})"
+    if n == 1 and (start - today).days == 1:
+        return f"tomorrow only ({start.isoformat()})"
+    if n == 1:
+        return f"{start.isoformat()} only"
     return f"{start.isoformat()} to {end.isoformat()}"
 
 

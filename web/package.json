@@ -4,13 +4,18 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build"
+    "build": "vite build",
+    "test": "node --test \"test/**/*.test.mjs\"",
+    "slop": "cd .. && bash scripts/slop-check.sh",
+    "lint": "npm run slop"
   },
   "devDependencies": {
+    "lefthook": "^2.2.2",
     "vite": "5.4.10"
   },
   "dependencies": {
     "maplibre-gl": "4.7.1",
+    "satellite.js": "7.1.0",
     "three": "0.169.0"
   }
 }

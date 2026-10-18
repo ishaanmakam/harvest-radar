@@ -15,6 +15,7 @@ from pathlib import Path
 import analytics
 from analytics import read_optional
 import queue_morning as q
+import accounts
 from common import read_json, s, write_json
 from tools import load_roster
 
@@ -55,6 +56,11 @@ def run(data_dir, roster_path=None, today=None, dry_run=True, preview=False, pro
 
     doc = q.run(data_dir, roster_path=roster_path, dry_run=dry_run, today=today, providers=providers, only=only,
                 translate=translate)
+    try:
+        logged = accounts.push_if_configured(doc, dry_run, run_date=s(today))   # the admin page reads this; a failed log never fails the run
+    except Exception as e:
+        logged = None
+        print(f"  morning: delivery log not written: {e}")
     todays = Counter(r["status"] for r in doc["deliveries"] if r["date"] == s(today))
     summary = {
         "date": s(today), "mode": "dry run" if dry_run else "real send",
@@ -63,6 +69,7 @@ def run(data_dir, roster_path=None, today=None, dry_run=True, preview=False, pro
         "route_stops": len(route.get("stops", [])),
         "roster_rows": len(roster), "messages": len(messages),
         "deliveries": {k: todays.get(k, 0) for k in ("pending", "sent", "failed")},
+        "logged_deliveries": logged,
     }
     print(f"  morning {summary['date']} ({summary['mode']}): plans from pass {summary['plans_as_of']}, farms {summary['flags']}, "
           f"{summary['route_stops']} route stops, {summary['roster_rows']} roster rows, deliveries {summary['deliveries']}")

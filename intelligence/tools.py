@@ -29,12 +29,18 @@ def normalize_phone(phone: str) -> str:
     return "+" + digits if (phone.strip().startswith("+") or len(digits) > 10) else digits
 
 
-def load_roster(path=None):
-    """Rows of the roster CSV, validated. path defaults to ROSTER_PATH from the environment / .env."""
+def roster_source(path=None):
+    """Where the roster comes from: "csv" (a path was given, or ROSTER_PATH is set), "accounts" (ACCOUNTS_DB is set:
+    the people who signed up on the site), "csv+accounts" (both, merged), or "none"."""
     load_env()
-    raw = str(path) if path else (os.environ.get("ROSTER_PATH") or "")
-    if not raw:
-        raise FileNotFoundError("ROSTER_PATH is not set in .env and no roster path was given; see intelligence/roster.example.csv")
+    csv_on = bool(path or os.environ.get("ROSTER_PATH"))
+    db_on = bool(os.environ.get("ACCOUNTS_DB"))
+    if csv_on and db_on:
+        return "csv+accounts"
+    return "csv" if csv_on else ("accounts" if db_on else "none")
+
+
+def _csv_rows(raw):
     path = Path(raw)
     if not path.is_file():
         raise FileNotFoundError(f"roster not found at {path}; see intelligence/roster.example.csv")
@@ -43,7 +49,29 @@ def load_roster(path=None):
         missing = [c for c in ROSTER_COLUMNS if c not in (reader.fieldnames or [])]
         if missing:
             raise ValueError(f"roster is missing columns {missing}")
-        rows = [{k: (v or "").strip() for k, v in r.items()} for r in reader]
+        return [{k: (v or "").strip() for k, v in r.items()} for r in reader]
+
+
+def load_roster(path=None, http=None):
+    """Rows of the roster, validated. An explicit path or ROSTER_PATH is the CSV (the officer and the demo farms);
+    ACCOUNTS_DB adds the people who signed up on the site (see accounts.py). Both together are one roster, so a phone
+    may appear only once across them. http is unused and kept for callers that pass it."""
+    source = roster_source(path)
+    if source == "none":
+        raise FileNotFoundError("no roster: set ROSTER_PATH in .env (see intelligence/roster.example.csv) and/or ACCOUNTS_DB "
+                                "(see backend/README.md)")
+    rows = []
+    if "csv" in source:
+        rows += _csv_rows(str(path) if path else os.environ.get("ROSTER_PATH"))
+    if "accounts" in source:
+        import accounts
+        rows += accounts.Accounts(os.environ["ACCOUNTS_DB"]).roster_rows()
+    return validate_rows(rows)
+
+
+def validate_rows(rows):
+    """The same checks for every roster source: ids unique, phones unique and normalised, roles known, language set,
+    farmers with a farm."""
     seen, phones = set(), set()
     for i, r in enumerate(rows, start=2):
         where = f"roster line {i} ({r.get('roster_id') or '?'})"

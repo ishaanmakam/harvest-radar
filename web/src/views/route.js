@@ -22,7 +22,7 @@ export function renderRoute(el, ctx) {
   if (!data.route) {
     el.replaceChildren(
       h("div", { class: "section" }, h("h2", { class: "panel-title" }, "Officer's day")),
-      h("div", { class: "empty" }, "No route in this dataset. The decision layer writes route.json next to plans.json."),
+      h("div", { class: "empty" }, "No route in this dataset. The decision layer writes route.json beside plans.json."),
     );
     return { update() {} };
   }
@@ -34,7 +34,7 @@ export function renderRoute(el, ctx) {
 
   const totals = [stat("Visits", String(visits.length)), stat("Calls", String(calls.length))];
   if (extra?.route.total_km != null) totals.push(stat("Driving", fmtKm(extra.route.total_km)));
-  if (extra?.route.total_hours != null) totals.push(stat("On the road", fmtHours(extra.route.total_hours)));
+  if (extra?.route.total_hours != null) totals.push(stat("Driving time", fmtHours(extra.route.total_hours)));
 
   const timing = [];
   if (extra?.route.departure) timing.push(`leaves ${extra.route.departure}`);
@@ -71,7 +71,7 @@ export function renderRoute(el, ctx) {
           plan ? chip(plan.flag) : null,
         ),
         stop.why ? h("div", { class: "stop-why" }, stop.why) : null,
-        meta.length ? h("div", { class: "stop-meta" }, meta.join(" · ")) : null,
+        meta.length ? h("div", { class: "stop-meta" }, meta.join(" / ")) : null,
       ),
     );
     rows.set(stop.farm_id, row);
@@ -85,7 +85,7 @@ export function renderRoute(el, ctx) {
       h("h2", { class: "panel-title" }, "Officer's day"),
       h("p", { class: "muted small" }, `Route for ${fmtDate(data.route.as_of, "long")}. Act-now farms are visited first, then the watch farms get a call.`),
       h("div", { class: "route-totals", style: { marginTop: "10px" } }, ...totals),
-      timing.length ? h("p", { class: "muted small", style: { marginTop: "8px" } }, titleCase(timing.join(" · "))) : null,
+      timing.length ? h("p", { class: "muted small", style: { marginTop: "8px" } }, titleCase(timing.join(" / "))) : null,
       officer.length
         ? h(
             "div",

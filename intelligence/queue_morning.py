@@ -24,6 +24,7 @@ import analytics
 from analytics import read_optional
 from common import read_json, s, product_name
 from tools import load_roster
+from voice_guard import enforce
 
 CHANNELS = ("grok_voice", "photon_sms", "email")
 SPEC_CHANNELS = ("grok_voice", "photon_sms")      # the two channels in the spec; email is additive
@@ -100,6 +101,12 @@ class UnverifiedProvider:
 
 
 # ---------------- words ----------------
+def guard(text):
+    """The output gate (voice_guard.enforce) every composed text passes before it is queued, sent or previewed:
+    violations are printed in the queue's own log style, symbols are scrubbed, words are left for a human."""
+    return enforce(text, log=lambda line: print(f"  {line}"))
+
+
 def render_plan(plan, language, translate=None, outlook=None):
     """The farmer's morning plan in the roster language, every check included (clear ones too).
     translate(text, language) -> text, when given, is applied to the free-text parts (details, today, risks).
@@ -117,7 +124,7 @@ def render_plan(plan, language, translate=None, outlook=None):
     if outlook:
         lines.append(f"{P.get('outlook', 'Outlook')}: " + " ".join(tr(x) for x in outlook))
     lines.append(f"{P['risks']}: " + "; ".join(tr(r) for r in plan["risks"]) if plan["risks"] else P["all_clear"])
-    return "\n".join(lines)
+    return guard("\n".join(lines))
 
 
 def render_route(route, language, translate=None):
@@ -127,10 +134,10 @@ def render_route(route, language, translate=None):
     stops = route.get("stops", [])
     head = P["route_head"].format(product=product_name(), date=route.get("as_of", ""), n=len(stops))
     if not stops:
-        return head + " " + P["no_stops"]
+        return guard(head + " " + P["no_stops"])
     body = [f"{i}. {P['farm']} {st['farm_id']}: {P['actions'].get(st['action'], st['action'])}. {tr(st['why'])}"
             for i, st in enumerate(stops, start=1)]
-    return "\n".join([head] + body)
+    return guard("\n".join([head] + body))
 
 
 # ---------------- checkpoint ----------------
@@ -164,7 +171,7 @@ def _attempt(provider, phone, text, language):
 
 
 # ---------------- the run ----------------
-def run(data_dir, roster_path=None, dry_run=True, today=None, providers=None, only=None, translate=None):
+def run(data_dir, roster_path=None, dry_run=True, today=None, providers=None, only=None, translate=None, channel_filter=None):
     """only = roster_ids to process (None = all; an empty list = nobody). translate = optional (text, language) hook
     for the free-text parts of the words."""
     data_dir = Path(data_dir)
@@ -189,6 +196,8 @@ def run(data_dir, roster_path=None, dry_run=True, today=None, providers=None, on
             continue
         err, text = None, None
         channels = row_channels(row)
+        if channel_filter:
+            channels = [c for c in (channels or SPEC_CHANNELS) if c in channel_filter]
         if not channels:
             err = "no phone number or email in the roster"
         elif row["role"] == "farmer" and row["farm_id"] not in plans:

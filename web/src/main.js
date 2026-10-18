@@ -1,6 +1,6 @@
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./style.css";
-import { loadData } from "./data.js";
+import { loadData, SEASON_ID } from "./data.js";
 import { store } from "./state.js";
 import { createMap } from "./map.js";
 import { renderPlan } from "./panel.js";
@@ -10,18 +10,28 @@ import { createTimelapse } from "./views/timelapse.js";
 import { renderRoute } from "./views/route.js";
 import { renderDeliveries } from "./views/deliveries.js";
 import { renderSeason } from "./views/season.js";
+import { renderYield } from "./views/yield.js";
+import { initPages } from "./pages.js";
+import { createMarsView } from "./mars/marsmap.js";
+import { renderRegionCard } from "./globe/region-card.js";
 import { createGlobe } from "./globe/globe.js";
 import { h, skeleton } from "./dom.js";
-import { CROP_LABEL, FLAG_LABEL, chip, fmtHa, isPhone, titleCase } from "./format.js";
+import { CROP_LABEL, FLAG_LABEL, chip, fmtDate, fmtHa, isPhone, titleCase } from "./format.js";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const VIEWS = ["fields", "timelapse", "route", "deliveries", "season"];
+// Two aspects: crop health is the daily inspector, crop yield is the second reading of the same season.
+const ASPECT_VIEWS = { health: ["fields", "timelapse", "route", "deliveries"], yield: ["yield", "season"] };
+// The sign-up page lives on the inbound server. Without a configured URL the localhost default only
+// makes sense on a developer's machine; on a host the buttons lead to the explainer instead.
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+const SIGNUP_URL = import.meta.env.VITE_SIGNUP_URL || (LOCAL_HOSTS.has(window.location.hostname) ? "http://localhost:8788/signup" : null);
+const EXPLAINER_ID = "signup-explainer";
 const $ = (id) => document.getElementById(id);
 
 function showError(message) {
   const error = $("error");
   error.hidden = false;
-  error.replaceChildren(h("strong", {}, "Nothing to show."), message);
+  error.replaceChildren(h("strong", {}, "No plans to show."), message);
 }
 
 /** The badge says where the imagery and the farm group came from; with real outlines pending it toggles them. */
@@ -37,7 +47,7 @@ function setBadge(data, mapApi) {
     badge = button;
     const render = () => {
       const on = mapApi.realOutlinesOn();
-      badge.textContent = `Imagery: ${imagery} · Farms & plans: ${farms} · Real field outlines: ${on ? "shown" : "hidden"}`;
+      badge.textContent = `Imagery: ${imagery} / Farms and plans: ${farms} / Real field outlines: ${on ? "shown" : "hidden"}`;
       badge.setAttribute("aria-pressed", String(on));
       badge.title = on ? "Hide the real field outlines (plans pending)" : "Show the real field outlines (plans pending)";
     };
@@ -49,9 +59,32 @@ function setBadge(data, mapApi) {
     return;
   }
 
-  badge.textContent = standIn ? `Imagery: ${imagery} · Farms & plans: ${farms}` : "Live season";
+  badge.textContent = SEASON_ID ? "Stand-in season" : standIn ? `Imagery: ${imagery} / Farms and plans: ${farms}` : "Live season";
   badge.className = standIn ? "badge badge-standin" : "badge badge-live";
-  badge.title = standIn ? "Stand-in season: at least one file came from data/mock" : "Every file came from data/out";
+  badge.title = SEASON_ID ? "Generated for the demo over this region: fields, flags and checks are made up" : standIn ? "Stand-in season: at least one file came from data/mock" : "Every file came from data/out";
+  // run.json already says "Live / date" in its own badge; a second "Live season" pill next to it says nothing new.
+  badge.hidden = !standIn && Boolean(data.run?.mode);
+}
+
+/** run.json says whether the farm files came from a live run or a replay, and for which day. */
+function setRunBadge(data) {
+  const badge = $("run-badge");
+  const run = data.run;
+  if (!run?.mode) {
+    badge.hidden = true;
+    return;
+  }
+  const live = String(run.mode).toLowerCase() === "live";
+  badge.textContent = `${live ? "Live" : "Replay"} / ${fmtDate(run.as_of)}`;
+  badge.className = `badge ${live ? "badge-live" : "badge-replay"}`;
+  badge.title = [
+    live ? "Live run" : "Replay of an earlier run",
+    run.latest_pass ? `latest pass ${fmtDate(run.latest_pass)}` : null,
+    run.generated_at ? `generated ${run.generated_at}` : null,
+  ]
+    .filter(Boolean)
+    .join(" / ");
+  badge.hidden = false;
 }
 
 function setIntroStats(data) {
@@ -60,12 +93,12 @@ function setIntroStats(data) {
   let actNow = 0;
   for (const plan of data.plans.plans) if (plan.flag === "act_now") actNow += 1;
   const standIn = data.sources.plans === "out" ? "" : " (stand-in farms)";
-  $("intro-stats").textContent = `Story County, Iowa · latest clear pass ${MONTHS[Number(month) - 1]} ${Number(day)} · ${data.plans.plans.length} farms · ${actNow} act now${standIn}`;
+  $("intro-stats").textContent = `Story County, Iowa / latest clear pass ${MONTHS[Number(month) - 1]} ${Number(day)} / ${data.plans.plans.length} farms / ${actNow} act now${standIn}`;
 }
 
 async function start() {
   const signup = $("signup");
-  signup.href = import.meta.env.VITE_SIGNUP_URL || "http://localhost:8788/signup";
+  signup.href = "#account"; // account creation is in the site; the server sign-up page stays available at SIGNUP_URL
 
   const headline = $("headline");
   const dock = $("dock");
@@ -75,6 +108,7 @@ async function start() {
   const timelapseBox = $("timelapse");
   const stage = document.querySelector(".stage");
   const tabs = [...document.querySelectorAll(".tab")];
+  const aspectButtons = [...document.querySelectorAll(".aspect")];
   const intro = $("intro");
   const enterBtn = $("enter");
   const orbitBtn = $("orbit");
@@ -85,14 +119,33 @@ async function start() {
   renderHeadlineSkeleton(headline);
   dockBody.replaceChildren(skeleton("100%", 36), skeleton("70%", 14), skeleton("90%", 14), skeleton("60%", 14));
   for (const tab of tabs) tab.addEventListener("click", () => store.set({ view: tab.dataset.view }));
+  for (const button of aspectButtons) {
+    button.addEventListener("click", () => {
+      const aspect = button.dataset.aspect;
+      if (aspect === store.get().aspect) return;
+      store.set({ aspect, view: ASPECT_VIEWS[aspect][0] });
+    });
+  }
   $("dock-handle").addEventListener("click", (event) => {
     const expanded = dock.classList.toggle("is-expanded");
     event.currentTarget.setAttribute("aria-expanded", String(expanded));
   });
 
+  let globe = null;
+  let worldsDoc = null;
+  let regionsDoc = null;
+  const marsView = createMarsView({ host: $("mars-view"), onBack: backToWorlds });
+  // A deep link opens the Mars view at once; it does not wait for the Earth season to load.
+  const wantedWorld = new URLSearchParams(window.location.search).get("world");
+  if (wantedWorld === "mars" || window.location.hash === "#mars") openMars();
+
+  const dataPromise = loadData();
+  // Account, developers, admin and data pages open over the map from the header and from #hash routes.
+  initPages({ dataPromise });
+
   let data;
   try {
-    data = await loadData();
+    data = await dataPromise;
   } catch (err) {
     showError(err.message);
     intro.classList.add("is-hidden");
@@ -100,11 +153,13 @@ async function start() {
     dock.hidden = true;
     return;
   }
-  renderHeadline(headline, data);
+  renderHeadline(headline, data, store.get().aspect);
+  setRunBadge(data);
   setIntroStats(data);
 
   const mapApi = createMap({ container: "map", data, onSelect: selectFarm, onHover: showTooltip });
   const { map } = mapApi;
+  $("map").__map = map; // the season map, for the browser checks in the audit
   setBadge(data, mapApi);
   const timelapse = createTimelapse({
     data,
@@ -133,8 +188,32 @@ async function start() {
     select: selectFarm,
     close: closeFarm,
     step: stepFarm,
+    go: (view) => {
+      const aspect = Object.keys(ASPECT_VIEWS).find((key) => ASPECT_VIEWS[key].includes(view)) || "health";
+      store.set({ aspect, view });
+    },
+    signupUrl: SIGNUP_URL,
+    explainerId: EXPLAINER_ID,
     position: (id) => data.routeByFarm.get(id) || null,
   };
+
+  function showExplainer() {
+    ctx.go("deliveries");
+    dock.classList.add("is-expanded");
+    $("dock-handle").setAttribute("aria-expanded", "true");
+    requestAnimationFrame(() => {
+      const explainer = $(EXPLAINER_ID);
+      explainer?.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "start" });
+      explainer?.focus({ preventScroll: true });
+    });
+  }
+
+  if (!SIGNUP_URL && signup.getAttribute("href") !== "#account") {
+    signup.addEventListener("click", (event) => {
+      event.preventDefault();
+      if (chromeShown) showExplainer();
+    });
+  }
 
   function currentList() {
     const state = store.get();
@@ -180,13 +259,22 @@ async function start() {
     if (!chromeShown) timelapseBox.hidden = true;
   }
 
+  function syncAspect() {
+    const aspect = store.get().aspect;
+    for (const button of aspectButtons) button.setAttribute("aria-pressed", String(button.dataset.aspect === aspect));
+    for (const tab of tabs) tab.hidden = tab.dataset.aspect !== aspect;
+    renderHeadline(headline, data, aspect);
+  }
+
   function renderView(name) {
     current?.api?.destroy?.();
     if (current?.name === "timelapse") timelapse.leave();
+    syncAspect();
     for (const tab of tabs) {
       if (tab.dataset.view === name) tab.setAttribute("aria-current", "page");
       else tab.removeAttribute("aria-current");
     }
+    mapApi.setFillMode(name === "yield" ? "yield" : "flag");
     dock.dataset.view = name;
     dock.classList.remove("is-expanded");
     dockBody.replaceChildren();
@@ -205,6 +293,7 @@ async function start() {
     } else if (name === "route") api = renderRoute(dockBody, ctx);
     else if (name === "deliveries") api = renderDeliveries(dockBody, ctx);
     else if (name === "season") api = renderSeason(dockBody, ctx);
+    else if (name === "yield") api = renderYield(dockBody, ctx);
     mapApi.setRouteMarkers(name === "route" && data.route ? data.route.stops.filter((stop) => stop.action === "visit") : null);
     if (!chromeShown) mapApi.setChrome(false);
     current = { name, api };
@@ -274,7 +363,7 @@ async function start() {
     const props = data.featuresById.get(id)?.properties || {};
     tooltip.replaceChildren(
       h("div", { class: "tip-head" }, h("span", {}, id), chip(plan?.flag ?? "none")),
-      h("div", { class: "tip-meta" }, `${CROP_LABEL[props.crop] || titleCase(props.crop)} · ${fmtHa(props.area_ha)}${plan ? "" : ` · ${FLAG_LABEL.none}`}`),
+      h("div", { class: "tip-meta" }, `${CROP_LABEL[props.crop] || titleCase(props.crop)} / ${fmtHa(props.area_ha)}${plan ? "" : ` / ${FLAG_LABEL.none}`}`),
       plan ? h("div", { class: "tip-today" }, plan.today) : null,
     );
     tooltip.hidden = false;
@@ -286,13 +375,22 @@ async function start() {
     tooltip.style.top = `${y}px`;
   }
 
+  /** [[w, s], [e, n]] of a field collection, or null when there are no fields. */
+  function fieldsBounds(fc) {
+    let w = Infinity, s = Infinity, e = -Infinity, n = -Infinity;
+    for (const f of fc?.features || []) {
+      const rings = f.geometry?.type === "Polygon" ? [f.geometry.coordinates[0]] : f.geometry?.type === "MultiPolygon" ? f.geometry.coordinates.map((p) => p[0]) : [];
+      for (const ring of rings) for (const [x, y] of ring) { if (x < w) w = x; if (x > e) e = x; if (y < s) s = y; if (y > n) n = y; }
+    }
+    return Number.isFinite(w) ? [[w, s], [e, n]] : null;
+  }
   const frameBounds = data.frames?.bounds;
   const aoiBounds = frameBounds
     ? [
         [frameBounds[0], frameBounds[1]],
         [frameBounds[2], frameBounds[3]],
       ]
-    : [
+    : fieldsBounds(data.fields) || [
         [data.bbox[0], data.bbox[1]],
         [data.bbox[2], data.bbox[3]],
       ];
@@ -303,8 +401,7 @@ async function start() {
 
   // Everything below is the orbit intro and its hand-off to the imagery map.
   const cardBody =
-    "Sentinel-2 passes over this place every ~5 days, so Overfield can inspect farms here the same way. Our live demo landscape is Story County, Iowa: real imagery, real farm plans.";
-  let globe = null;
+    "Sentinel-2 passes over this place every 2 to 5 days, the same revisit as over Iowa. The live county is Story County, Iowa, with its imagery and farm plans.";
   let moveToken = 0;
   let toastTimer = 0;
   let revealTimer = 0;
@@ -377,9 +474,10 @@ async function start() {
     } else {
       showFarmChrome(false);
       map.jumpTo({ center: [detail.lng, detail.lat], zoom: 3 });
+      setRegionOverlay(detail.overlay || null);
       map.flyTo({
         center: [detail.lng, detail.lat],
-        zoom: 11,
+        zoom: detail.zoom || 11,
         duration: reducedMotion ? 0 : 2200,
         essential: true,
       });
@@ -387,7 +485,7 @@ async function start() {
       const reveal = () => {
         window.clearTimeout(revealTimer);
         $("place-title").textContent = title;
-        $("place-body").textContent = cardBody;
+        $("place-body").textContent = detail.body || cardBody;
         card.hidden = false;
       };
       if (reducedMotion) reveal();
@@ -402,8 +500,38 @@ async function start() {
     }, 500);
   }
 
+  /** A region field-pattern image over its 5.5 km box (data/global/overlays), or none. It is a plain image placed
+   *  over the map and re-projected on every move, so it never depends on the map style. */
+  let overlayImg = null;
+  let overlayBox = null;
+  function placeRegionOverlay() {
+    if (!overlayImg || !overlayBox) return;
+    const [w, s, e, n] = overlayBox;
+    const a = map.project([w, n]);
+    const b = map.project([e, s]);
+    overlayImg.style.left = `${a.x}px`;
+    overlayImg.style.top = `${a.y}px`;
+    overlayImg.style.width = `${Math.max(1, b.x - a.x)}px`;
+    overlayImg.style.height = `${Math.max(1, b.y - a.y)}px`;
+  }
+  function setRegionOverlay(overlay) {
+    if (overlayImg) {
+      overlayImg.remove();
+      overlayImg = null;
+      overlayBox = null;
+      map.off("move", placeRegionOverlay);
+    }
+    if (!overlay) return;
+    overlayBox = overlay.bbox;
+    overlayImg = h("img", { class: "region-overlay", src: `global/overlays/${overlay.id}.png`, alt: "" });
+    map.getContainer().append(overlayImg);
+    map.on("move", placeRegionOverlay);
+    placeRegionOverlay();
+  }
+
   function backToOrbit() {
     if (!globe) return;
+    setRegionOverlay(null);
     card.hidden = true;
     moveToken += 1;
     window.clearTimeout(revealTimer);
@@ -413,13 +541,93 @@ async function start() {
     globe.flyOut();
   }
 
+
+  // A green region dot: its card takes the copy slot on the left until Back, a world change or Enter.
+  const regionCopy = h("div", { class: "world-copy region-copy" });
+  regionCopy.hidden = true;
+  $("intro-copy").append(regionCopy);
+  function showRegion(region) {
+    regionCopy.replaceChildren(renderRegionCard(region, {
+      onBack: hideRegion,
+      onMap: () => {
+        // the region has its own stand-in season: reload straight into it
+        window.location.href = `${window.location.pathname}?season=${encodeURIComponent(region.id)}`;
+      },
+    }));
+    $("earth-copy").hidden = true;
+    regionCopy.hidden = false;
+  }
+  function hideRegion() {
+    if (regionCopy.hidden) return;
+    regionCopy.hidden = true;
+    const world = globe?.currentWorld();
+    if (!world || world.kind === "home") $("earth-copy").hidden = false;
+  }
+
+  function openMars() {
+    if (!intro.classList.contains("is-hidden")) {
+      intro.classList.add("is-leaving");
+      window.setTimeout(() => intro.classList.add("is-hidden"), 500);
+    }
+    globe?.stop();
+    marsView.open();
+  }
+
+  function backToWorlds() {
+    marsView.close();
+    intro.classList.remove("is-hidden", "is-leaving");
+    enterBtn.disabled = false;
+    globe?.start();
+    globe?.showWorld("mars");
+  }
+
   try {
     globe = createGlobe($("globe"), {
       bounds: frameBounds,
       onEnter: handoff,
       onToast: showToast,
+      worldsHosts: { copyHost: $("intro-copy"), navHost: $("world-nav") },
+      onOpenMars: openMars,
+      onRegion: showRegion,
+      introVisible: () => !intro.classList.contains("is-hidden") && !marsView.isOpen(),
+      orbiters: () => worldsDoc?.orbiters || [],
     });
     globe.start();
+    globe.onWorldChange(() => hideRegion());
+    if (SEASON_ID) handoff({ live: true }); // a regional season opens on its map at once
+    if (marsView.isOpen()) globe.stop();
+    // Worlds beyond Earth load lazily; without the file the globe shows Earth alone and hides the controls.
+    (async () => {
+      try {
+        const res = await fetch("out/worlds.json", { cache: "no-cache" });
+        if (!res.ok || !(res.headers.get("content-type") || "").includes("json")) return;
+        worldsDoc = await res.json();
+        let sites = null;
+        try {
+          const sr = await fetch("out/mars/sites.json", { cache: "no-cache" });
+          if (sr.ok && (sr.headers.get("content-type") || "").includes("json")) sites = await sr.json();
+        } catch {
+          sites = null;
+        }
+        globe.setWorlds(worldsDoc, sites, "out/mars/");
+      } catch (err) {
+        console.warn("worlds.json not loaded", err);
+      }
+    })();
+    // World regions (data/global/regions.json): green dots anywhere on Earth, a card each.
+    (async () => {
+      try {
+        const res = await fetch("global/regions.json", { cache: "no-cache" });
+        if (!res.ok || !(res.headers.get("content-type") || "").includes("json")) return;
+        regionsDoc = await res.json();
+        globe.setRegions(regionsDoc.regions || []);
+        // ?region=<id> opens that region card once the dots exist.
+        const wantedRegion = new URLSearchParams(window.location.search).get("region");
+        if (wantedRegion) globe.focusRegion(wantedRegion);
+      } catch (err) {
+        console.warn("regions.json not loaded", err);
+      }
+    })();
   } catch (err) {
     console.error(err);
     intro.classList.add("is-hidden");
@@ -447,6 +655,7 @@ async function start() {
   window.addEventListener("resize", () => {
     tooltip.hidden = true;
   });
+
 }
 
 start();

@@ -1,0 +1,53 @@
+name: Overfield site
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Slop check
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq ripgrep && bash scripts/slop-check.sh
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+      - run: npm ci
+        working-directory: web
+      - run: npm run build
+        working-directory: web
+        env:
+          # Repository variable SIGNUP_URL: the public sign-up page of the inbound server, once it has one.
+          VITE_SIGNUP_URL: ${{ vars.SIGNUP_URL }}
+          # Repository variable API_BASE: the public address of the Overfield server (inbound_server.py behind a tunnel);
+          # scripts/publish_backend_url.py sets it and re-runs this workflow. Empty means the site runs without accounts.
+          VITE_API_BASE: ${{ vars.API_BASE }}
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: web/dist
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
