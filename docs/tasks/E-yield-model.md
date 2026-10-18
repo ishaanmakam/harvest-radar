@@ -101,6 +101,26 @@ Validation and honesty rules:
 Order: I1, I3, N1, N2 and N3 can start at once (I1 does not wait for N1); I2 after I1 and I3; S2 after I2 lands in
 `analytics.json` (the shape is in the contract below, so S2 can start on the mock).
 
+
+## Open-source building blocks (checked Oct 18, 1 AM)
+
+| Project | What it is | Our use |
+|---|---|---|
+| Fields of The World (fieldsofthe.world, CC-BY-4.0) | A finished global field map at 10 m (CVPR 2026 PRUE model), one GeoParquet per state, read locally with DuckDB in under a second | Task N0: outer field boundaries for the box, split by our greenness; 145 polygons for Story County are in `data/out/ftw_fields_2024.geojson` |
+| CropNet (KDD 2024, CC BY-NC 4.0, research use) | US county yields 2016-2022 joined to Sentinel-2 and HRRR weather, 2.6 TB, plus MMST-ViT | Its USDA county tables (2.5 MB) are the labels for L1 until the NASS key is in `.env`; the imagery and the ViT are the post-hackathon path |
+| YieldSAT (CVPR 2026, by request) | Combine-harvester yield maps at 10 m with Sentinel-2, weather, soil, terrain; 2,173 fields in 4 countries | Request submitted; input recipe and evaluation adopted now; field-level transfer training after approval |
+| Crop-Yield-Prediction-Using-Satellite-Imagery (meet-sapu) | A reimplementation of the Stanford MODIS-histogram CNN-LSTM on US county yields via Google Earth Engine | Reference for the histogram recipe; needs a GEE account, not for tonight |
+
+None of these replaces the split of work: the data fetch and the field IDs stay with Niranjan, the model and the words
+with Ishaan, the Yield view with the web.
+
+| # | Who | Task | Done when |
+|---|---|---|---|
+| N0 | Niranjan | Fields of The World outer boundaries split by our June-vs-August greenness; keep IDs where overlap > 0.5 (issue #29) | `fields.geojson` validates; kept IDs unchanged |
+| I1 | Ishaan | done: `intelligence/yield_train.py` trains on the CropNet tables (NASS when the key is present); `data/out/yield_model.json` | |
+| I3 | Ishaan | done: `intelligence/field_env.py`; `data/out/field_env.json` | |
+| I2 | Ishaan | done: calibrated per-field estimate, band and soil/terrain in `analytics.json` and the Outlook words | |
+
 ## Contracts (CONTRACT IMPACT, all additive; agree in #bot-channel before merging)
 
 - New optional `contracts/yield_model.schema.json` for `data/out/yield_model.json`: `{as_of, crops: {corn|soybean: {county,
