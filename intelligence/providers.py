@@ -74,7 +74,8 @@ def _ok(status, payload, what):
                or payload.get("raw") or f"HTTP {status}")
         if isinstance(msg, dict):
             msg = json.dumps(msg)
-        raise ProviderError(f"{what}: {msg} (HTTP {status})")
+        code = payload.get("code") if isinstance(payload, dict) else None
+        raise ProviderError(f"{what}: {msg}{f' [{code}]' if code else ''} (HTTP {status})")
 
 
 def _basic(user, password):
@@ -111,13 +112,17 @@ class TwilioVoice:
 
 class PhotonSMS:
     """Photon 2.0 REST (api.photon.codes/v1/projects/{id}): create-or-get the recipient's User, create-or-get the
-    direct Space between our line and them, then send a plain-text message. Lookups are cached per recipient."""
+    direct Space between our line and them, then send a plain-text message. Lookups are cached per recipient.
+
+    platform "imessage" (the default from .env) uses Photon's shared iMessage lines: each farmer's handle gets an
+    assignment on one of the project's pooled lines, that line is the sender, and the farmer must text it once before
+    it may message them (Photon's rule for shared lines). platform "sms" needs a number the project owns."""
 
     def __init__(self, api_key, project_id, from_number, http=None, base_url=PHOTON_BASE, platform="sms",
                  text_format="plain", timeout=20):
         self.api_key, self.project_id, self.from_number = api_key, project_id, from_number
         self.http, self.base_url, self.platform, self.text_format, self.timeout = http or _urllib_http, base_url.rstrip("/"), platform, text_format, timeout
-        self._users, self._spaces = {}, {}
+        self._users, self._spaces, self._lines = {}, {}, {}
 
     def _call(self, method, path, body=None, idempotency=None):
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json", "Accept": "application/json"}
@@ -134,24 +139,47 @@ class PhotonSMS:
             self._users[handle] = self._call("POST", "/users", {"handle": handle, "platform": self.platform})["id"]
         return self._users[handle]
 
-    def sender_id(self):
-        return self.user_id(self.from_number)
+    def line_for(self, handle):
+        """The line that talks to this handle: PHOTON_FROM, or on iMessage the shared line Photon assigned to the
+        handle (assigned now when it has none)."""
+        if self.platform != "imessage":
+            return self.from_number
+        if handle not in self._lines:
+            for a in self._call("GET", "/platforms/imessage/assignments").get("assignments") or []:
+                if not a.get("releasedAt") and a.get("handle") and a.get("assignedPhoneNumber"):
+                    self._lines[a["handle"]] = a["assignedPhoneNumber"]
+            if handle not in self._lines:
+                key = "asg-" + hashlib.sha256(f"{self.project_id}|{handle}".encode()).hexdigest()[:32]
+                a = self._call("POST", "/platforms/imessage/assignments", {"handle": handle}, idempotency=key)
+                self._lines[handle] = a["assignedPhoneNumber"]
+        return self._lines[handle]
+
+    def sender_id(self, handle=None):
+        return self.user_id(self.line_for(handle) if handle else self.from_number)
 
     def space_id(self, handle):
         if handle not in self._spaces:
-            key = "space-" + hashlib.sha256(f"{self.platform}|{self.from_number}|{handle}".encode()).hexdigest()[:32]
-            body = {"participantIds": [self.sender_id(), self.user_id(handle)], "platform": self.platform}
+            line = self.line_for(handle)
+            key = "space-" + hashlib.sha256(f"{self.platform}|{line}|{handle}".encode()).hexdigest()[:32]
+            body = {"participantIds": [self.user_id(line), self.user_id(handle)], "platform": self.platform}
             self._spaces[handle] = self._call("POST", "/spaces", body, idempotency=key)["id"]
         return self._spaces[handle]
 
-    def send_to_space(self, space_id, text):
-        body = {"spaceId": space_id, "senderId": self.sender_id(),
+    def send_to_space(self, space_id, text, sender_id=None):
+        """Post to a Space; the sender defaults to our line (a webhook reply goes out on the Space's own line)."""
+        body = {"spaceId": space_id, "senderId": sender_id or self.sender_id(),
                 "content": {"type": "text", "format": self.text_format, "text": text}}
         payload = self._call("POST", "/messages", body, idempotency=str(uuid.uuid4()))
         return f"photon {payload.get('id', '?')} ({payload.get('status', 'accepted')})"
 
     def send(self, phone, text, language):
-        return self.send_to_space(self.space_id(phone), text)
+        try:
+            return self.send_to_space(self.space_id(phone), text, sender_id=self.sender_id(phone))
+        except ProviderError as e:
+            if "SHARED_LINE_INBOUND_REQUIRED" in str(e) or "Inbound Required" in str(e):
+                raise ProviderError(f"photon: {phone} has not texted the line yet. Ask them to send one message to "
+                                    f"{self.line_for(phone)} first, then send again.") from e
+            raise
 
 
 EMAIL_VARS = ("SMTP_HOST", "SMTP_USER", "SMTP_PASSWORD", "SMTP_FROM")
@@ -230,6 +258,7 @@ def photon_from_env(env=None, http=None):
     if all(env.get(v) for v in PHOTON_VARS):
         return PhotonSMS(env["PHOTON_API_KEY"], env["PHOTON_PROJECT_ID"], env["PHOTON_FROM"], http=http,
                          base_url=env.get("PHOTON_BASE_URL") or PHOTON_BASE,
+                         platform=(env.get("PHOTON_PLATFORM") or "imessage").strip().lower(),
                          text_format=env.get("PHOTON_TEXT_FORMAT") or "plain")
     return None
 
