@@ -10,12 +10,15 @@ import { createTimelapse } from "./views/timelapse.js";
 import { renderRoute } from "./views/route.js";
 import { renderDeliveries } from "./views/deliveries.js";
 import { renderSeason } from "./views/season.js";
+import { renderYield } from "./views/yield.js";
 import { createGlobe } from "./globe/globe.js";
 import { h, skeleton } from "./dom.js";
-import { CROP_LABEL, FLAG_LABEL, chip, fmtHa, isPhone, titleCase } from "./format.js";
+import { CROP_LABEL, FLAG_LABEL, chip, fmtDate, fmtHa, isPhone, titleCase } from "./format.js";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
-const VIEWS = ["fields", "timelapse", "route", "deliveries", "season"];
+// Two aspects: crop health is the daily inspector, crop yield is the second reading of the same season.
+const ASPECT_VIEWS = { health: ["fields", "timelapse", "route", "deliveries"], yield: ["yield", "season"] };
+const SIGNUP_URL = import.meta.env.VITE_SIGNUP_URL || "http://localhost:8788/signup";
 const $ = (id) => document.getElementById(id);
 
 function showError(message) {
@@ -54,6 +57,27 @@ function setBadge(data, mapApi) {
   badge.title = standIn ? "Stand-in season: at least one file came from data/mock" : "Every file came from data/out";
 }
 
+/** run.json says whether the farm files came from a live run or a replay, and for which day. */
+function setRunBadge(data) {
+  const badge = $("run-badge");
+  const run = data.run;
+  if (!run?.mode) {
+    badge.hidden = true;
+    return;
+  }
+  const live = String(run.mode).toLowerCase() === "live";
+  badge.textContent = `${live ? "Live" : "Replay"} · ${fmtDate(run.as_of)}`;
+  badge.className = `badge ${live ? "badge-live" : "badge-replay"}`;
+  badge.title = [
+    live ? "Live run" : "Replay of an earlier run",
+    run.latest_pass ? `latest pass ${fmtDate(run.latest_pass)}` : null,
+    run.generated_at ? `generated ${run.generated_at}` : null,
+  ]
+    .filter(Boolean)
+    .join(" · ");
+  badge.hidden = false;
+}
+
 function setIntroStats(data) {
   const pass = data.frames?.frames?.length ? data.frames.frames[data.frames.frames.length - 1].date : data.plans.as_of;
   const [, month, day] = (pass || "2026-10-17").split("-");
@@ -65,7 +89,7 @@ function setIntroStats(data) {
 
 async function start() {
   const signup = $("signup");
-  signup.href = import.meta.env.VITE_SIGNUP_URL || "http://localhost:8788/signup";
+  signup.href = SIGNUP_URL;
 
   const headline = $("headline");
   const dock = $("dock");
@@ -75,6 +99,7 @@ async function start() {
   const timelapseBox = $("timelapse");
   const stage = document.querySelector(".stage");
   const tabs = [...document.querySelectorAll(".tab")];
+  const aspectButtons = [...document.querySelectorAll(".aspect")];
   const intro = $("intro");
   const enterBtn = $("enter");
   const orbitBtn = $("orbit");
@@ -85,6 +110,13 @@ async function start() {
   renderHeadlineSkeleton(headline);
   dockBody.replaceChildren(skeleton("100%", 36), skeleton("70%", 14), skeleton("90%", 14), skeleton("60%", 14));
   for (const tab of tabs) tab.addEventListener("click", () => store.set({ view: tab.dataset.view }));
+  for (const button of aspectButtons) {
+    button.addEventListener("click", () => {
+      const aspect = button.dataset.aspect;
+      if (aspect === store.get().aspect) return;
+      store.set({ aspect, view: ASPECT_VIEWS[aspect][0] });
+    });
+  }
   $("dock-handle").addEventListener("click", (event) => {
     const expanded = dock.classList.toggle("is-expanded");
     event.currentTarget.setAttribute("aria-expanded", String(expanded));
@@ -100,7 +132,8 @@ async function start() {
     dock.hidden = true;
     return;
   }
-  renderHeadline(headline, data);
+  renderHeadline(headline, data, store.get().aspect);
+  setRunBadge(data);
   setIntroStats(data);
 
   const mapApi = createMap({ container: "map", data, onSelect: selectFarm, onHover: showTooltip });
@@ -133,6 +166,11 @@ async function start() {
     select: selectFarm,
     close: closeFarm,
     step: stepFarm,
+    go: (view) => {
+      const aspect = Object.keys(ASPECT_VIEWS).find((key) => ASPECT_VIEWS[key].includes(view)) || "health";
+      store.set({ aspect, view });
+    },
+    signupUrl: SIGNUP_URL,
     position: (id) => data.routeByFarm.get(id) || null,
   };
 
@@ -180,13 +218,22 @@ async function start() {
     if (!chromeShown) timelapseBox.hidden = true;
   }
 
+  function syncAspect() {
+    const aspect = store.get().aspect;
+    for (const button of aspectButtons) button.setAttribute("aria-pressed", String(button.dataset.aspect === aspect));
+    for (const tab of tabs) tab.hidden = tab.dataset.aspect !== aspect;
+    renderHeadline(headline, data, aspect);
+  }
+
   function renderView(name) {
     current?.api?.destroy?.();
     if (current?.name === "timelapse") timelapse.leave();
+    syncAspect();
     for (const tab of tabs) {
       if (tab.dataset.view === name) tab.setAttribute("aria-current", "page");
       else tab.removeAttribute("aria-current");
     }
+    mapApi.setFillMode(name === "yield" ? "yield" : "flag");
     dock.dataset.view = name;
     dock.classList.remove("is-expanded");
     dockBody.replaceChildren();
@@ -205,6 +252,7 @@ async function start() {
     } else if (name === "route") api = renderRoute(dockBody, ctx);
     else if (name === "deliveries") api = renderDeliveries(dockBody, ctx);
     else if (name === "season") api = renderSeason(dockBody, ctx);
+    else if (name === "yield") api = renderYield(dockBody, ctx);
     mapApi.setRouteMarkers(name === "route" && data.route ? data.route.stops.filter((stop) => stop.action === "visit") : null);
     if (!chromeShown) mapApi.setChrome(false);
     current = { name, api };

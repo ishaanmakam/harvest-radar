@@ -146,8 +146,19 @@ export function renderFields(el, ctx) {
   const list = h("ul", { class: "farm-list", id: "farm-list", "aria-label": "Farms in view" });
   const listNote = h("p", { class: "muted small", hidden: true });
 
+  const flagCounts = { act_now: 0, watch: 0 };
+  for (const plan of data.plans.plans || []) if (flagCounts[plan.flag] != null) flagCounts[plan.flag] += 1;
+  const stops = data.route?.stops?.length ?? 0;
+  const quick = h(
+    "div",
+    { class: "quick", role: "group", "aria-label": "Today in one look" },
+    h("button", { class: "quick-btn quick-act", type: "button", onclick: () => ctx.go("route") }, h("strong", {}, String(flagCounts.act_now)), " act now"),
+    h("button", { class: "quick-btn quick-watch", type: "button", onclick: () => ctx.go("route") }, h("strong", {}, String(flagCounts.watch)), " watch"),
+    h("button", { class: "quick-btn", type: "button", onclick: () => ctx.go("route"), disabled: stops ? null : true }, h("strong", {}, String(stops)), stops === 1 ? " stop on the route" : " stops on the route"),
+  );
+
   el.replaceChildren(
-    h("div", { class: "section" }, search),
+    h("div", { class: "section" }, quick, h("div", { style: { marginTop: "10px" } }, search)),
     h(
       "div",
       { class: "section" },

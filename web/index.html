@@ -4,6 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
     <meta name="color-scheme" content="dark" />
+    <meta name="theme-color" content="#0d1217" />
     <meta name="description" content="Overfield: the satellite visits every farm and every farmer gets a morning plan." />
     <title>Overfield</title>
   </head>
@@ -29,14 +30,20 @@
           </svg>
           <span>Overfield</span>
         </a>
+        <div class="aspects" role="group" aria-label="Aspect">
+          <button class="aspect" type="button" data-aspect="health" aria-pressed="true">Crop health</button>
+          <button class="aspect" type="button" data-aspect="yield" aria-pressed="false">Crop yield</button>
+        </div>
         <nav class="tabs" aria-label="Views">
-          <button class="tab" type="button" data-view="fields" aria-current="page">Fields</button>
-          <button class="tab" type="button" data-view="timelapse">Time-lapse</button>
-          <button class="tab" type="button" data-view="route">Route</button>
-          <button class="tab" type="button" data-view="deliveries">Deliveries</button>
-          <button class="tab" type="button" data-view="season">Season</button>
+          <button class="tab" type="button" data-view="fields" data-aspect="health" aria-current="page">Fields</button>
+          <button class="tab" type="button" data-view="timelapse" data-aspect="health">Time-lapse</button>
+          <button class="tab" type="button" data-view="route" data-aspect="health">Route</button>
+          <button class="tab" type="button" data-view="deliveries" data-aspect="health">Deliveries</button>
+          <button class="tab" type="button" data-view="yield" data-aspect="yield" hidden>Yield</button>
+          <button class="tab" type="button" data-view="season" data-aspect="yield" hidden>Season</button>
         </nav>
         <div class="topbar-right">
+          <span id="run-badge" class="badge" hidden></span>
           <span id="badge" class="badge"></span>
           <button id="orbit" type="button" class="btn btn-ghost">Orbit</button>
           <a id="signup" class="signup" href="http://localhost:8788/signup" target="_blank" rel="noopener">Get your farm's morning plan</a>
@@ -84,6 +91,6 @@
         <button id="back-orbit" type="button">Back to orbit</button>
       </div>
     </div>
-    <script type="module" src="/src/main.js"></script>
+    <script type="module" src="./src/main.js"></script>
   </body>
 </html>
