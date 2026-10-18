@@ -230,28 +230,32 @@ export function createSatellites({ earth, overlay, legendHost, reduced }) {
   });
   const fold = el("button", "sat-fold", "Hide");
   fold.type = "button";
-  fold.addEventListener("click", () => setFolded(!legend.classList.contains("is-folded")));
+  fold.addEventListener("click", () => setFolded(!legend.classList.contains("is-folded"), { remember: true }));
   foot.append(clock, speedBox, fold);
   const source = el("p", "sat-src", "Orbits: CelesTrak GP data, SGP4 at the clock above · lines: ground track, next 90 min");
   legend.append(rowS2, rowImg, rowSl, pass, foot, source);
   legendHost.append(legend);
 
-  /** Folded, the panel is one line: the clock, the speed and the Show button. The choice is remembered. */
-  function setFolded(on) {
+  /** Folded, the panel is one line: the clock, the speed and the Show button. A click is remembered per browser. */
+  function setFolded(on, { remember = false } = {}) {
     legend.classList.toggle("is-folded", on);
     fold.textContent = on ? "Show" : "Hide";
     fold.setAttribute("aria-label", on ? "Show the satellite panel" : "Collapse the satellite panel");
     fold.setAttribute("aria-expanded", String(!on));
+    if (!remember) return;
     try {
-      window.localStorage.setItem(FOLD_KEY, on ? "1" : "");
+      window.localStorage.setItem(FOLD_KEY, on ? "1" : "0");
     } catch {
       /* storage off */
     }
   }
+  // No stored choice: phones start folded, so the panel is one row and leaves Mars in view.
+  const narrow = window.matchMedia("(max-width: 767px)").matches;
   try {
-    setFolded(Boolean(window.localStorage.getItem(FOLD_KEY)));
+    const stored = window.localStorage.getItem(FOLD_KEY);
+    setFolded(stored == null ? narrow : stored === "1");
   } catch {
-    setFolded(false);
+    setFolded(narrow);
   }
 
   function setSpeed(value) {
