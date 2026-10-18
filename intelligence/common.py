@@ -7,6 +7,19 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 
 
+def load_env(path=None):
+    """Put KEY=value lines from .env (gitignored) into os.environ without overriding what is already set."""
+    import os
+    p = Path(path) if path else ROOT / ".env"
+    if not p.exists():
+        return
+    for line in p.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if "=" in line and not line.startswith("#"):
+            k, v = line.split("=", 1)
+            os.environ.setdefault(k.strip(), v.strip())
+
+
 def load_region():
     return json.loads((ROOT / "config" / "region.json").read_text())
 
@@ -25,9 +38,13 @@ def read_json(data_dir: Path, name: str, default=None):
 
 
 def write_json(data_dir: Path, name: str, obj):
+    """Atomic: the file is either the previous complete document or the new one, never a truncated one."""
+    import os
     p = Path(data_dir) / name
     p.parent.mkdir(parents=True, exist_ok=True)
-    p.write_text(json.dumps(obj, separators=(",", ":")))
+    tmp = p.with_name(p.name + ".tmp")
+    tmp.write_text(json.dumps(obj, separators=(",", ":")))
+    os.replace(tmp, p)
     print(f"  wrote {p}")
 
 

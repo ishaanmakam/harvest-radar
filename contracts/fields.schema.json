@@ -25,7 +25,7 @@
               "field_id": {"type": "string", "pattern": "^F[0-9]{4,}$"},
               "zone_id": {"type": "string", "pattern": "^Z[0-9]{2}$"},
               "area_ha": {"type": "number", "exclusiveMinimum": 0},
-              "crop": {"enum": ["rice", "wheat", "other", "unknown"]},
+              "crop": {"enum": ["rice", "wheat", "corn", "soybean", "other", "unknown"]},
               "source": {"enum": ["perceptron", "segmentation", "mock"]}
             }
           }
