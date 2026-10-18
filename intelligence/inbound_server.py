@@ -29,7 +29,7 @@ from xml.sax.saxutils import escape
 
 import inbound
 from common import load_env, read_json
-from providers import say_language
+from providers import parse_photon_webhook, photon_from_env, photon_signature_ok, say_language
 from tools import UNKNOWN_CALLER_MESSAGE, load_roster, resolve_caller
 
 XML_HEAD = '<?xml version="1.0" encoding="UTF-8"?>'
@@ -60,11 +60,15 @@ def twiml_for(handle, speech, data_dir, roster):
             f'<Say language="{lang}">{escape(prompt)}</Say></Gather></Response>')
 
 
-def make_handler(data_dir, roster_path, bridge_token=None, twilio_auth_token=None, public_url=None, public_ws_url=None):
+def make_handler(data_dir, roster_path, bridge_token=None, twilio_auth_token=None, public_url=None, public_ws_url=None,
+                 photon=None, photon_webhook_secret=None):
+    """photon: a provider with send_to_space(space_id, text) used to answer Photon webhooks (None = reply only in the
+    HTTP response); photon_webhook_secret: verify Photon's HMAC signature when set."""
     data_dir = Path(data_dir)
     roster = load_roster(roster_path)
     public_url = (public_url or "").rstrip("/")
     public_ws_url = public_ws_url or None
+    seen_message_ids = set()
 
     class Handler(BaseHTTPRequestHandler):
         server_version = "HarvestRadarInbound/1"
@@ -123,6 +127,35 @@ def make_handler(data_dir, roster_path, bridge_token=None, twilio_auth_token=Non
                         return self._send(403, XML_HEAD + "<Response><Say>Forbidden</Say><Hangup/></Response>", "text/xml; charset=utf-8")
                 body = twiml_for(params.get("From", ""), params.get("SpeechResult"), data_dir, roster)
                 return self._send(200, XML_HEAD + body, "text/xml; charset=utf-8")
+            if path == "/photon/webhook":
+                # Photon 2.0 webhook destination (event message.received): answer the texter in the same Space
+                if photon_webhook_secret:
+                    sig = (self.headers.get("X-Spectrum-Signature") or self.headers.get("X-Photon-Signature")
+                           or self.headers.get("Photon-Signature") or "")
+                    if not photon_signature_ok(raw, sig, photon_webhook_secret):
+                        return self._json(401, {"error": "bad signature"})
+                try:
+                    doc = json.loads(raw or b"{}")
+                except ValueError:
+                    return self._json(400, {"error": "bad json"})
+                ev = parse_photon_webhook(doc)
+                if ev is None or ev["from_agent"]:
+                    return self._json(200, {"handled": False, "reason": "not a text from a person"})
+                mid = ev.get("message_id")
+                if mid in seen_message_ids:
+                    return self._json(200, {"handled": False, "reason": "duplicate"})
+                if mid:
+                    if len(seen_message_ids) > 5000:
+                        seen_message_ids.clear()
+                    seen_message_ids.add(mid)
+                reply = inbound.answer(ev["handle"], ev["text"], data_dir, roster)
+                sent = None
+                if photon is not None and ev.get("space_id"):
+                    try:
+                        sent = photon.send_to_space(ev["space_id"], reply)
+                    except Exception as e:  # the webhook must still be acknowledged
+                        sent = f"reply failed: {e}"
+                return self._json(200, {"handled": True, "to": ev["handle"], "reply": reply, "sent": sent})
             if path == "/photon/inbound":
                 if not self._authorized():
                     return self._json(401, {"error": "unauthorized"})
@@ -146,13 +179,16 @@ def make_handler(data_dir, roster_path, bridge_token=None, twilio_auth_token=Non
 
 def serve(data_dir, roster_path=None, host="0.0.0.0", port=8788, public_url=None):
     load_env()
+    photon = photon_from_env()
     handler = make_handler(data_dir, roster_path, bridge_token=os.environ.get("INBOUND_TOKEN") or None,
                            twilio_auth_token=os.environ.get("TWILIO_AUTH_TOKEN") or None,
                            public_url=public_url or os.environ.get("PUBLIC_URL"),
-                           public_ws_url=os.environ.get("PUBLIC_WS_URL"))
+                           public_ws_url=os.environ.get("PUBLIC_WS_URL"),
+                           photon=photon, photon_webhook_secret=os.environ.get("PHOTON_WEBHOOK_SECRET") or None)
     httpd = ThreadingHTTPServer((host, port), handler)
     print(f"  inbound service on http://{host}:{port}  (data {data_dir}; Twilio signature check "
-          f"{'on' if os.environ.get('TWILIO_AUTH_TOKEN') else 'off'}; bearer token {'on' if os.environ.get('INBOUND_TOKEN') else 'off'})")
+          f"{'on' if os.environ.get('TWILIO_AUTH_TOKEN') else 'off'}; bearer token {'on' if os.environ.get('INBOUND_TOKEN') else 'off'}; "
+          f"Photon replies {'on' if photon else 'off'}; Photon signature check {'on' if os.environ.get('PHOTON_WEBHOOK_SECRET') else 'off'})")
     httpd.serve_forever()
 
 
