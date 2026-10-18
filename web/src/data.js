@@ -71,6 +71,8 @@ async function loadFile(path, pinned) {
   }
   const out = await fetchJson(`${DATA_BASE}${path}`);
   if (out) return { data: out, source: "out", base: "out" };
+  // a regional stand-in season never borrows Iowa's mock files: a missing file there means none
+  if (SEASON_ID) return { data: null, source: null, base: null };
   const mock = await fetchJson(`mock/${path}`);
   if (mock) return { data: mock, source: "mock", base: "mock" };
   return { data: null, source: null, base: null };

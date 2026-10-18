@@ -59,9 +59,9 @@ function setBadge(data, mapApi) {
     return;
   }
 
-  badge.textContent = standIn ? `Imagery: ${imagery} / Farms and plans: ${farms}` : "Live season";
+  badge.textContent = SEASON_ID ? "Stand-in season" : standIn ? `Imagery: ${imagery} / Farms and plans: ${farms}` : "Live season";
   badge.className = standIn ? "badge badge-standin" : "badge badge-live";
-  badge.title = standIn ? "Stand-in season: at least one file came from data/mock" : "Every file came from data/out";
+  badge.title = SEASON_ID ? "Generated for the demo over this region: fields, flags and checks are made up" : standIn ? "Stand-in season: at least one file came from data/mock" : "Every file came from data/out";
   // run.json already says "Live / date" in its own badge; a second "Live season" pill next to it says nothing new.
   badge.hidden = !standIn && Boolean(data.run?.mode);
 }

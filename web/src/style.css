@@ -3894,3 +3894,65 @@ a {
 .topbar-right {
   gap: 20px;
 }
+
+/* ---- a calmer top bar: wraps instead of clipping, one account action, plain page links ---- */
+.topbar {
+  flex-wrap: wrap;
+  row-gap: 0;
+  gap: 24px;
+  padding: 0 24px;
+}
+
+.topbar-right {
+  margin-left: auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 18px;
+}
+
+.topbar .page-links {
+  gap: 18px;
+}
+
+.topbar .page-links a,
+.topbar #orbit,
+.topbar .badge {
+  font-size: 0.75rem;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.topbar #orbit {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--fg-dim);
+}
+
+.topbar #orbit::before {
+  content: none;
+}
+
+.topbar #orbit:hover {
+  color: var(--fg);
+  text-decoration: underline;
+  text-underline-offset: 8px;
+}
+
+.topbar .auth-slot .auth-btn {
+  display: none;
+}
+
+.topbar .signup {
+  min-height: 34px;
+  padding: 0 14px;
+  white-space: nowrap;
+}
+
+@media (max-width: 1180px) {
+  .topbar .badge-standin,
+  .topbar .badge-live {
+    display: none;
+  }
+}
