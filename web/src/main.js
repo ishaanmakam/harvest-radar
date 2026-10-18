@@ -18,7 +18,11 @@ import { CROP_LABEL, FLAG_LABEL, chip, fmtDate, fmtHa, isPhone, titleCase } from
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 // Two aspects: crop health is the daily inspector, crop yield is the second reading of the same season.
 const ASPECT_VIEWS = { health: ["fields", "timelapse", "route", "deliveries"], yield: ["yield", "season"] };
-const SIGNUP_URL = import.meta.env.VITE_SIGNUP_URL || "http://localhost:8788/signup";
+// The sign-up page lives on the inbound server. Without a configured URL the localhost default only
+// makes sense on a developer's machine; on a host the buttons lead to the explainer instead.
+const LOCAL_HOSTS = new Set(["localhost", "127.0.0.1", "[::1]"]);
+const SIGNUP_URL = import.meta.env.VITE_SIGNUP_URL || (LOCAL_HOSTS.has(window.location.hostname) ? "http://localhost:8788/signup" : null);
+const EXPLAINER_ID = "signup-explainer";
 const $ = (id) => document.getElementById(id);
 
 function showError(message) {
@@ -89,7 +93,13 @@ function setIntroStats(data) {
 
 async function start() {
   const signup = $("signup");
-  signup.href = SIGNUP_URL;
+  if (SIGNUP_URL) signup.href = SIGNUP_URL;
+  else {
+    signup.href = `#${EXPLAINER_ID}`;
+    signup.removeAttribute("target");
+    signup.removeAttribute("rel");
+    signup.title = "How a farmer gets the morning plan";
+  }
 
   const headline = $("headline");
   const dock = $("dock");
@@ -171,8 +181,27 @@ async function start() {
       store.set({ aspect, view });
     },
     signupUrl: SIGNUP_URL,
+    explainerId: EXPLAINER_ID,
     position: (id) => data.routeByFarm.get(id) || null,
   };
+
+  function showExplainer() {
+    ctx.go("deliveries");
+    dock.classList.add("is-expanded");
+    $("dock-handle").setAttribute("aria-expanded", "true");
+    requestAnimationFrame(() => {
+      const explainer = $(EXPLAINER_ID);
+      explainer?.scrollIntoView({ behavior: reducedMotion ? "auto" : "smooth", block: "start" });
+      explainer?.focus({ preventScroll: true });
+    });
+  }
+
+  if (!SIGNUP_URL) {
+    signup.addEventListener("click", (event) => {
+      event.preventDefault();
+      if (chromeShown) showExplainer();
+    });
+  }
 
   function currentList() {
     const state = store.get();
