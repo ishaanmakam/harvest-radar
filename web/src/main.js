@@ -2,7 +2,7 @@ import maplibregl from "maplibre-gl";
 import "maplibre-gl/dist/maplibre-gl.css";
 import "./style.css";
 import { loadData } from "./data.js";
-import { renderPlan } from "./panel.js";
+import { renderPlan, renderRoute } from "./panel.js";
 
 const FILL_COLOR = [
   "match",
@@ -48,6 +48,68 @@ function setStats(data) {
   }
   const stats = document.getElementById("stats");
   stats.textContent = `${data.plans.as_of} · ${data.fields.features.length} farms · ${counts.act_now} act now · ${counts.watch} watch · ${counts.fine} fine`;
+  const badge = document.getElementById("badge");
+  badge.textContent = data.isMock ? "MOCK" : "REAL";
+  badge.className = data.isMock ? "badge mock" : "badge real";
+}
+
+function setupTimelapse(map, frames, base) {
+  const box = document.getElementById("timelapse");
+  if (!frames?.frames?.length || !frames.bounds) return;
+  const [west, south, east, north] = frames.bounds;
+  const coordinates = [[west, north], [east, north], [east, south], [west, south]];
+  const list = frames.frames;
+  let index = list.length - 1;
+  let timer = null;
+
+  map.addSource("frame", {
+    type: "image",
+    url: `${base}/${list[index].rgb}`,
+    coordinates,
+  });
+  map.addLayer(
+    {
+      id: "frame",
+      type: "raster",
+      source: "frame",
+      paint: { "raster-opacity": 1, "raster-fade-duration": 0, "raster-resampling": "nearest" },
+    },
+    "fields-fill",
+  );
+
+  const slider = document.getElementById("frame-slider");
+  const dateEl = document.getElementById("frame-date");
+  const play = document.getElementById("play");
+  slider.max = String(list.length - 1);
+  slider.value = String(index);
+  dateEl.textContent = list[index].date;
+  box.hidden = false;
+
+  const show = (next) => {
+    index = next;
+    slider.value = String(next);
+    dateEl.textContent = list[next].date;
+    map.getSource("frame").updateImage({ url: `${base}/${list[next].rgb}`, coordinates });
+  };
+
+  const pause = () => {
+    if (timer) clearInterval(timer);
+    timer = null;
+    play.textContent = "Play";
+  };
+
+  slider.addEventListener("input", () => {
+    pause();
+    show(Number(slider.value));
+  });
+  play.addEventListener("click", () => {
+    if (timer) {
+      pause();
+      return;
+    }
+    play.textContent = "Pause";
+    timer = setInterval(() => show((index + 1) % list.length), 800);
+  });
 }
 
 function addFields(map, fields) {
@@ -74,8 +136,9 @@ function addFields(map, fields) {
 }
 
 async function start() {
-  const panel = document.getElementById("panel");
-  renderPlan(panel, null);
+  const routeEl = document.getElementById("route");
+  const planEl = document.getElementById("plan");
+  renderPlan(planEl, null);
 
   let data;
   try {
@@ -85,6 +148,38 @@ async function start() {
     return;
   }
   setStats(data);
+
+  const featuresById = new Map(data.fields.features.map((feature) => [feature.properties.field_id, feature]));
+  let selectedId = "";
+  let routeLimit = 12;
+
+  const drawRoute = () => {
+    renderRoute(routeEl, data.route, {
+      onSelect: selectFarm,
+      limit: routeLimit,
+      selectedId,
+      officerDeliveries: data.officerDeliveries,
+      onLimit: (next) => {
+        routeLimit = next;
+        drawRoute();
+      },
+    });
+  };
+
+  function highlight(id) {
+    if (!map.isStyleLoaded() || !map.getLayer("fields-selected")) return;
+    map.setFilter("fields-selected", ["==", ["get", "field_id"], id]);
+  }
+
+  function selectFarm(id, feature) {
+    selectedId = id;
+    const match = feature || featuresById.get(id);
+    highlight(id);
+    renderPlan(planEl, data.plansById.get(id) || null, match, data.deliveriesByFarm.get(id));
+    drawRoute();
+  }
+
+  drawRoute();
 
   const map = new maplibregl.Map({
     container: "map",
@@ -104,6 +199,8 @@ async function start() {
 
   map.on("load", () => {
     addFields(map, data.fields);
+    if (selectedId) highlight(selectedId);
+    setupTimelapse(map, data.frames, data.base);
     const bounds = data.frames?.bounds
       ? [[data.frames.bounds[0], data.frames.bounds[1]], [data.frames.bounds[2], data.frames.bounds[3]]]
       : fieldsBbox(data.fields);
@@ -117,9 +214,7 @@ async function start() {
     });
     map.on("click", "fields-fill", (event) => {
       const feature = event.features[0];
-      const id = feature.properties.field_id;
-      map.setFilter("fields-selected", ["==", ["get", "field_id"], id]);
-      renderPlan(panel, data.plansById.get(id) || null, feature);
+      selectFarm(feature.properties.field_id, feature);
     });
   });
 }

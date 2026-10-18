@@ -32,6 +32,17 @@ export async function loadData() {
     feature.properties.flag = plan ? plan.flag : "none";
   }
 
+  const deliveriesByFarm = new Map();
+  const officerDeliveries = [];
+  for (const row of deliveries?.deliveries || []) {
+    if (!row.farm_id) officerDeliveries.push(row);
+    else {
+      const rows = deliveriesByFarm.get(row.farm_id) || [];
+      rows.push(row);
+      deliveriesByFarm.set(row.farm_id, rows);
+    }
+  }
+
   return {
     base,
     isMock: base === "/mock",
@@ -40,6 +51,8 @@ export async function loadData() {
     plansById,
     route,
     deliveries,
+    deliveriesByFarm,
+    officerDeliveries,
     frames,
   };
 }

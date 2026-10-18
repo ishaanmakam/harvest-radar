@@ -16,7 +16,7 @@ body {
 header {
   display: flex;
   gap: 16px;
-  align-items: baseline;
+  align-items: center;
   padding: 10px 16px;
   background: #14213d;
   color: #fff;
@@ -29,6 +29,18 @@ header h1 {
 }
 
 #stats { margin: 0; font-size: 14px; }
+
+.badge {
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.badge.mock { background: #f4a259; color: #1c1917; }
+.badge.real { background: #3bb273; color: #fff; }
 
 #error {
   margin: 0;
@@ -43,7 +55,40 @@ main {
   min-height: 0;
 }
 
+.map-wrap { flex: 1; min-width: 0; position: relative; display: flex; }
 #map { flex: 1; min-width: 0; }
+
+#timelapse {
+  position: absolute;
+  z-index: 2;
+  left: 12px;
+  right: 12px;
+  bottom: 28px;
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(20, 33, 61, 0.9);
+  color: #fff;
+}
+
+#timelapse button, .more {
+  font: inherit;
+  cursor: pointer;
+}
+
+#play {
+  border: 0;
+  border-radius: 6px;
+  padding: 4px 10px;
+  background: #fff;
+  color: #14213d;
+  font-weight: 650;
+}
+
+#frame-slider { flex: 1; }
+#frame-date { min-width: 6.5em; font-variant-numeric: tabular-nums; }
 
 #panel {
   width: 380px;
@@ -80,8 +125,39 @@ h3 { margin: 16px 0 8px; font-size: 14px; }
 
 .empty { color: #57534e; }
 
+#route { margin-bottom: 16px; padding-bottom: 12px; border-bottom: 1px solid #e4dfd8; }
+#route h2, #plan h2 { font-size: 16px; }
+#route ol { margin: 8px 0; padding-left: 1.3em; }
+#route li { margin: 0 0 6px; }
+
+.stop {
+  display: block;
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  padding: 4px 6px;
+  cursor: pointer;
+}
+
+.stop.selected { background: #fff; }
+.stop-title { display: flex; gap: 8px; align-items: center; }
+.why { display: block; margin-top: 2px; color: #44403c; font-size: 13px; }
+
+.more {
+  border: 1px solid #d6d3d1;
+  border-radius: 6px;
+  background: #fff;
+  padding: 4px 10px;
+}
+
+.delivery { display: flex; gap: 8px; align-items: baseline; margin: 4px 0; }
+
 @media (max-width: 800px) {
   main { flex-direction: column; }
-  #map { height: 55vh; flex: none; }
+  .map-wrap { height: 55vh; flex: none; }
   #panel { width: auto; flex: 1; border-left: 0; border-top: 1px solid #e4dfd8; }
 }

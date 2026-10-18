@@ -9,11 +9,22 @@
     <header>
       <h1>Harvest Radar</h1>
       <p id="stats"></p>
+      <span id="badge" class="badge"></span>
     </header>
     <p id="error" hidden></p>
     <main>
-      <div id="map"></div>
-      <aside id="panel"></aside>
+      <div class="map-wrap">
+        <div id="map"></div>
+        <div id="timelapse" hidden>
+          <button id="play" type="button">Play</button>
+          <input id="frame-slider" type="range" min="0" value="0" aria-label="Season date" />
+          <span id="frame-date"></span>
+        </div>
+      </div>
+      <aside id="panel">
+        <section id="route"></section>
+        <section id="plan"></section>
+      </aside>
     </main>
     <script type="module" src="/src/main.js"></script>
   </body>
