@@ -41,21 +41,24 @@ FLAG = {0: "fine", 1: "watch", 2: "act_now"}
 DEFAULTS = {
     "rain_act_now_mm": 15.0,       # spec: harvest-before-rain threshold
     "rain_lookahead_days": 3,      # spec: "any forecast day in the next 3 days"
+    "frost_tmin_c": 0.0,           # ours (Iowa): forecast Tmin at or below this within the same lookahead also triggers
     "fire_lookback_days": 5,       # spec: hotspot in the last 5 days
     "flood_ndvi_max": 0.0,         # ours: standing water reads as NDVI at or below zero
-    "stress_ndvi_drop_min": 0.10,  # ours: drop between consecutive clear passes that is not a harvest
+    "stress_ndvi_drop_min": 0.10,  # ours: drop between consecutive clear passes that is not a harvest (no zone context)
+    "stress_zone_margin": 0.10,    # ours: with zone context, stress = this field's drop exceeds the zone's typical drop by this much
+    "stress_max_gap_days": 12,     # ours: two clear passes further apart than this are not compared for stress
     "change_ndvi_min": 0.15,       # ours: swing between consecutive clear passes that counts as a visible change
-    "peak_ndvi_min": 0.55, "burn_nbr_max": -0.05, "harvest_ndvi_max": 0.35,   # shared with harvest_model
+    "peak_ndvi_min": 0.55, "burn_nbr_max": -0.05, "harvest_ndvi_max": 0.25,   # shared with harvest_model; region.json overrides
 }
 CONFIDENCE = {"l": "low", "n": "nominal", "h": "high"}
 TODAY_TEXT = {
-    ("act_now", "fire"): "Check the field for fire now and call the officer if it is burning.",
+    ("act_now", "fire"): "Check the field for fire now. If it is burning, call emergency services first; the officer will follow up today.",
     ("act_now", "flood"): "Water is standing on the field: check the drainage today.",
-    ("act_now", "burn_scar"): "A fresh burn scar was seen from orbit: the officer will visit today.",
-    ("watch", "stress"): "Walk the declining part of the field and check for pests or water stress.",
+    ("act_now", "burn_scar"): "The field went dark after harvest in the latest pass (a burn or a fresh tillage pass): the officer will visit today.",
+    ("watch", "stress"): "Walk the part of the field that is browning faster than its neighbours and check for pests, lodging or water stress.",
     ("watch", "visible_change"): "Something changed since the last pass: confirm what happened in the field.",
-    ("watch", "establishment"): "The crop never greened up: check whether the field was sown.",
-    ("watch", "burn_scar"): "An older burn scar is on record: no action today.",
+    ("watch", "establishment"): "This field never greened up: check whether it was planted, or whether it is not a crop field at all.",
+    ("watch", "burn_scar"): "An older dark scar (burn or tillage) is on record: no action today.",
 }
 QUIET = "Nothing needs action today. Harvest, rain, fire, flood and stress were checked and are fine."
 
@@ -83,14 +86,40 @@ def _cue_norm(cue):
     return c
 
 
-def forecast_pairs(dates, precip):
-    """(date, mm) per forecast day. A precip array that is shorter or longer than the dates is padded with None /
-    cut, with a warning, instead of silently dropping days (zip would)."""
+def forecast_pairs(dates, precip, tmin=None):
+    """(date, mm) per forecast day, or (date, mm, tmin_c) when the forecast carries minimum temperatures. Arrays
+    shorter or longer than the dates are padded with None / cut, with a warning, instead of silently dropping days."""
     dates, precip = list(dates or []), list(precip or [])
     if len(precip) != len(dates):
         print(f"  WARN weather forecast has {len(dates)} dates but {len(precip)} precip values; padding with null")
         precip = (precip + [None] * len(dates))[:len(dates)]
+    if tmin:
+        tmin = list(tmin)
+        if len(tmin) != len(dates):
+            print(f"  WARN weather forecast has {len(dates)} dates but {len(tmin)} tmin values; padding with null")
+            tmin = (tmin + [None] * len(dates))[:len(dates)]
+        return [(d(x), mm, t) for x, mm, t in zip(dates, precip, tmin)]
     return [(d(x), mm) for x, mm in zip(dates, precip)]
+
+
+def zone_declines(ts, zone_of, max_gap_days=12):
+    """Per zone, the median NDVI drop between each field's last two clear passes (pairs further apart than
+    max_gap_days are skipped). A whole zone drying down together (corn in September) then reads as normal, and a
+    field falling much faster than its neighbours stands out."""
+    import statistics
+    dates = [d(x) for x in ts["dates"]]
+    drops = {}
+    for fid, series in ts["fields"].items():
+        zone = zone_of.get(fid)
+        if zone is None:
+            continue
+        clear = [(dates[i], v) for i, v in enumerate(series.get("ndvi", [])) if v is not None and i < len(dates)]
+        if len(clear) < 2:
+            continue
+        (d1, v1), (d2, v2) = clear[-2], clear[-1]
+        if (d2 - d1).days <= max_gap_days:
+            drops.setdefault(zone, []).append(round(v1 - v2, 3))
+    return {z: round(statistics.median(v), 3) for z, v in drops.items()}
 
 
 def _cue_text(cue, default):
@@ -101,10 +130,11 @@ def _cue_text(cue, default):
     return f"{text} ({tag})"
 
 
-def farm_plan(rec, passes, forecast, hotspots, insight, today: date, th=None, fallback_as_of=None):
+def farm_plan(rec, passes, forecast, hotspots, insight, today: date, th=None, fallback_as_of=None, zone_drop=None):
     """One farm's plan. passes = [(date, ndvi, nbr)] clear passes; forecast = [(date, precip_mm)];
     hotspots = FIRMS detections in this field; insight = per-field Perceptron cues (kind -> cue) or None;
-    fallback_as_of = the landscape's latest clear pass, used when this farm has no clear pass of its own."""
+    fallback_as_of = the landscape's latest clear pass, used when this farm has no clear pass of its own;
+    zone_drop = the zone's typical NDVI drop between the last two passes (see zone_declines), or None."""
     th = {**DEFAULTS, **(th or {})}
     passes = sorted(p for p in passes if p[1] is not None)
     latest = passes[-1] if passes else None
@@ -126,7 +156,7 @@ def farm_plan(rec, passes, forecast, hotspots, insight, today: date, th=None, fa
         detail = "Crop looks ready to harvest" + (f": expected {_span(*pred)}" if pred else "")
         checks.append(_check("harvest_ready", "watch", detail, window=_win(*pred) if pred else {}))
     elif harvest:
-        checks.append(_check("harvest_ready", "clear", f"Already cut, around {s(harvest)}"))
+        checks.append(_check("harvest_ready", "clear", f"Looks harvested from the satellite: greenness collapsed around {s(harvest)}"))
     elif stage == "maturing" and pred:
         checks.append(_check("harvest_ready", "clear", f"Maturing: harvest expected {_span(*pred)}"))
     elif stage == "growing":
@@ -134,22 +164,34 @@ def farm_plan(rec, passes, forecast, hotspots, insight, today: date, th=None, fa
     else:
         checks.append(_check("harvest_ready", "clear", "No harvest signal yet"))
 
-    # 2. harvest versus rain
-    rain = [(dt, mm) for dt, mm in forecast
-            if mm is not None and 0 <= (dt - today).days < th["rain_lookahead_days"] and mm >= th["rain_act_now_mm"]]
-    if ready and rain:
-        first, last = rain[0], rain[-1]
-        more = f" and more on {s(last[0])}" if len(rain) > 1 else ""
-        detail = f"Harvest before the rain: {first[1]:.0f} mm forecast on {s(first[0])}{more}"
-        checks.append(_check("harvest_before_rain", "act_now", detail, window=_win(first[0], last[0])))
-        today_text = f"Harvest before {s(first[0])}: {first[1]:.0f} mm of rain is forecast."
+    # 2. harvest versus weather: heavy rain (spec) or frost (Iowa addition) in the next 3 days on a ready crop
+    horizon = [e for e in forecast if 0 <= (e[0] - today).days < th["rain_lookahead_days"]]
+    rain = [(e[0], e[1]) for e in horizon if e[1] is not None and e[1] >= th["rain_act_now_mm"]]
+    has_temps = any(len(e) > 2 for e in forecast)
+    frost = [(e[0], e[2]) for e in horizon if len(e) > 2 and e[2] is not None and e[2] <= th["frost_tmin_c"]]
+    if ready and (rain or frost):
+        parts, days = [], []
+        if rain:
+            more = f" and more on {s(rain[-1][0])}" if len(rain) > 1 else ""
+            parts.append(f"{rain[0][1]:.0f} mm of rain forecast on {s(rain[0][0])}{more}")
+            days += [r[0] for r in rain]
+        if frost:
+            parts.append(f"frost forecast on {s(frost[0][0])} ({frost[0][1]:.0f} °C)")
+            days += [f[0] for f in frost]
+        what = "rain" if rain and not frost else ("frost" if frost and not rain else "rain and the frost")
+        checks.append(_check("harvest_before_rain", "act_now", f"Harvest before the {what}: " + "; ".join(parts),
+                             window=_win(min(days), max(days))))
+        today_text = f"Harvest before {s(min(days))}: " + "; ".join(parts) + "."
     else:
         if ready:
-            detail = f"No rain of {th['rain_act_now_mm']:.0f} mm or more in the next {th['rain_lookahead_days']} days"
-        elif rain:
-            detail = f"{rain[0][1]:.0f} mm forecast on {s(rain[0][0])}, but the crop is not ready to cut"
+            detail = (f"No rain of {th['rain_act_now_mm']:.0f} mm or more" + (" and no frost" if has_temps else "")
+                      + f" in the next {th['rain_lookahead_days']} days")
+        elif rain or frost:
+            coming = ([f"{rain[0][1]:.0f} mm forecast on {s(rain[0][0])}"] if rain else []) + \
+                     ([f"frost forecast on {s(frost[0][0])}"] if frost else [])
+            detail = ", ".join(coming) + ", but the crop is not ready to cut"
         else:
-            detail = "Crop not ready to cut; no heavy rain forecast"
+            detail = "Crop not ready to cut; no heavy rain" + (" or frost" if has_temps else "") + " forecast"
         checks.append(_check("harvest_before_rain", "clear", detail))
         today_text = None
 
@@ -180,13 +222,14 @@ def farm_plan(rec, passes, forecast, hotspots, insight, today: date, th=None, fa
         scar_date = min(scar_date, cue_date) if scar_date else cue_date
         scar_where, scar_note = cue.get("where", ""), "; " + _cue_text(cue, "confirmed by Perceptron")
     if scar_date and (latest is None or scar_date >= latest[0]):     # on or after the last index pass = new
-        checks.append(_check("burn_scar", "act_now", f"New burn scar seen in the latest pass ({s(scar_date)}){scar_note}",
+        checks.append(_check("burn_scar", "act_now",
+                             f"Field went dark after harvest in the latest pass ({s(scar_date)}): burn or tillage scar{scar_note}",
                              where=scar_where, window=_win(scar_date)))
     elif scar_date:
-        checks.append(_check("burn_scar", "watch", f"Burn scar on record since {s(scar_date)}{scar_note}",
+        checks.append(_check("burn_scar", "watch", f"Dark scar (burn or tillage) on record since {s(scar_date)}{scar_note}",
                              where=scar_where, window=_win(scar_date)))
     else:
-        checks.append(_check("burn_scar", "clear", "No burn scar"))
+        checks.append(_check("burn_scar", "clear", "No burn or tillage scar"))
 
     # 5. fire
     recent = sorted((h for h in hotspots if 0 <= (today - d(h["date"])).days <= th["fire_lookback_days"]), key=lambda h: h["date"])
@@ -229,15 +272,30 @@ def farm_plan(rec, passes, forecast, hotspots, insight, today: date, th=None, fa
                                  where=cue.get("where", ""), window=_win(prev[0], latest[0]) if prev and latest else {}))
         else:
             checks.append(_check("stress", "clear", _cue_text(cue, "Perceptron sees no browning")))
-    elif (standing and prev and latest and prev[1] - latest[1] >= th["stress_ndvi_drop_min"]
-          and latest[1] > th["harvest_ndvi_max"]):
-        checks.append(_check("stress", "watch",
-                             f"Greenness fell from {prev[1]:.2f} to {latest[1]:.2f} between {s(prev[0])} and {s(latest[0])} without a harvest",
-                             window=_win(prev[0], latest[0])))
     elif not standing:
         checks.append(_check("stress", "clear", "No standing crop to stress"))
-    elif prev:
-        checks.append(_check("stress", "clear", f"Crop holding steady since {s(prev[0])}"))
+    elif prev and latest:
+        gap = (latest[0] - prev[0]).days
+        drop = prev[1] - latest[1]
+        between = f"between {s(prev[0])} and {s(latest[0])}"
+        not_harvest = latest[1] > th["harvest_ndvi_max"]
+        if gap > th["stress_max_gap_days"]:
+            checks.append(_check("stress", "clear", f"Last two clear passes are {gap} days apart; too far apart to judge stress"))
+        elif zone_drop is not None:
+            if drop - zone_drop >= th["stress_zone_margin"] and not_harvest:
+                checks.append(_check("stress", "watch",
+                                     f"Greenness fell {drop:.2f} {between}, {drop - zone_drop:.2f} more than the zone's typical {zone_drop:.2f}",
+                                     window=_win(prev[0], latest[0])))
+            elif drop >= th["stress_ndvi_drop_min"]:
+                checks.append(_check("stress", "clear", f"Declining in step with the zone (typical drop {zone_drop:.2f} {between})"))
+            else:
+                checks.append(_check("stress", "clear", f"Crop holding steady since {s(prev[0])}"))
+        elif drop >= th["stress_ndvi_drop_min"] and not_harvest:
+            checks.append(_check("stress", "watch",
+                                 f"Greenness fell from {prev[1]:.2f} to {latest[1]:.2f} {between} without a harvest",
+                                 window=_win(prev[0], latest[0])))
+        else:
+            checks.append(_check("stress", "clear", f"Crop holding steady since {s(prev[0])}"))
     else:
         checks.append(_check("stress", "clear", "Only one clear pass; nothing to compare"))
 
@@ -254,10 +312,10 @@ def farm_plan(rec, passes, forecast, hotspots, insight, today: date, th=None, fa
     elif prev and latest:
         between = _span(prev[0], latest[0])
         if harvest and prev[0] < harvest <= latest[0]:
-            checks.append(_check("visible_change", "watch", f"Field cut between {s(prev[0])} and {s(latest[0])}",
+            checks.append(_check("visible_change", "watch", f"Field harvested between {s(prev[0])} and {s(latest[0])}",
                                  window=_win(prev[0], latest[0])))
         elif scar_date and scar_date >= latest[0]:
-            checks.append(_check("visible_change", "watch", f"Burn scar appeared between {s(prev[0])} and {s(latest[0])}",
+            checks.append(_check("visible_change", "watch", f"Field went dark (burn or tillage) between {s(prev[0])} and {s(latest[0])}",
                                  window=_win(prev[0], latest[0])))
         elif abs(latest[1] - prev[1]) >= th["change_ndvi_min"]:
             checks.append(_check("visible_change", "watch",
@@ -278,7 +336,7 @@ def farm_plan(rec, passes, forecast, hotspots, insight, today: date, th=None, fa
     elif key == ("watch", "harvest_ready"):
         w = by_kind["harvest_ready"]["window"]
         when = f" for {w['start']} to {w['end']}" if w else ""
-        today_line = f"Crop looks ready: line up the harvester and a residue machine{when}."
+        today_line = f"Crop looks ready: line up the combine or your custom harvester{when}."
     elif key == ("watch", "establishment") and too_few:
         today_line = "Too few clear satellite passes to judge the crop yet: the officer will check by phone."
     else:
@@ -330,7 +388,7 @@ def run(data_dir: Path):
 
     dates = [d(x) for x in ts["dates"]]
     fc = weather.get("forecast") or {}
-    forecast = forecast_pairs(fc.get("dates", []), fc.get("precip_mm", []))
+    forecast = forecast_pairs(fc.get("dates", []), fc.get("precip_mm", []), fc.get("tmin_c"))
     # the landscape's latest clear pass: the as_of for a farm that has no clear pass of its own, and the document's
     clear_days = [i for i, _ in enumerate(dates)
                   if any(i < len(sr["ndvi"]) and sr["ndvi"][i] is not None for sr in ts["fields"].values())]
@@ -344,6 +402,9 @@ def run(data_dir: Path):
         if c.get("field_id") and c.get("kind"):
             cues[c["field_id"]][c["kind"]] = c
     recs = {r["field_id"]: r for r in status["fields"]}
+    zone_of = {f["properties"]["field_id"]: f["properties"]["zone_id"] for f in fields["features"]}
+    thr = {**DEFAULTS, **th}
+    drops = zone_declines(ts, zone_of, thr["stress_max_gap_days"])
 
     plans = []
     for feat in fields["features"]:
@@ -353,7 +414,7 @@ def run(data_dir: Path):
         series = ts["fields"].get(fid, {"ndvi": [], "nbr": []})
         passes = [(dt, v, b) for dt, v, b in zip(dates, series["ndvi"], series["nbr"]) if v is not None]
         plan = farm_plan(rec, passes, forecast, hotspots.get(fid, []), cues.get(fid), today, th,
-                         fallback_as_of=latest_clear)
+                         fallback_as_of=latest_clear, zone_drop=drops.get(p["zone_id"]))
         plan["zone_id"] = p["zone_id"]
         plans.append(plan)
     route = build_route(plans, today)

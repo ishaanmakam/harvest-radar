@@ -1,0 +1,382 @@
+"""Observed daily weather and the 14-day rain forecast at the centre of the demo box."""
+import argparse
+import json
+import os
+import sys
+import time
+from datetime import date, datetime, timedelta
+
+import requests
+from jsonschema import Draft202012Validator
+
+from common import CACHE, OUT, ROOT, load_region, log, write_json
+
+STEP = "s06"
+POWER_URL = "https://power.larc.nasa.gov/api/temporal/daily/point"
+METEO_URL = "https://api.open-meteo.com/v1/forecast"
+POWER_PARAMS = ("PRECTOTCORR", "T2M_MAX", "T2M_MIN")
+FILL_FLOOR = -999
+
+
+def ymd(day: date) -> str:
+    return day.strftime("%Y%m%d")
+
+
+def iso(day: date) -> str:
+    return day.isoformat()
+
+
+def parse_day(text: str) -> date:
+    return date.fromisoformat(text)
+
+
+def days_inclusive(start: date, end: date):
+    out = []
+    day = start
+    while day <= end:
+        out.append(day)
+        day += timedelta(days=1)
+    return out
+
+
+def centre(bbox):
+    west, south, east, north = bbox
+    return (west + east) / 2, (south + north) / 2
+
+
+def as_number(value):
+    if value is None or isinstance(value, bool):
+        return None
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return None
+
+
+def clean_power(value, fill):
+    number = as_number(value)
+    if number is None:
+        return None
+    if number <= FILL_FLOOR or (fill is not None and number == fill):
+        return None
+    return round(number, 1)
+
+
+def clean_meteo_amount(value):
+    number = as_number(value)
+    if number is None:
+        return None
+    return round(number, 1)
+
+
+def clean_prob(value):
+    number = as_number(value)
+    if number is None:
+        return None
+    if number < 0 or number > 100:
+        log(STEP, f"ERROR precip probability {number} is outside 0-100")
+        sys.exit(1)
+    return int(round(number))
+
+
+def fetch_json(url, params, timeout):
+    last = None
+    for attempt in range(1, 4):
+        try:
+            response = requests.get(url, params=params, timeout=timeout)
+            response.raise_for_status()
+            return response.json()
+        except (requests.RequestException, ValueError) as exc:
+            last = exc
+            log(STEP, f"request failed ({attempt}/3) {url}: {exc}")
+            if attempt < 3:
+                time.sleep(attempt)
+    log(STEP, f"ERROR giving up on {url}: {last}")
+    sys.exit(1)
+
+
+def require_power(raw):
+    try:
+        fill = as_number(raw["header"]["fill_value"])
+        parameter = raw["properties"]["parameter"]
+        for name in POWER_PARAMS:
+            if not isinstance(parameter[name], dict):
+                raise TypeError(name)
+    except (KeyError, TypeError) as exc:
+        log(STEP, f"ERROR NASA POWER response shape is not the documented one: {exc}")
+        sys.exit(1)
+    return fill, parameter
+
+
+def require_meteo(raw):
+    try:
+        daily = raw["daily"]
+        hourly = raw["hourly"]
+        for key in (
+            "time",
+            "precipitation_sum",
+            "precipitation_probability_max",
+            "temperature_2m_max",
+            "temperature_2m_min",
+        ):
+            if not isinstance(daily[key], list):
+                raise TypeError(f"daily.{key}")
+        for key in ("time", "precipitation", "wind_gusts_10m", "weather_code"):
+            if not isinstance(hourly[key], list):
+                raise TypeError(f"hourly.{key}")
+        if len(daily["time"]) != len(daily["precipitation_sum"]):
+            raise ValueError("daily precipitation_sum length")
+        if len(hourly["time"]) != len(hourly["wind_gusts_10m"]):
+            raise ValueError("hourly wind_gusts_10m length")
+    except (KeyError, TypeError, ValueError) as exc:
+        log(STEP, f"ERROR Open-Meteo response shape is not the documented one: {exc}")
+        sys.exit(1)
+    return daily, hourly
+
+
+def series_by_day(dates, values):
+    out = {}
+    for day, value in zip(dates, values):
+        out[day] = value
+    return out
+
+
+def build_weather(region, power, meteo):
+    fill, parameter = require_power(power)
+    daily, hourly = require_meteo(meteo)
+    season_start = parse_day(region["season_start"])
+    as_of = parse_day(region["as_of"])
+    observed_days = days_inclusive(season_start, as_of - timedelta(days=1))
+    if not observed_days:
+        log(STEP, "ERROR observed range is empty")
+        sys.exit(1)
+
+    meteo_days = series_by_day(daily["time"], range(len(daily["time"])))
+    fill_from = as_of - timedelta(days=14)
+    filled_days = 0
+    precip, tmax, tmin = [], [], []
+    for day in observed_days:
+        key = ymd(day)
+        row = {
+            "precip_mm": clean_power(parameter["PRECTOTCORR"].get(key), fill),
+            "tmax_c": clean_power(parameter["T2M_MAX"].get(key), fill),
+            "tmin_c": clean_power(parameter["T2M_MIN"].get(key), fill),
+        }
+        if fill_from <= day < as_of and any(value is None for value in row.values()):
+            index = meteo_days.get(iso(day))
+            if index is not None:
+                replacements = {
+                    "precip_mm": clean_meteo_amount(daily["precipitation_sum"][index]),
+                    "tmax_c": clean_meteo_amount(daily["temperature_2m_max"][index]),
+                    "tmin_c": clean_meteo_amount(daily["temperature_2m_min"][index]),
+                }
+                wrote = False
+                for name, value in replacements.items():
+                    if row[name] is None and value is not None:
+                        row[name] = value
+                        wrote = True
+                if wrote:
+                    filled_days += 1
+        precip.append(row["precip_mm"])
+        tmax.append(row["tmax_c"])
+        tmin.append(row["tmin_c"])
+
+    source = "NASA POWER daily (community AG)"
+    if filled_days:
+        source += f"; last {filled_days} days filled from Open-Meteo"
+
+    horizon = int(region["forecast_horizon_days"])
+    forecast_days = [day for day in daily["time"] if day >= iso(as_of)][:horizon]
+    if len(forecast_days) != horizon:
+        log(STEP, f"ERROR Open-Meteo has {len(forecast_days)} days on or after {iso(as_of)}, need {horizon}")
+        sys.exit(1)
+    fc_precip, fc_prob = [], []
+    for day in forecast_days:
+        index = meteo_days[day]
+        fc_precip.append(clean_meteo_amount(daily["precipitation_sum"][index]))
+        fc_prob.append(clean_prob(daily["precipitation_probability_max"][index]))
+
+    doc = {
+        "observed": {
+            "source": source,
+            "dates": [iso(day) for day in observed_days],
+            "precip_mm": precip,
+            "tmax_c": tmax,
+            "tmin_c": tmin,
+        },
+        "forecast": {
+            "source": "Open-Meteo forecast",
+            "dates": forecast_days,
+            "precip_mm": fc_precip,
+            "precip_prob": fc_prob,
+        },
+    }
+    return doc, filled_days, hourly
+
+
+def nulls(values):
+    return sum(value is None for value in values)
+
+
+def rain_total(values):
+    return round(sum(value for value in values if value is not None), 1)
+
+
+def max_gust(hourly, as_of: date):
+    start = datetime(as_of.year, as_of.month, as_of.day)
+    end = start + timedelta(hours=72)
+    best = None
+    for stamp, gust in zip(hourly["time"], hourly["wind_gusts_10m"]):
+        try:
+            moment = datetime.fromisoformat(stamp)
+        except ValueError:
+            log(STEP, f"ERROR hourly time {stamp!r} is not a timestamp")
+            sys.exit(1)
+        number = as_number(gust)
+        if number is None or moment < start or moment >= end:
+            continue
+        best = number if best is None else max(best, number)
+    unit = (hourly.get("hourly_units") or {}).get("wind_gusts_10m")
+    # Units live on the parent response, not inside hourly. Caller passes them via the raw file.
+    return best, unit
+
+
+def gust_from_raw(raw, as_of: date):
+    hourly = raw["hourly"]
+    best, _unit = max_gust(hourly, as_of)
+    units = raw.get("hourly_units") or {}
+    return best, units.get("wind_gusts_10m", "km/h")
+
+
+def validate(doc):
+    schema = json.loads((ROOT / "contracts" / "weather.schema.json").read_text())
+    errors = sorted(Draft202012Validator(schema).iter_errors(doc), key=lambda err: list(err.path))
+    for err in errors:
+        loc = "/".join(str(part) for part in err.path) or "<root>"
+        log(STEP, f"ERROR weather.json @ {loc}: {err.message}")
+    mock = json.loads((ROOT / "data" / "mock" / "weather.json").read_text())
+    observed, forecast = doc["observed"], doc["forecast"]
+    if observed["dates"] != mock["observed"]["dates"]:
+        log(STEP, "ERROR observed.dates do not match data/mock/weather.json")
+        log(STEP, f"got {observed['dates'][0]}..{observed['dates'][-1]} n={len(observed['dates'])}")
+        log(STEP, f"mock {mock['observed']['dates'][0]}..{mock['observed']['dates'][-1]} n={len(mock['observed']['dates'])}")
+        errors.append("dates")
+    if forecast["dates"] != mock["forecast"]["dates"]:
+        log(STEP, "ERROR forecast.dates do not match data/mock/weather.json")
+        log(STEP, f"got {forecast['dates']}")
+        log(STEP, f"mock {mock['forecast']['dates']}")
+        errors.append("dates")
+    for block, name in ((observed, "observed"), (forecast, "forecast")):
+        count = len(block["dates"])
+        for key, values in block.items():
+            if key == "source":
+                continue
+            if len(values) != count:
+                log(STEP, f"ERROR {name}.{key} has {len(values)} values for {count} dates")
+                errors.append(key)
+    if list(doc) != ["observed", "forecast"]:
+        log(STEP, f"ERROR top-level keys {list(doc)}")
+        errors.append("keys")
+    if list(observed) != ["source", "dates", "precip_mm", "tmax_c", "tmin_c"]:
+        log(STEP, f"ERROR observed keys {list(observed)}")
+        errors.append("keys")
+    if list(forecast) != ["source", "dates", "precip_mm", "precip_prob"]:
+        log(STEP, f"ERROR forecast keys {list(forecast)}")
+        errors.append("keys")
+    if errors:
+        log(STEP, "ERROR validation failed; data/out/weather.json left untouched")
+        sys.exit(1)
+
+
+def publish(doc):
+    dest = OUT / "weather.json"
+    OUT.mkdir(parents=True, exist_ok=True)
+    tmp = dest.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(doc, separators=(",", ":")))
+    os.replace(tmp, dest)
+    log(STEP, f"wrote {dest}")
+
+
+def report(doc, filled_days, raw_meteo):
+    observed, forecast = doc["observed"], doc["forecast"]
+    dates = observed["dates"]
+    log(STEP, f"observed {dates[0]} .. {dates[-1]} ({len(dates)} days)")
+    log(STEP, f"nulls precip={nulls(observed['precip_mm'])} tmax={nulls(observed['tmax_c'])} tmin={nulls(observed['tmin_c'])}")
+    log(STEP, f"days filled from Open-Meteo: {filled_days}")
+    last7 = observed["precip_mm"][-7:]
+    log(STEP, f"season rain {rain_total(observed['precip_mm'])} mm; last 7 observed days {rain_total(last7)} mm")
+    log(STEP, f"forecast {forecast['dates'][0]} .. {forecast['dates'][-1]}")
+    log(STEP, f"next 3 days precip_mm {forecast['precip_mm'][:3]} precip_prob {forecast['precip_prob'][:3]}")
+    as_of = parse_day(json.loads((ROOT / "config" / "region.json").read_text())["as_of"])
+    best, unit = gust_from_raw(raw_meteo, as_of)
+    shown = "none" if best is None else f"{best:g} {unit}"
+    log(STEP, f"max hourly wind gust in the next 72 h: {shown}")
+    trigger = any(value is not None and value >= 15 for value in forecast["precip_mm"][:3])
+    print(f"RAIN TRIGGER (any day >= 15 mm in next 3): {'YES' if trigger else 'NO'}", flush=True)
+
+
+def load_cached():
+    power_path = CACHE / "power_raw.json"
+    meteo_path = CACHE / "openmeteo_raw.json"
+    missing = [path for path in (power_path, meteo_path) if not path.exists()]
+    if missing:
+        for path in missing:
+            log(STEP, f"ERROR missing cache {path}")
+        sys.exit(1)
+    return (
+        json.loads(power_path.read_text()),
+        json.loads(meteo_path.read_text()),
+    )
+
+
+def main():
+    parser = argparse.ArgumentParser(description="Write observed weather and the rain forecast")
+    parser.add_argument("--from-cache", action="store_true")
+    args = parser.parse_args()
+    region = load_region()
+    lon, lat = centre(region["bbox"])
+    log(STEP, f"centre lon={lon:.5f} lat={lat:.5f}")
+    if args.from_cache:
+        log(STEP, "rebuilding from cache, no network")
+        power, meteo = load_cached()
+    else:
+        season_start = parse_day(region["season_start"])
+        as_of = parse_day(region["as_of"])
+        power = fetch_json(
+            POWER_URL,
+            {
+                "parameters": "PRECTOTCORR,T2M_MAX,T2M_MIN",
+                "community": "AG",
+                "longitude": lon,
+                "latitude": lat,
+                "start": ymd(season_start),
+                "end": ymd(as_of - timedelta(days=1)),
+                "format": "JSON",
+            },
+            timeout=90,
+        )
+        meteo = fetch_json(
+            METEO_URL,
+            {
+                "latitude": lat,
+                "longitude": lon,
+                "timezone": "auto",
+                "past_days": 14,
+                "forecast_days": 16,
+                "daily": "precipitation_sum,precipitation_probability_max,temperature_2m_max,temperature_2m_min",
+                "hourly": "precipitation,wind_gusts_10m,weather_code",
+            },
+            timeout=30,
+        )
+        write_json(CACHE / "power_raw.json", power)
+        write_json(CACHE / "openmeteo_raw.json", meteo)
+        log(STEP, f"cached {CACHE / 'power_raw.json'} and {CACHE / 'openmeteo_raw.json'}")
+
+    doc, filled_days, _hourly = build_weather(region, power, meteo)
+    validate(doc)
+    publish(doc)
+    report(doc, filled_days, meteo)
+
+
+if __name__ == "__main__":
+    main()

@@ -26,7 +26,7 @@ from tools import load_roster
 CHANNELS = ("grok_voice", "photon_sms")
 RETRIES = 2
 LABELS = {"harvest_ready": "Harvest readiness", "harvest_before_rain": "Harvest versus rain", "establishment": "Establishment",
-          "burn_scar": "Burn scar", "fire": "Fire", "flood": "Flood", "stress": "Stress or browning",
+          "burn_scar": "Burn or tillage scar", "fire": "Fire", "flood": "Flood", "stress": "Stress or browning",
           "visible_change": "Visible change"}
 STATUS_WORDS = {"clear": "clear", "watch": "watch", "act_now": "act now"}
 
@@ -214,6 +214,13 @@ if __name__ == "__main__":
     ap.add_argument("--dry-run", action="store_true", help="write delivery rows, place no calls or texts")
     ap.add_argument("--date", default=None, help="morning date YYYY-MM-DD (default: today)")
     ap.add_argument("--only", nargs="*", default=None, help="roster_ids to process (default: all)")
+    ap.add_argument("--translate", action="store_true", help="translate free text with Grok (XAI_API_KEY), cached in <data>/translations.json")
     a = ap.parse_args()
+    translate = None
+    if a.translate:
+        from providers import translator_from_env
+        translate = translator_from_env(cache_path=Path(a.data) / "translations.json")
+        if translate is None:
+            print("  --translate: XAI_API_KEY not set, words stay English")
     run(Path(a.data), roster_path=a.roster, dry_run=a.dry_run, today=date.fromisoformat(a.date) if a.date else None,
-        only=a.only)
+        only=a.only, translate=translate)

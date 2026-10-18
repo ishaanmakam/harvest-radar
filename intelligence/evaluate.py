@@ -20,11 +20,16 @@ from pathlib import Path
 from common import d, load_region, read_json, s, write_json
 
 STANDING = ("growing", "maturing", "ready")
+CROPS = ("rice", "wheat", "corn", "soybean", "maize")   # fields that go through peak -> harvest; "other" never greens up
+
+
+def is_crop(t: dict) -> bool:
+    return t.get("crop") in CROPS
 
 
 def true_stage(t: dict, as_of: date) -> str:
     """What the model should say for a field given what really happened (mirrors harvest_model's stage rules)."""
-    if t["crop"] != "rice":
+    if not is_crop(t):
         return "unknown"
     if t["burned"] and t["burn_date"] and d(t["burn_date"]) <= as_of:
         return "burned"
@@ -92,7 +97,7 @@ def evaluate(status_fields, truth, as_of: date) -> dict:
         exact += ts == ps
         coarse_ok += coarse(ts) == coarse(ps)
 
-        if t["crop"] == "rice":
+        if is_crop(t):
             th = d(t["harvest_date"])
             if r.get("harvest_date"):
                 harvest_errs.append((d(r["harvest_date"]) - th).days)
