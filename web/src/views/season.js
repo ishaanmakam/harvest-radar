@@ -203,15 +203,17 @@ export function renderSeason(el, ctx) {
         { class: "note note-info" },
         "The analytics layer has not run on this dataset, so there is no yield, economics or USDA comparison yet. It writes analytics.json beside plans.json.",
       ),
-      sat
-        ? h(
-            "div",
-            { class: "section" },
-            h("div", { class: "section-title" }, "Harvest progress from the satellite"),
-            h("p", { class: "muted small", style: { marginBottom: "8px" } }, `${sat.harvested} of ${sat.total} fields with a crop signal look harvested, by the date their greenness collapsed.`),
-            progressChart({ series: sat.series, today }),
-          )
-        : null,
+      ...(sat
+        ? [
+            h(
+              "div",
+              { class: "section" },
+              h("div", { class: "section-title" }, "Harvest progress from the satellite"),
+              h("p", { class: "muted small", style: { marginBottom: "8px" } }, `${sat.harvested} of ${sat.total} fields with a crop signal look harvested, by the date their greenness collapsed.`),
+              progressChart({ series: sat.series, today }),
+            ),
+          ]
+        : []),
     );
     return { update() {} };
   }

@@ -175,7 +175,7 @@ async function start() {
   function syncChrome() {
     const state = store.get();
     headline.hidden = !chromeShown;
-    dock.hidden = !chromeShown || state.view === "timelapse";
+    dock.hidden = !chromeShown || (state.view === "timelapse" && timelapse.enabled);
     panel.hidden = !chromeShown || !state.selected;
     if (!chromeShown) timelapseBox.hidden = true;
   }

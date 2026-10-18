@@ -10,7 +10,11 @@ Open http://localhost:5173. `npm run build` writes `web/dist/`.
 
 ## What it reads
 
-Vite serves `../data` as the public folder. Each file is tried in `data/out` first and falls back to `data/mock` on its own, so a half-finished real season still renders; the badge in the top bar says whether the imagery and the farms came from the real or the stand-in season. The app loads finished files only and makes no live API calls.
+Vite serves `../data` as the public folder. The app loads finished files only and makes no live API calls.
+
+The four farm files `fields.geojson`, `plans.json`, `route.json` and `deliveries.json` are one group: they come from `data/out` only when both `fields.geojson` and `plans.json` are real JSON there, otherwise all four come from `data/mock`. Real fields are never joined to mock plans, because the farm ids overlap but are different farms, and a missing `route.json` or `deliveries.json` inside a real group means "none yet". When `data/out/fields.geojson` exists before the real plans do, those fields draw as a thin white outline layer under the mock farms, toggled from the badge in the top bar.
+
+Every other file is tried in `data/out` first and falls back to `data/mock` on its own, so a half-finished real season still renders; the badge says whether the imagery and the farm group came from the real or the stand-in season.
 
 | File | Needed | Used for |
 |---|---|---|
