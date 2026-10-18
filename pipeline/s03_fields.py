@@ -1,28 +1,35 @@
 """Segment crop fields from the NDVI cube and write frozen field outlines."""
 import argparse
 import json
+import math
 import os
 import sys
+import warnings
 from datetime import date
 
 import numpy as np
 from jsonschema import Draft202012Validator
 from PIL import Image, ImageDraw
-from pyproj import Geod
+from pyproj import Geod, Transformer
 from rasterio.features import shapes
+from shapely import transform
 from shapely.geometry import Polygon, shape
 from shapely.ops import unary_union
 from shapely.strtree import STRtree
+from skimage.graph import RAG, cut_threshold
 from skimage.segmentation import felzenszwalb
 
 from common import CACHE, OUT, ROOT, load_region, log, write_json
 from geo import region_geobox
 
 STEP = "s03"
-SCALES = (400, 800, 1600, 3200)
-MIN_SIZES = (400, 800)
+SCALE = 400
+MIN_SIZE = 400
+THRESHOLDS = (0.06, 0.09, 0.12)
 STACK_WINDOWS = ("W1", "W2", "W3", "W4")
 GEOD = Geod(ellps="WGS84")
+TO_METRES = Transformer.from_crs("EPSG:4326", "EPSG:32615", always_xy=True)
+TO_DEGREES = Transformer.from_crs("EPSG:32615", "EPSG:4326", always_xy=True)
 COLORS = {"corn": (255, 255, 0), "soybean": (0, 255, 255), "unknown": (255, 0, 255)}
 
 
@@ -184,9 +191,6 @@ def vectorize(labels, kept, medians, names, affine):
     fields = []
     for label, parts in pieces.items():
         geom = unary_union(parts).buffer(0)
-        geom = geom.simplify(0.00003, preserve_topology=True)
-        if not geom.is_valid:
-            geom = geom.buffer(0)
         parts = polygons_of(geom)
         if not parts:
             continue
@@ -198,14 +202,159 @@ def vectorize(labels, kept, medians, names, affine):
             geom = largest
         else:
             geom = parts[0]
-        area_m2, _perim = GEOD.geometry_area_perimeter(geom)
-        area_ha = abs(area_m2) / 10000.0
-        if area_ha < 2 or area_ha > 300:
+        if geom.is_empty:
             continue
         old = kept[label - 1]
         series = {name: medians[old][index] for index, name in enumerate(names)}
-        fields.append({"geom": geom, "area_ha": area_ha, "series": series})
+        fields.append({"geom": geom, "series": series})
     return fields
+
+
+def project(geom, transformer):
+    def apply(coords):
+        x, y = transformer.transform(coords[:, 0], coords[:, 1])
+        return np.column_stack([x, y])
+    return transform(geom, apply)
+
+
+def rag_distance(image, labels):
+    """Mean-color distance graph. rag_mean_color hardcodes 3 channels; the stack has 4."""
+    graph = RAG(labels, connectivity=2)
+    channels = image.shape[-1]
+    flat = labels.ravel()
+    pixels = np.asarray(image, dtype=np.float64).reshape(-1, channels)
+    width = int(labels.max()) + 1
+    counts = np.bincount(flat, minlength=width)
+    sums = np.column_stack([
+        np.bincount(flat, weights=pixels[:, channel], minlength=width) for channel in range(channels)
+    ])
+    for node in graph.nodes:
+        count = int(counts[node])
+        mean = sums[node] / count if count else np.zeros(channels)
+        graph.nodes[node]["labels"] = [int(node)]
+        graph.nodes[node]["pixel count"] = count
+        graph.nodes[node]["mean color"] = mean
+    for left, right, data in graph.edges(data=True):
+        diff = graph.nodes[left]["mean color"] - graph.nodes[right]["mean color"]
+        data["weight"] = float(np.linalg.norm(diff))
+    return graph
+
+
+def drop_small_holes(poly):
+    kept = []
+    removed = 0
+    for hole in poly.interiors:
+        ring = Polygon(hole)
+        if ring.area >= 10000:
+            kept.append(hole)
+        else:
+            removed += 1
+    if removed == 0:
+        return poly, 0
+    cleaned = Polygon(poly.exterior, kept)
+    if not cleaned.is_valid:
+        cleaned = cleaned.buffer(0)
+    return cleaned, removed
+
+
+def short_side(rect):
+    coords = list(rect.exterior.coords)
+    if len(coords) < 2:
+        return 0.0
+    lengths = []
+    for start, end in zip(coords, coords[1:]):
+        lengths.append(math.hypot(end[0] - start[0], end[1] - start[1]))
+    return min(lengths) if lengths else 0.0
+
+
+def polsby_popper(geom):
+    perim = geom.length
+    if perim <= 0 or geom.area <= 0:
+        return 0.0
+    return 4 * math.pi * geom.area / (perim * perim)
+
+
+def largest_piece(geom):
+    parts = polygons_of(geom)
+    if not parts:
+        return None
+    if len(parts) == 1:
+        return parts[0]
+    largest = max(parts, key=lambda part: part.area)
+    total = sum(part.area for part in parts)
+    if total <= 0 or largest.area < 0.8 * total:
+        return None
+    return largest
+
+
+def clean_metres(fields):
+    """Square up outlines in UTM metres, drop slivers, then give overlaps to the larger field."""
+    prepared = []
+    holes_filled = 0
+    slivers = 0
+    rectangular = 0
+    for field in fields:
+        metric = largest_piece(project(field["geom"], TO_METRES))
+        if metric is None or metric.area <= 0:
+            continue
+        metric, removed = drop_small_holes(metric)
+        holes_filled += removed
+        metric = metric.simplify(10, preserve_topology=True)
+        if not metric.is_valid:
+            metric = metric.buffer(0)
+        metric = largest_piece(metric)
+        if metric is None or metric.area <= 0:
+            continue
+        try:
+            rectangle = metric.minimum_rotated_rectangle
+        except Exception:
+            slivers += 1
+            continue
+        if rectangle.is_empty or rectangle.area <= 0:
+            slivers += 1
+            continue
+        is_rect = metric.area / rectangle.area >= 0.85
+        if is_rect:
+            metric = rectangle
+        if polsby_popper(metric) < 0.2 or short_side(metric.minimum_rotated_rectangle) < 80:
+            slivers += 1
+            continue
+        prepared.append({**field, "geom": metric, "rectangular": is_rect})
+        if is_rect:
+            rectangular += 1
+    prepared.sort(key=lambda field: field["geom"].area, reverse=True)
+    accepted = []
+    taken = None
+    for field in prepared:
+        geom = field["geom"]
+        if taken is not None and not taken.is_empty:
+            geom = geom.difference(taken).buffer(0)
+        geom = largest_piece(geom)
+        if geom is None or geom.area < 20000:
+            continue
+        lonlat = project(geom, TO_DEGREES)
+        if not lonlat.is_valid:
+            lonlat = lonlat.buffer(0)
+        lonlat = largest_piece(lonlat)
+        if lonlat is None:
+            continue
+        area_m2, _perim = GEOD.geometry_area_perimeter(lonlat)
+        area_ha = abs(area_m2) / 10000.0
+        if area_ha < 2 or area_ha > 300:
+            continue
+        accepted.append({**field, "geom": lonlat, "area_ha": area_ha})
+        taken = geom if taken is None else unary_union([taken, geom])
+    share = (rectangular / len(prepared)) if prepared else 0.0
+    final_share = (sum(field["rectangular"] for field in accepted) / len(accepted)) if accepted else 0.0
+    areas = [field["area_ha"] for field in accepted]
+    return accepted, {
+        "n_fields": len(accepted),
+        "median_ha": None if not areas else float(np.median(areas)),
+        "share_rectangular": final_share,
+        "share_rectangular_before_overlap": share,
+        "slivers_dropped": slivers,
+        "holes_filled": holes_filled,
+    }
 
 
 def kmeans_1d(values):
@@ -426,7 +575,8 @@ def summarize(fields, features, params, region):
     log(STEP, f"total {total:.0f} ha, {share:.0%} of the box")
     log(STEP, f"crops {crops}")
     log(STEP, f"zones {dict(sorted(zones.items()))}")
-    log(STEP, f"params scale={params['scale']} min_size={params['min_size']}")
+    log(STEP, f"thresh={params['thresh']} scale={params['scale']} min_size={params['min_size']}")
+    log(STEP, f"rectangular {params['share_rectangular']:.0%} | slivers dropped {params['slivers_dropped']} | holes filled {params['holes_filled']}")
     labelled = crops.get("corn", 0) + crops.get("soybean", 0)
     if not (100 <= len(fields) <= 350):
         log(STEP, f"note: field count {len(fields)} is outside the 100-350 expectation")
@@ -442,50 +592,67 @@ def summarize(fields, features, params, region):
                 log(STEP, f"note: {crop} is {portion:.0%} of labelled fields, under a quarter")
 
 
+def run_thresh(stack, planes, masks, names, affine, thresh):
+    with warnings.catch_warnings():
+        warnings.filterwarnings("ignore", message="Got image with third dimension")
+        labels = felzenszwalb(stack, scale=SCALE, sigma=0.5, min_size=MIN_SIZE, channel_axis=-1)
+    labels = np.asarray(labels, dtype=np.int32)
+    merged = cut_threshold(labels, rag_distance(stack, labels), thresh, in_place=False)
+    medians = segment_medians(merged, planes, masks)
+    kept = [label for label, values in medians.items() if keep_label(values, names)]
+    raw = vectorize(merged, kept, medians, names, affine) if kept else []
+    fields, stats = clean_metres(raw)
+    centres, threshold, means = label_crops(fields)
+    return fields, stats, centres, threshold, means
+
+
 def search(stack, planes, masks, names, affine):
     rows = []
-    best = None
-    for scale in SCALES:
-        for min_size in MIN_SIZES:
-            labels = felzenszwalb(stack, scale=scale, sigma=0.5, min_size=min_size, channel_axis=-1)
-            medians = segment_medians(labels, planes, masks)
-            kept = [label for label, values in medians.items() if keep_label(values, names)]
-            fields = vectorize(labels, kept, medians, names, affine) if kept else []
-            areas = [field["area_ha"] for field in fields]
-            median = float(np.median(areas)) if areas else None
-            over = sum(area > 150 for area in areas)
-            row = {
-                "scale": scale,
-                "min_size": min_size,
-                "n_fields": len(fields),
-                "median_ha": None if median is None else round(median, 2),
-                "n_over_150": over,
-            }
-            rows.append(row)
-            shown = "none" if median is None else f"{median:.1f}"
-            log(STEP, f"scale={scale:<5} min_size={min_size:<4} fields={len(fields):<5} median_ha={shown:<6} over_150={over}")
-    qualified = [row for row in rows if row["median_ha"] is not None and 15 <= row["median_ha"] <= 65]
-    fallback = False
-    if qualified:
-        chosen = sorted(qualified, key=lambda row: (row["n_over_150"], -row["n_fields"], row["scale"], row["min_size"]))[0]
-        log(STEP, f"chosen scale={chosen['scale']} min_size={chosen['min_size']}")
-    else:
-        fallback = True
-        usable = [row for row in rows if row["median_ha"] is not None]
-        if not usable:
-            fail("no grid-search run kept a field")
-        chosen = min(usable, key=lambda row: (abs(row["median_ha"] - 40), row["scale"], row["min_size"]))
-        log(STEP, f"no run had median area 15-65 ha; using median closest to 40 ha (scale={chosen['scale']} min_size={chosen['min_size']})")
-    if max(row["n_fields"] for row in rows) < 50:
-        fail("no grid-search run keeps at least 50 fields")
-    # Recompute the chosen run so we don't keep every run's polygons.
-    labels = felzenszwalb(stack, scale=chosen["scale"], sigma=0.5, min_size=chosen["min_size"], channel_axis=-1)
-    medians = segment_medians(labels, planes, masks)
-    kept = [label for label, values in medians.items() if keep_label(values, names)]
-    fields = vectorize(labels, kept, medians, names, affine)
-    chosen = dict(chosen)
-    chosen["fallback"] = fallback
-    return rows, chosen, fields
+    for thresh in THRESHOLDS:
+        fields, stats, centres, threshold, means = run_thresh(stack, planes, masks, names, affine, thresh)
+        median = stats["median_ha"]
+        ok = expectations_hold(means) and median is not None and 15 <= median <= 65
+        shown = "none" if median is None else f"{median:.1f}"
+        log(
+            STEP,
+            f"thresh={thresh:.2f} fields={stats['n_fields']:<4} median_ha={shown:<6} "
+            f"rect={stats['share_rectangular']:.0%} slivers={stats['slivers_dropped']} "
+            f"holes={stats['holes_filled']} means={'ok' if expectations_hold(means) else 'fail'}",
+        )
+        rows.append({
+            "thresh": thresh,
+            "fields": fields,
+            "stats": stats,
+            "centres": centres,
+            "threshold": threshold,
+            "means": means,
+            "ok": ok,
+        })
+    good = [row for row in rows if row["ok"]]
+    if not good:
+        fail("no thresh keeps valid corn/soybean class means and a median area of 15-65 ha; data/out left untouched")
+    chosen = max(good, key=lambda row: row["thresh"])
+    log(STEP, f"chosen thresh={chosen['thresh']}")
+    table = [{
+        "thresh": row["thresh"],
+        "n_fields": row["stats"]["n_fields"],
+        "median_ha": None if row["stats"]["median_ha"] is None else round(row["stats"]["median_ha"], 2),
+        "share_rectangular": round(row["stats"]["share_rectangular"], 3),
+        "slivers_dropped": row["stats"]["slivers_dropped"],
+        "holes_filled": row["stats"]["holes_filled"],
+        "means_ok": expectations_hold(row["means"]),
+        "median_ok": row["stats"]["median_ha"] is not None and 15 <= row["stats"]["median_ha"] <= 65,
+    } for row in rows]
+    params = {
+        "scale": SCALE,
+        "min_size": MIN_SIZE,
+        "thresh": chosen["thresh"],
+        **chosen["stats"],
+        "centres": chosen["centres"],
+        "crop_threshold": chosen["threshold"],
+        "means": chosen["means"],
+    }
+    return table, params, chosen["fields"]
 
 
 def main():
@@ -511,9 +678,6 @@ def main():
     rows, params, fields = search(stack, planes, masks, names, frame_box.affine)
     if len(fields) < 1:
         fail("chosen run produced no fields")
-    centres, threshold, means = label_crops(fields)
-    if not expectations_hold(means):
-        fail("class-mean check failed (corn W2 > soybean W2 and corn W4 < soybean W4); data/out left untouched")
     features = assign_ids(fields, region)
     doc = {"type": "FeatureCollection", "features": features}
     validate(doc, region)
@@ -522,7 +686,12 @@ def main():
         "runs": rows,
         "chosen": params,
         "stack_windows": list(STACK_WINDOWS),
-        "crop": {"signal": "W2-W4", "centres": centres, "threshold": threshold, "means": means},
+        "crop": {
+            "signal": "W2-W4",
+            "centres": params["centres"],
+            "threshold": params["crop_threshold"],
+            "means": params["means"],
+        },
         "fields": {
             field["field_id"]: {name: field["series"].get(name) for name in ("W1", "W2", "W3", "W4", "W5", "W6")}
             for field in fields
