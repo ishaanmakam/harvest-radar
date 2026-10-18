@@ -239,7 +239,7 @@ function demoSection(ctx, profile, current) {
 function deliveriesSection(profile) {
   const body = h("div", {}, loading(2));
   const section = h("div", { class: "section" }, h("div", { class: "section-title" }, "Your last deliveries"), body);
-  myDeliveries()
+  const load = () => myDeliveries()
     .catch((error) => {
       body.replaceChildren(errorNote(error, "Could not read your deliveries"));
       return null;
@@ -278,6 +278,8 @@ function deliveriesSection(profile) {
         ),
       );
     });
+  load();
+  document.addEventListener("overfield:delivered", load); // the demo text refreshes the list
   return section;
 }
 
