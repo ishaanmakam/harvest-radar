@@ -171,7 +171,7 @@ def _attempt(provider, phone, text, language):
 
 
 # ---------------- the run ----------------
-def run(data_dir, roster_path=None, dry_run=True, today=None, providers=None, only=None, translate=None):
+def run(data_dir, roster_path=None, dry_run=True, today=None, providers=None, only=None, translate=None, channel_filter=None):
     """only = roster_ids to process (None = all; an empty list = nobody). translate = optional (text, language) hook
     for the free-text parts of the words."""
     data_dir = Path(data_dir)
@@ -196,6 +196,8 @@ def run(data_dir, roster_path=None, dry_run=True, today=None, providers=None, on
             continue
         err, text = None, None
         channels = row_channels(row)
+        if channel_filter:
+            channels = [c for c in (channels or SPEC_CHANNELS) if c in channel_filter]
         if not channels:
             err = "no phone number or email in the roster"
         elif row["role"] == "farmer" and row["farm_id"] not in plans:
