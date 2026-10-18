@@ -90,17 +90,37 @@ _CLIP = re.compile(r"<clip([^>]*)/>")
 _ATTR = re.compile(r'(\w+)="([^"]*)"')
 
 
+def _open_collection_mention(text, pos):
+    """Mention of the collection still open at pos. An unclosed collection runs to the end of the text."""
+    mention = None
+    for m in re.finditer(r"<(/?)collection([^>]*)>", text):
+        if m.start() > pos:
+            break
+        if m.group(1) == "/":
+            mention = None
+        else:
+            mention = dict(_ATTR.findall(m.group(2))).get("mention")
+    return mention
+
+
 def parse_annotations(text):
-    """Return list of dicts: {kind, mention, asset_idx, coords:[(x,y)...]} or clips {kind:'clip', mention, t:[s] or [s,e]}."""
+    """Return list of dicts: {kind, mention, asset_idx, coords:[(x,y)...]} or clips {kind:'clip', mention, t:[s] or [s,e]}.
+
+    A tag with no mention inherits the mention of the surrounding <collection>, which is how
+    the live API groups polygons and boxes.
+    """
     out = []
-    for kind, attrs, body in _TAG.findall(text):
+    for m in _TAG.finditer(text):
+        kind, attrs, body = m.group(1), m.group(2), m.group(3)
         a = dict(_ATTR.findall(attrs))
-        out.append({"kind": kind, "mention": a.get("mention"), "asset_idx": int(a.get("asset_idx", 0) or 0),
+        mention = a.get("mention") or _open_collection_mention(text, m.start())
+        out.append({"kind": kind, "mention": mention, "asset_idx": int(a.get("asset_idx", 0) or 0),
                     "coords": [(float(x), float(y)) for x, y in _PAIR.findall(body)]})
-    for attrs in _CLIP.findall(text):
-        a = dict(_ATTR.findall(attrs))
+    for m in _CLIP.finditer(text):
+        a = dict(_ATTR.findall(m.group(1)))
+        mention = a.get("mention") or _open_collection_mention(text, m.start())
         secs = [float(x) for x in re.findall(r"(-?\d+(?:\.\d+)?)\s*seconds", a.get("t", ""))]
-        out.append({"kind": "clip", "mention": a.get("mention"), "asset_idx": int(a.get("asset_idx", 0) or 0), "t": secs})
+        out.append({"kind": "clip", "mention": mention, "asset_idx": int(a.get("asset_idx", 0) or 0), "t": secs})
     return out
 
 
