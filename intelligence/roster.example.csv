@@ -1,0 +1,4 @@
+roster_id,farm_id,name,phone,language,role
+R001,,Officer (name),+91XXXXXXXXXX,pa,officer
+R002,F0001,Farmer (name),+91XXXXXXXXXX,pa,farmer
+R003,F0002,Farmer (name),+91XXXXXXXXXX,hi,farmer
