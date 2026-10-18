@@ -17,6 +17,10 @@ STEP = "s04"
 SOURCE = "sentinel-2-l2a (earth-search), pipeline/s04_timeseries.py"
 
 
+def parse_day(text):
+    return date.fromisoformat(str(text))
+
+
 def fail(msg):
     log(STEP, f"ERROR {msg}")
     sys.exit(1)
@@ -164,6 +168,16 @@ def main():
     if not fields_path.is_absolute():
         fields_path = ROOT / fields_path
     dates, ndvi, nbr, clear, fields = load_inputs(region, frame_box, fields_path)
+    as_of = parse_day(region["as_of"]).isoformat()
+    keep = [index for index, day in enumerate(dates) if day <= as_of]
+    if not keep:
+        fail(f"no cube dates on or before {as_of}")
+    if len(keep) != len(dates):
+        log(STEP, f"dropped {len(dates) - len(keep)} cube dates after {as_of}")
+        dates = [dates[index] for index in keep]
+        ndvi = ndvi[keep]
+        nbr = nbr[keep]
+        clear = clear[keep]
     features = fields["features"]
     if not features:
         fail("fields file has no features")

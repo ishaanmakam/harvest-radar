@@ -55,6 +55,21 @@ def write_json(data_dir: Path, name: str, obj):
     print(f"  wrote {p}")
 
 
+def season_as_of(data_dir, region=None):
+    """The date the season is judged at: <data>/run.json's as_of when the pipeline wrote one (live or replay), else
+    config/region.json's as_of. A replay's as-issued forecast is only fresh relative to its own morning."""
+    region = region or load_region()
+    p = Path(data_dir) / "run.json"
+    if p.is_file():
+        try:
+            doc = json.loads(p.read_text(encoding="utf-8"))
+            if isinstance(doc, dict) and isinstance(doc.get("as_of"), str) and len(doc["as_of"]) >= 10:
+                return date.fromisoformat(doc["as_of"][:10])
+        except (ValueError, OSError):
+            pass
+    return date.fromisoformat(str(region["as_of"])[:10])
+
+
 def d(s: str) -> date:
     return date.fromisoformat(s)
 
