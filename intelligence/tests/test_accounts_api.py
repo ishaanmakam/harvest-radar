@@ -203,3 +203,65 @@ class TestAdmin:
         assert status == 200 and doc["keys"][0]["email"] == "adm@example.com" and doc["keys"][0]["usage_7d"] == 0
         status, text, headers = call(ctx, "GET", "/admin/export.csv", token=adm_token)
         assert status == 200 and headers["Content-Type"].startswith("text/csv") and text.splitlines()[0].startswith("roster_id,farm_id")
+
+
+class TestDemoText:
+    """POST /demo/text: the morning text for one farm, sent now to one phone. The demo of the 08:00 send."""
+
+    class _Photon:
+        def __init__(self):
+            self.sent = []
+
+        def send(self, phone, text, language):
+            self.sent.append((phone, text, language))
+            return {"id": "msg_1", "status": "queued"}
+
+    def test_needs_a_session(self, ctx):
+        status, doc, _ = call(ctx, "POST", "/demo/text", {"phone": "+15155550100", "farm": "F0001"})
+        assert status == 401
+
+    def test_post_only(self, ctx):
+        token, _ = signed_up(ctx)
+        status, _, _ = call(ctx, "GET", "/demo/text", token=token)
+        assert status == 405
+
+    def test_no_phone_is_a_400(self, ctx):
+        token, _ = signed_up(ctx)
+        status, doc, _ = call(ctx, "POST", "/demo/text", {"farm": "F0001", "dry_run": True}, token=token)
+        assert status == 400 and "phone" in doc["error"]
+
+    def test_dry_run_renders_the_plan_and_sends_nothing(self, ctx, monkeypatch):
+        import providers
+        photon = self._Photon()
+        monkeypatch.setattr(providers, "photon_from_env", lambda env=None, http=None: photon)
+        token, _ = signed_up(ctx)
+        status, doc, _ = call(ctx, "POST", "/demo/text", {"phone": "+15155550100", "farm": "F0001", "dry_run": True}, token=token)
+        assert status == 200, doc
+        assert doc["sent"] is False and doc["dry_run"] is True and doc["farm"] == "F0001" and doc["configured"] is True
+        assert doc["preview"].startswith("Overfield morning plan for farm F0001")
+        assert photon.sent == []
+        status, doc, _ = call(ctx, "GET", "/me/deliveries", token=token)
+        assert status == 200 and doc["deliveries"] == []
+
+    def test_live_send_goes_through_photon_and_is_logged(self, ctx, monkeypatch):
+        import providers
+        photon = self._Photon()
+        monkeypatch.setattr(providers, "photon_from_env", lambda env=None, http=None: photon)
+        token, _ = signed_up(ctx)
+        call(ctx, "PATCH", "/me", {"phone": "+15155550100", "farm_id": "F0002"}, token=token)
+        status, doc, _ = call(ctx, "POST", "/demo/text", {}, token=token)
+        assert status == 200, doc
+        assert doc["sent"] is True and doc["to"] == "+15155550100" and doc["farm"] == "F0002" and doc["channel"] == "photon_sms"
+        assert len(photon.sent) == 1 and photon.sent[0][0] == "+15155550100" and photon.sent[0][2] == "en"
+        assert photon.sent[0][1].startswith("Overfield morning plan for farm F0002")
+        status, doc, _ = call(ctx, "GET", "/me/deliveries", token=token)
+        assert status == 200 and len(doc["deliveries"]) == 1
+        row = doc["deliveries"][0]
+        assert row["farm_id"] == "F0002" and row["channel"] == "photon_sms" and row["status"] == "sent" and not row["dry_run"]
+
+    def test_unconfigured_photon_is_a_503(self, ctx, monkeypatch):
+        import providers
+        monkeypatch.setattr(providers, "photon_from_env", lambda env=None, http=None: None)
+        token, _ = signed_up(ctx)
+        status, doc, _ = call(ctx, "POST", "/demo/text", {"phone": "+15155550100", "farm": "F0001"}, token=token)
+        assert status == 503 and "Photon" in doc["error"]
