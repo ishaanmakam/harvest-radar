@@ -12,7 +12,7 @@ Endpoints
                           (PUBLIC_URL must then be the scheme+host Twilio calls).
   POST /photon/inbound    {"from"|"sender", "text"|"message"} -> {"to", "reply"}; the officer's iMessage questions
                           (farmers are scoped the same way). Bearer INBOUND_TOKEN when set.
-  POST /tools/<name>      {"handle", "args"} -> the shared tool's JSON (get_plan / get_route / get_change) for a
+  POST /tools/<name>      {"handle", "args"} -> the shared tool's JSON (get_plan / get_route / get_change / get_outlook) for a
                           voice agent; {"error"} with 403 / 404 / 400 on refusal. Bearer INBOUND_TOKEN when set.
 Nothing here places calls or sends texts.
 """

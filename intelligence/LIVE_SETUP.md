@@ -23,6 +23,8 @@ Then run the preflight; it sends nothing and tells you exactly what is still mis
 python intelligence/check_providers.py
 ```
 
+Optional: `PRODUCT_NAME=Overfield` (or any name) renames the product in every call and text; the map must use the same name.
+
 ## 2. Services to run (two terminals, plus ngrok)
 
 ```bash
@@ -75,3 +77,12 @@ twice on the same morning, failed rows are retried next run.
 
 Rotate anything that was pasted in chat or shown on a screen: the Twilio auth token and API key, the Photon
 project key and webhook secret.
+
+## 7. Analytics outlook (optional, additive)
+
+`python intelligence/analytics.py --data data/out` (also the last step of `run_all.py` and of `refresh.py`) writes
+`analytics.json`: yield index, phenology and a second-opinion harvest date, water balance, anomalies versus the zone,
+harvest-now-or-wait economics, the chance to finish before the rain, burn severity and flood duration, observation
+quality, and the landscape table with a harvest-progress projection. When the file is present the morning words gain one
+`Outlook:` line per farm and the voice and text tools answer `get_outlook(farm_id)` (same scope rules as `get_plan`). The
+spec's plans, route and deliveries do not depend on it; delete the file to switch the outlook off.

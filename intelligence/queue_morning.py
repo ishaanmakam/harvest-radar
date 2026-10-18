@@ -20,7 +20,9 @@ from collections import Counter
 from datetime import date
 from pathlib import Path
 
-from common import read_json, s
+import analytics
+from analytics import read_optional
+from common import read_json, s, product_name
 from tools import load_roster
 
 CHANNELS = ("grok_voice", "photon_sms")
@@ -35,32 +37,32 @@ STATUS_WORDS = {"clear": "clear", "watch": "watch", "act_now": "act now"}
 # pa / hi strings were drafted by the team's agent: have a native speaker read them before the first real send.
 PACKS = {
     "en": {
-        "head": "Harvest Radar morning plan for farm {farm}, from the satellite pass of {date}.",
+        "head": "{product} morning plan for farm {farm}, from the satellite pass of {date}.",
         "flag": "Flag", "today": "Today", "checks": "Checks", "risks": "Risks", "all_clear": "All eight checks are clear.",
         "status": STATUS_WORDS, "flags": {"fine": "fine", "watch": "watch", "act_now": "act now"}, "labels": LABELS,
-        "route_head": "Harvest Radar officer route for {date}: {n} stops.", "no_stops": "No stops today: every farm is fine.",
-        "farm": "Farm", "actions": {"visit": "visit", "call": "call"},
+        "route_head": "{product} officer route for {date}: {n} stops.", "no_stops": "No stops today: every farm is fine.",
+        "farm": "Farm", "actions": {"visit": "visit", "call": "call"}, "outlook": "Outlook",
     },
     "hi": {
-        "head": "हार्वेस्ट रडार की सुबह की योजना, खेत {farm}, {date} के सैटेलाइट पास से।",
-        "flag": "स्थिति", "today": "आज", "checks": "जाँचें", "risks": "जोखिम", "all_clear": "सभी आठ जाँचें ठीक हैं।", "weather": "मौसम",
+        "head": "{product} की सुबह की योजना, खेत {farm}, {date} के सैटेलाइट पास से।",
+        "flag": "स्थिति", "today": "आज", "checks": "जाँचें", "risks": "जोखिम", "all_clear": "सभी आठ जाँचें ठीक हैं।", "weather": "मौसम", "outlook": "आगे का अनुमान",
         "status": {"clear": "ठीक", "watch": "ध्यान दें", "act_now": "अभी कार्रवाई करें"},
         "flags": {"fine": "ठीक", "watch": "ध्यान दें", "act_now": "अभी कार्रवाई करें"},
         "labels": {"harvest_ready": "कटाई की तैयारी", "harvest_before_rain": "बारिश से पहले कटाई", "establishment": "फसल का जमाव",
                    "burn_scar": "जलने का निशान", "fire": "आग", "flood": "खड़ा पानी", "stress": "तनाव या पीलापन",
                    "visible_change": "दिखने वाला बदलाव"},
-        "route_head": "हार्वेस्ट रडार अधिकारी रूट, {date}: {n} स्टॉप।", "no_stops": "आज कोई स्टॉप नहीं: हर खेत ठीक है।",
+        "route_head": "{product} अधिकारी रूट, {date}: {n} स्टॉप।", "no_stops": "आज कोई स्टॉप नहीं: हर खेत ठीक है।",
         "farm": "खेत", "actions": {"visit": "जाएँ", "call": "फ़ोन करें"},
     },
     "pa": {
-        "head": "ਹਾਰਵੈਸਟ ਰਾਡਾਰ ਸਵੇਰ ਦੀ ਯੋਜਨਾ, ਖੇਤ {farm}, {date} ਦੇ ਸੈਟੇਲਾਈਟ ਪਾਸ ਤੋਂ।",
-        "flag": "ਸਥਿਤੀ", "today": "ਅੱਜ", "checks": "ਜਾਂਚਾਂ", "risks": "ਖ਼ਤਰੇ", "all_clear": "ਸਾਰੀਆਂ ਅੱਠ ਜਾਂਚਾਂ ਠੀਕ ਹਨ।", "weather": "ਮੌਸਮ",
+        "head": "{product} ਸਵੇਰ ਦੀ ਯੋਜਨਾ, ਖੇਤ {farm}, {date} ਦੇ ਸੈਟੇਲਾਈਟ ਪਾਸ ਤੋਂ।",
+        "flag": "ਸਥਿਤੀ", "today": "ਅੱਜ", "checks": "ਜਾਂਚਾਂ", "risks": "ਖ਼ਤਰੇ", "all_clear": "ਸਾਰੀਆਂ ਅੱਠ ਜਾਂਚਾਂ ਠੀਕ ਹਨ।", "weather": "ਮੌਸਮ", "outlook": "ਅੱਗੇ ਦਾ ਅੰਦਾਜ਼ਾ",
         "status": {"clear": "ਠੀਕ", "watch": "ਧਿਆਨ ਦਿਓ", "act_now": "ਹੁਣੇ ਕਾਰਵਾਈ ਕਰੋ"},
         "flags": {"fine": "ਠੀਕ", "watch": "ਧਿਆਨ ਦਿਓ", "act_now": "ਹੁਣੇ ਕਾਰਵਾਈ ਕਰੋ"},
         "labels": {"harvest_ready": "ਵਾਢੀ ਦੀ ਤਿਆਰੀ", "harvest_before_rain": "ਮੀਂਹ ਤੋਂ ਪਹਿਲਾਂ ਵਾਢੀ", "establishment": "ਫ਼ਸਲ ਦਾ ਜੰਮਣਾ",
                    "burn_scar": "ਸੜਨ ਦਾ ਨਿਸ਼ਾਨ", "fire": "ਅੱਗ", "flood": "ਖੜ੍ਹਾ ਪਾਣੀ", "stress": "ਤਣਾਅ ਜਾਂ ਪੀਲਾਪਣ",
                    "visible_change": "ਦਿਖਾਈ ਦੇਣ ਵਾਲੀ ਤਬਦੀਲੀ"},
-        "route_head": "ਹਾਰਵੈਸਟ ਰਾਡਾਰ ਅਫ਼ਸਰ ਰੂਟ, {date}: {n} ਸਟਾਪ।", "no_stops": "ਅੱਜ ਕੋਈ ਸਟਾਪ ਨਹੀਂ: ਹਰ ਖੇਤ ਠੀਕ ਹੈ।",
+        "route_head": "{product} ਅਫ਼ਸਰ ਰੂਟ, {date}: {n} ਸਟਾਪ।", "no_stops": "ਅੱਜ ਕੋਈ ਸਟਾਪ ਨਹੀਂ: ਹਰ ਖੇਤ ਠੀਕ ਹੈ।",
         "farm": "ਖੇਤ", "actions": {"visit": "ਜਾਓ", "call": "ਫ਼ੋਨ ਕਰੋ"},
     },
 }
@@ -89,12 +91,13 @@ class UnverifiedProvider:
 
 
 # ---------------- words ----------------
-def render_plan(plan, language, translate=None):
+def render_plan(plan, language, translate=None, outlook=None):
     """The farmer's morning plan in the roster language, every check included (clear ones too).
-    translate(text, language) -> text, when given, is applied to the free-text parts (details, today, risks)."""
+    translate(text, language) -> text, when given, is applied to the free-text parts (details, today, risks).
+    outlook = analytics.farm_outlook(...) lines for this farm, when the analytics layer has run (additive line)."""
     P = pack(language)
     tr = _translator(translate, language, P)
-    lines = [P["head"].format(farm=plan["farm_id"], date=plan["as_of"]) + f" {P['flag']}: {P['flags'].get(plan['flag'], plan['flag'])}.",
+    lines = [P["head"].format(product=product_name(), farm=plan["farm_id"], date=plan["as_of"]) + f" {P['flag']}: {P['flags'].get(plan['flag'], plan['flag'])}.",
              f"{P['today']}: {tr(plan['today'])}",
              f"{P['checks']}:"]
     for c in plan["checks"]:
@@ -102,6 +105,8 @@ def render_plan(plan, language, translate=None):
                      + (f" ({tr(c['where'])})" if c.get("where") else ""))
     if plan.get("harvest_outlook", {}).get("summary"):
         lines.append(f"{P.get('weather', 'Weather')}: {tr(plan['harvest_outlook']['summary'])}")
+    if outlook:
+        lines.append(f"{P.get('outlook', 'Outlook')}: " + " ".join(tr(x) for x in outlook))
     lines.append(f"{P['risks']}: " + "; ".join(tr(r) for r in plan["risks"]) if plan["risks"] else P["all_clear"])
     return "\n".join(lines)
 
@@ -111,7 +116,7 @@ def render_route(route, language, translate=None):
     P = pack(language)
     tr = _translator(translate, language, P)
     stops = route.get("stops", [])
-    head = P["route_head"].format(date=route.get("as_of", ""), n=len(stops))
+    head = P["route_head"].format(product=product_name(), date=route.get("as_of", ""), n=len(stops))
     if not stops:
         return head + " " + P["no_stops"]
     body = [f"{i}. {P['farm']} {st['farm_id']}: {P['actions'].get(st['action'], st['action'])}. {tr(st['why'])}"
@@ -159,6 +164,7 @@ def run(data_dir, roster_path=None, dry_run=True, today=None, providers=None, on
     roster = load_roster(roster_path)
     plans = {p["farm_id"]: p for p in read_json(data_dir, "plans.json")["plans"]}
     route = read_json(data_dir, "route.json")
+    outlook_doc = read_optional(data_dir, "analytics.json")   # additive: outlook lines when the analytics ran
     if providers is None:
         if dry_run:
             providers = {c: UnverifiedProvider(c, "dry run") for c in CHANNELS}
@@ -179,7 +185,8 @@ def run(data_dir, roster_path=None, dry_run=True, today=None, providers=None, on
             err = f"no plan for farm {row['farm_id']}"
         else:
             text = render_route(route, row["language"], translate) if row["role"] == "officer" \
-                else render_plan(plans[row["farm_id"]], row["language"], translate)
+                else render_plan(plans[row["farm_id"]], row["language"], translate,
+                                 analytics.farm_outlook(outlook_doc, row["farm_id"]) if outlook_doc else None)
         for ch in CHANNELS:
             key = (dstr, row["roster_id"], ch)
             rec = index.get(key)

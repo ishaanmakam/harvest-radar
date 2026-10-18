@@ -55,7 +55,7 @@ def answer(handle, text, data_dir, roster):
 
 
 def call_tool(name, args, handle, data_dir, roster):
-    """Dispatcher for the three shared tools. Returns the tool's JSON, or {"error": message}."""
+    """Dispatcher for the shared tools (get_plan, get_route, get_change, get_outlook). Returns the tool's JSON, or {"error": message}."""
     caller = resolve_caller(_strip_scheme(handle), roster)
     t = Tools(data_dir, caller)
     args = args or {}
@@ -66,6 +66,8 @@ def call_tool(name, args, handle, data_dir, roster):
             return t.get_route()
         if name == "get_change":
             return t.get_change(args.get("farm_id"))
+        if name == "get_outlook":
+            return t.get_outlook(args.get("farm_id"))
         return {"error": f"unknown tool {name}"}
     except PermissionError as e:
         return {"error": str(e)}

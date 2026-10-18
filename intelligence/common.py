@@ -1,10 +1,17 @@
 """Shared helpers for the intelligence layer. Owner: Person B."""
 import json
 import math
+import os
 from datetime import date, timedelta
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
+
+
+def product_name():
+    """The name farmers hear and read. PRODUCT_NAME in the environment (or .env) overrides the default, so the whole
+    team can rename the product for the demo in one place."""
+    return os.environ.get("PRODUCT_NAME", "").strip() or "Harvest Radar"
 
 
 def load_env(path=None):
