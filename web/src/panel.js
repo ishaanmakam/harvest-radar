@@ -194,7 +194,7 @@ function outlookBlock(modules, env) {
   if (a && (a.anomaly_type || a.note)) {
     cards.push(
       card(
-        "Against its peers",
+        "Peer comparison",
         a.anomaly_type ? (a.anomaly_type === "none" ? "In step" : titleCase(a.anomaly_type)) : null,
         joinParts([a.note, a.latest_z != null && !String(a.note || "").includes("z ") ? `z ${fmtNum(a.latest_z, 1)}` : null]),
         { span: true },

@@ -1,5 +1,5 @@
 web\src\backend.js:13: Accounts are not set up on this copy of Overfield yet: the site does not know where its server is. Start the inbound server and publish its address (backend/README.md).
-web\src\backend.js:53: The Overfield server did not answer. Is it running, and is the tunnel up?
+web\src\backend.js:53: The Overfield server did not answer. Check that it is running and that the tunnel is up.
 web\src\backend.js:62: ${res.status} from the server
 web\src\charts.js:59: chart chart-ndvi
 web\src\charts.js:59: NDVI through the season
@@ -41,8 +41,8 @@ web\src\globe\region-card.js:38: Rain next 3 days
 web\src\globe\region-card.js:47: Clear passes
 web\src\globe\region-card.js:48: Latest clear pass
 web\src\globe\region-card.js:53: Region watch${region.country ? 
-web\src\globe\region-card.js:64: Return to the globe
 web\src\globe\region-card.js:73: Open the map here
+web\src\globe\region-card.js:74: Return to the globe
 web\src\main.js:34: No plans to show.
 web\src\main.js:45: badge badge-standin badge-toggle
 web\src\main.js:50: Imagery: ${imagery} / Farms and plans: ${farms} / Real field outlines: ${on ? "shown" : "hidden"}
@@ -59,16 +59,16 @@ web\src\main.js:81: Replay of an earlier run
 web\src\main.js:82: latest pass ${fmtDate(run.latest_pass)}
 web\src\main.js:96: Story County, Iowa / latest clear pass ${MONTHS[Number(month) - 1]} ${Number(day)} / ${data.plans.plans.length} farms / ${actNow} act now${standIn}
 web\src\main.js:106: The morning plan, step by step
-web\src\main.js:295: No frames in this dataset. The pipeline writes frames/frames.json with one image per clear pass.
-web\src\main.js:400: Sentinel-2 passes over this place every 2 to 5 days, the same revisit as over Iowa. The live county is Story County, Iowa, with its imagery and farm plans.
-web\src\main.js:511: world-copy region-copy
-web\src\main.js:578: worlds.json not loaded
-web\src\main.js:592: regions.json not loaded
+web\src\main.js:296: No frames in this dataset. The pipeline writes frames/frames.json with one image per clear pass.
+web\src\main.js:401: Sentinel-2 passes over this place every 2 to 5 days, the same revisit as over Iowa. The live county is Story County, Iowa, with its imagery and farm plans.
+web\src\main.js:543: world-copy region-copy
+web\src\main.js:614: worlds.json not loaded
+web\src\main.js:628: regions.json not loaded
 web\src\mars\marsmap.js:15: Ice within reach: water for propellant, air and crops.
 web\src\mars\marsmap.js:16: Low ground: more atmosphere to slow the ship.
 web\src\mars\marsmap.js:17: Plume-safe ground: firm soil the engines will not dig out.
 web\src\mars\marsmap.js:18: Science reach: more kinds of rock within a rover's range.
-web\src\mars\marsmap.js:19: Magnetic shelter: a little local radiation cover from magnetized crust.
+web\src\mars\marsmap.js:19: Magnetic shelter: radiation cover from magnetized crust, strength not scored.
 web\src\mars\marsmap.js:72: The Mars data has not been built. Run 
 web\src\mars\marsmap.js:72: python pipeline/mars/run_all.py
 web\src\mars\marsmap.js:101: MOLA, TES (NASA/USGS); ice: SWIM (PSI); geology: USGS SIM 3292
@@ -100,7 +100,7 @@ web\src\mars\marsmap.js:241: btn btn-ghost
 web\src\mars\marsmap.js:241: Close site details
 web\src\mars\marsmap.js:242: row row-wrap
 web\src\mars\marsmap.js:244: muted small
-web\src\mars\marsmap.js:244: better than ${fmtNum(cand.percentile)}% of scored cells
+web\src\mars\marsmap.js:244: better than ${fmtNum(cand.percentile)} percent of scored cells
 web\src\mars\marsmap.js:245: muted small
 web\src\mars\marsmap.js:248: The four checks
 web\src\mars\marsmap.js:251: Best cell within 200 km
@@ -138,7 +138,7 @@ web\src\panel.js:171: ${fmtNum(water.days_since_rain)} days since rain
 web\src\panel.js:181: Season curve
 web\src\panel.js:186: curve harvest ${fmtDate(ph.curve_harvest_date)}
 web\src\panel.js:187: ${typeof ph.agreement === "number" ? fmtNum(ph.agreement, 2) : titleCase(ph.agreement)} with the lag estimate
-web\src\panel.js:197: Against its peers
+web\src\panel.js:197: Peer comparison
 web\src\panel.js:216: ${fmtNum(floods)} flood passes
 web\src\panel.js:217: fire exposure ${typeof fire === "number" ? fmtNum(fire, 2) : titleCase(fire)}
 web\src\panel.js:232: ${fmtNum(c.clear_passes)} clear passes
@@ -289,7 +289,7 @@ web\src\views\data.js:27: The globe
 web\src\views\data.js:87: muted small
 web\src\views\data.js:92: In the code: ${src.where_in_code.length} ${src.where_in_code.length === 1 ? "place" : "places"}
 web\src\views\data.js:93: mono muted
-web\src\views\data.js:137: Overfield cross-checks several sources because no single one is enough on its own. Imagery says what a field looks like today, and weather says what is coming. Fire and flood feeds say what happened overnight. Reference data says what is normal for this place and this crop. Every check in a morning plan traces back to the sources below.
+web\src\views\data.js:137: Every check in a morning plan names the source it came from. The tables below list each source Overfield reads, what it feeds, how often it updates, its resolution and its licence. Imagery says what a field looks like today, and weather says what is coming. Fire and flood feeds say what happened overnight. Reference data says what is normal for this place and this crop. Every check in a morning plan traces back to the sources below.
 web\src\views\data.js:141: muted small
 web\src\views\data.js:142: Counts: ${fmtNum(total)} sources, ${fmtNum(open)} free and open (by licence), ${fmtNum(keyed)} need a key.
 web\src\views\data.js:143:  List generated ${fmtDay(doc.generated)}.
@@ -391,7 +391,7 @@ web\src\views\season.js:101: Machine-days on a workable day
 web\src\views\season.js:102: key key-wet
 web\src\views\season.js:102: Day the fields are too wet
 web\src\views\season.js:103: key key-cap
-web\src\views\season.js:160: Against USDA crop progress
+web\src\views\season.js:160: USDA crop progress
 web\src\views\season.js:161: note note-watch
 web\src\views\season.js:161: Stand-in USDA rows shaped like a QuickStats answer, not published figures.
 web\src\views\season.js:203: note note-info
@@ -400,7 +400,7 @@ web\src\views\season.js:211: Harvest progress from the satellite
 web\src\views\season.js:212: ${sat.harvested} of ${sat.total} fields with a crop signal look harvested, by the date their greenness collapsed.
 web\src\views\season.js:228:  }, `Analytics as of ${fmtDate(analytics.as_of || today, 
 web\src\views\season.js:228: )}.${land.latest_pass ? ` Latest pass ${fmtDate(land.latest_pass)}.` : 
-web\src\views\season.js:239: Still standing
+web\src\views\season.js:239: Standing fields
 web\src\views\season.js:241: ${fmtNum(land.flags.act_now ?? 0)} act now
 web\src\views\season.js:253: ${CROP_LABEL[crop] || titleCase(crop)} harvest progress
 web\src\views\season.js:264: muted small
@@ -453,10 +453,10 @@ web/index.html:20: Overfield reads each new Sentinel-2 pass over a farm and turn
 web/index.html:22: Open the season map
 web/index.html:26: Sentinel-2 L2A via Earth Search / NASA FIRMS VIIRS / NASA POWER and Open-Meteo / CelesTrak GP / Contains modified Copernicus Sentinel data 2026
 web/index.html:28: Mars landing-site map
-web/index.html:30: Back to worlds
-web/index.html:32: Where Starship should land
-web/index.html:33: Every 7 km of Mars between 60 S and 60 N, checked against four rules from public orbital data.
-web/index.html:35: Data sources
+web/index.html:30: Return to the globe
+web/index.html:32: Landing sites for Starship
+web/index.html:33: Every 7 km of Mars between 60 degrees south and 60 degrees north, checked against four rules from NASA, USGS and PSI orbital data.
+web/index.html:35: Open the data sources
 web/index.html:38: Mars map
 web/index.html:39: Sites
 web/index.html:40: Expand panel
@@ -486,17 +486,17 @@ web/index.html:85: View panel
 web/index.html:86: Expand panel
 web/index.html:89: Farm plan
 web/index.html:91: Play the season
-web/index.html:92: Previous pass
-web/index.html:92: Previous
-web/index.html:93: Next pass
-web/index.html:93: Next
+web/index.html:92: Earlier pass
+web/index.html:92: Earlier pass
+web/index.html:93: Later pass
+web/index.html:93: Later pass
 web/index.html:95: Season date
 web/index.html:99: Speed
 web/index.html:100: Playback speed
 web/index.html:108: Opacity
 web/index.html:109: Imagery opacity
 web/index.html:111: Sentinel-2 sees 10 m per pixel; zoom in on the Fields view for the latest aerial basemap.
-web/index.html:118: Back to the map
+web/index.html:118: Return to the map
 web/index.html:119: Pages
 web/index.html:120: Data
 web/index.html:121: Developers

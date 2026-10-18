@@ -27,12 +27,12 @@
     </section>
     <section id="mars-view" hidden aria-label="Mars landing-site map">
       <div class="mars-top">
-        <button id="mars-back" type="button" class="btn btn-ghost">Back to worlds</button>
+        <button id="mars-back" type="button" class="btn btn-ghost">Return to the globe</button>
         <div class="mars-title">
-          <h1>Where Starship should land</h1>
-          <p>Every 7 km of Mars between 60 S and 60 N, checked against four rules from public orbital data.</p>
+          <h1>Landing sites for Starship</h1>
+          <p>Every 7 km of Mars between 60 degrees south and 60 degrees north, checked against four rules from NASA, USGS and PSI orbital data.</p>
         </div>
-        <a class="btn btn-ghost mars-data-link" href="#data">Data sources</a>
+        <a class="btn btn-ghost mars-data-link" href="#data">Open the data sources</a>
       </div>
       <div class="mars-stage">
         <div id="mars-map" class="map" aria-label="Mars map"></div>
@@ -89,8 +89,8 @@
         <aside id="panel" class="drawer" aria-label="Farm plan" hidden></aside>
         <div id="timelapse" class="timelapse" hidden>
           <button id="play" type="button" class="btn btn-primary">Play the season</button>
-          <button id="frame-prev" type="button" class="btn btn-icon" aria-label="Previous pass">Previous</button>
-          <button id="frame-next" type="button" class="btn btn-icon" aria-label="Next pass">Next</button>
+          <button id="frame-prev" type="button" class="btn btn-icon" aria-label="Earlier pass">Earlier pass</button>
+          <button id="frame-next" type="button" class="btn btn-icon" aria-label="Later pass">Later pass</button>
           <div class="tl-track">
             <input id="frame-slider" type="range" min="0" value="0" aria-label="Season date" />
             <div class="tl-readout"><strong id="frame-date"></strong><span id="frame-clear" class="muted"></span></div>
@@ -115,7 +115,7 @@
     </div>
     <section id="page" class="page" hidden aria-labelledby="page-title">
       <div class="page-bar">
-        <button id="page-back" type="button" class="btn btn-ghost page-back">Back to the map</button>
+        <button id="page-back" type="button" class="btn btn-ghost page-back">Return to the map</button>
         <nav class="page-nav" aria-label="Pages">
           <a href="#data">Data</a>
           <a href="#developers">Developers</a>

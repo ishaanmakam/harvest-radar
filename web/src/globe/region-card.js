@@ -61,7 +61,6 @@ export function regionPill(region) {
 export function renderRegionCard(region, { onBack = null, onMap = null } = {}) {
   const lines = regionLines(region);
   return h("div", { class: "region-card" },
-    onBack ? h("div", { class: "region-head" }, h("button", { class: "region-back", type: "button", onclick: onBack }, "Return to the globe")) : null,
     h("h1", {}, region.name || region.id),
     h("p", { class: "region-kind" }, regionPill(region)),
     region.headline ? h("p", { class: "tagline" }, region.headline) : null,
@@ -70,6 +69,8 @@ export function renderRegionCard(region, { onBack = null, onMap = null } = {}) {
       h("dd", { class: l.key === "alert" || (l.key === "rain" && region.rain_flag) ? "is-alert" : "" }, l.value),
     ])) : null,
     h("p", { class: "region-note" }, HONESTY_LINE),
-    onMap ? h("div", { class: "region-actions" }, h("button", { class: "world-open", type: "button", onclick: onMap }, "Open the map here")) : null,
+    h("div", { class: "region-actions" },
+      onMap ? h("button", { class: "world-open", type: "button", onclick: onMap }, "Open the map here") : null,
+      onBack ? h("button", { class: "region-back", type: "button", onclick: onBack }, "Return to the globe") : null),
   );
 }

@@ -16,7 +16,7 @@ const FACTOR_LINE = {
   low_elevation: "Low ground: more atmosphere to slow the ship.",
   plume_safe_ground: "Plume-safe ground: firm soil the engines will not dig out.",
   science_reach: "Science reach: more kinds of rock within a rover's range.",
-  magnetic_shelter: "Magnetic shelter: a little local radiation cover from magnetized crust.",
+  magnetic_shelter: "Magnetic shelter: radiation cover from magnetized crust, strength not scored.",
 };
 
 function statusChip(status, large = false) {
@@ -149,7 +149,7 @@ export function createMarsView({ host, onBack }) {
 
   function candidateRow(c) {
     return h("button", { class: `mars-row${selected === c.id ? " is-active" : ""}`, type: "button", "data-id": c.id, onclick: () => select(c.id) },
-      h("span", { class: "mars-rank is-spacex" }, "○"),
+      h("span", { class: "mars-rank is-spacex" }, ""),
       h("span", { class: "mars-row-main" }, h("strong", {}, c.id), h("span", { class: "muted small" }, ` ${c.region}`),
         h("div", { class: "small" }, c.missing ? "Page could not be read; listed as missing." : `Scores better than ${fmtNum(c.percentile)} percent of scored cells.`)),
       h("span", { class: "mars-row-side" }, c.missing ? statusChip("no_data") : statusChip(c.status), c.score != null ? h("span", { class: "mono small" }, c.score.toFixed(2)) : null),
@@ -241,7 +241,7 @@ export function createMarsView({ host, onBack }) {
         h("button", { class: "btn btn-ghost", type: "button", "aria-label": "Close site details", onclick: closeDrawer }, "×")),
       h("div", { class: "row row-wrap", style: { gap: "8px", margin: "10px 0" } }, statusChip(p.status, true),
         h("span", { class: "mono" }, `score ${p.score != null ? p.score.toFixed(3) : "n/a"}`),
-        isCand && cand.percentile != null ? h("span", { class: "muted small" }, `better than ${fmtNum(cand.percentile)}% of scored cells`) : null,
+        isCand && cand.percentile != null ? h("span", { class: "muted small" }, `better than ${fmtNum(cand.percentile)} percent of scored cells`) : null,
         site?.nearest_spacex ? h("span", { class: "muted small" }, `${fmtNum(site.nearest_spacex.km)} km from ${site.nearest_spacex.id}`) : null),
       isCand ? h("p", { class: "small" }, coords(cand), " / ", h("a", { href: cand.url, target: "_blank", rel: "noopener" }, "HiRISE page")) : h("p", { class: "small" }, site.reason),
       thumb(p),

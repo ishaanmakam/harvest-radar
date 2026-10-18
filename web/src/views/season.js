@@ -157,7 +157,7 @@ function usdaSection(usda) {
   return h(
     "div",
     { class: "section" },
-    h("div", { class: "section-title" }, "Against USDA crop progress"),
+    h("div", { class: "section-title" }, "USDA crop progress"),
     standIn ? h("div", { class: "note note-watch", style: { marginBottom: "8px" } }, "Stand-in USDA rows shaped like a QuickStats answer, not published figures.") : null,
     rows.length
       ? h(
@@ -236,7 +236,7 @@ export function renderSeason(el, ctx) {
   if (land.pct_harvested_area != null) tiles.push(stat("Harvested", fmtPct(land.pct_harvested_area), land.harvested_ha != null ? `${fmtHa(land.harvested_ha)} of area` : null));
   if (land.standing_ha != null) {
     const stages = land.standing_by_stage && typeof land.standing_by_stage === "object" ? Object.entries(land.standing_by_stage).map(([k, v]) => `${titleCase(k).toLowerCase()} ${fmtHa(v)}`).join(", ") : null;
-    tiles.push(stat("Still standing", fmtHa(land.standing_ha), stages));
+    tiles.push(stat("Standing fields", fmtHa(land.standing_ha), stages));
   }
   if (land.flags) tiles.push(stat("Today", `${fmtNum(land.flags.act_now ?? 0)} act now`, `${fmtNum(land.flags.watch ?? 0)} watch / ${fmtNum(land.flags.fine ?? 0)} fine`));
   if (tiles.length) sections.push(h("div", { class: "section" }, h("div", { class: "milestones" }, ...tiles)));

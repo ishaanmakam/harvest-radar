@@ -134,7 +134,7 @@ export function renderData(el) {
         h(
           "p",
           { class: "lede" },
-          "Overfield cross-checks several sources because no single one is enough on its own. Imagery says what a field looks like today, and weather says what is coming. Fire and flood feeds say what happened overnight. Reference data says what is normal for this place and this crop. Every check in a morning plan traces back to the sources below.",
+          "Every check in a morning plan names the source it came from. The tables below list each source Overfield reads, what it feeds, how often it updates, its resolution and its licence. Imagery says what a field looks like today, and weather says what is coming. Fire and flood feeds say what happened overnight. Reference data says what is normal for this place and this crop. Every check in a morning plan traces back to the sources below.",
         ),
         h(
           "p",

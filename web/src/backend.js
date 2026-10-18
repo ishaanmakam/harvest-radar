@@ -50,7 +50,7 @@ export async function api(method, path, body, { key } = {}) {
   try {
     res = await fetch(`${base}${path}`, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) });
   } catch {
-    throw new Error("The Overfield server did not answer. Is it running, and is the tunnel up?");
+    throw new Error("The Overfield server did not answer. Check that it is running and that the tunnel is up.");
   }
   const type = res.headers.get("content-type") || "";
   const payload = type.includes("json") ? await res.json().catch(() => ({})) : await res.text();

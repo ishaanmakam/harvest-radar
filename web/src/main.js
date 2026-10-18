@@ -165,6 +165,7 @@ async function start() {
 
   const mapApi = createMap({ container: "map", data, onSelect: selectFarm, onHover: showTooltip });
   const { map } = mapApi;
+  $("map").__map = map; // the season map, for the browser checks in the audit
   setBadge(data, mapApi);
   const timelapse = createTimelapse({
     data,
@@ -496,14 +497,33 @@ async function start() {
     }, 500);
   }
 
-  /** A region field-pattern layer over its 5.5 km box (data/global/overlays), or none. */
+  /** A region field-pattern image over its 5.5 km box (data/global/overlays), or none. It is a plain image placed
+   *  over the map and re-projected on every move, so it never depends on the map style. */
+  let overlayImg = null;
+  let overlayBox = null;
+  function placeRegionOverlay() {
+    if (!overlayImg || !overlayBox) return;
+    const [w, s, e, n] = overlayBox;
+    const a = map.project([w, n]);
+    const b = map.project([e, s]);
+    overlayImg.style.left = `${a.x}px`;
+    overlayImg.style.top = `${a.y}px`;
+    overlayImg.style.width = `${Math.max(1, b.x - a.x)}px`;
+    overlayImg.style.height = `${Math.max(1, b.y - a.y)}px`;
+  }
   function setRegionOverlay(overlay) {
-    if (map.getLayer("region-overlay")) map.removeLayer("region-overlay");
-    if (map.getSource("region-overlay")) map.removeSource("region-overlay");
+    if (overlayImg) {
+      overlayImg.remove();
+      overlayImg = null;
+      overlayBox = null;
+      map.off("move", placeRegionOverlay);
+    }
     if (!overlay) return;
-    const [w, s, e, n] = overlay.bbox;
-    map.addSource("region-overlay", { type: "image", url: `global/overlays/${overlay.id}.png`, coordinates: [[w, n], [e, n], [e, s], [w, s]] });
-    map.addLayer({ id: "region-overlay", type: "raster", source: "region-overlay", paint: { "raster-opacity": 0.92, "raster-fade-duration": 0, "raster-resampling": "nearest" } });
+    overlayBox = overlay.bbox;
+    overlayImg = h("img", { class: "region-overlay", src: `global/overlays/${overlay.id}.png`, alt: "" });
+    map.getContainer().append(overlayImg);
+    map.on("move", placeRegionOverlay);
+    placeRegionOverlay();
   }
 
   function backToOrbit() {
