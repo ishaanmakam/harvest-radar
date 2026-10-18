@@ -52,6 +52,37 @@ def lag_window(lags, default_lag, default_half=7):
     return statistics.median(lags), max(3, (q[8] - q[0]) / 2)
 
 
+def censored_median(events, censored):
+    """Median lag when some fields are still standing: a standing field only says its lag is at least
+    (as_of - peak). Mid-season the harvested fields are the early ones, so their median alone runs short.
+    Censored lower bounds are imputed at max(bound, median of the events) and pooled; the result is still a
+    lower-ish estimate of the true median (right-censoring cannot be fully undone), but no longer the early-harvester
+    median. None when there are no events."""
+    if not events:
+        return None
+    base = statistics.median(events)
+    imputed = [max(c, base) for c in censored]
+    return statistics.median(list(events) + imputed)
+
+
+def lag_windows(lags_by_crop, censored_by_crop, default_lag, default_half=7, min_n=10):
+    """{crop: (lag, half_width)} plus '*' for the pooled estimate. A crop with fewer than min_n harvested fields
+    uses the pooled values; the pooled estimate itself falls back to the configured default."""
+    def window(events, censored):
+        if len(events) < min_n:
+            return None
+        q = statistics.quantiles(events, n=10)
+        return censored_median(events, censored), max(3, (q[8] - q[0]) / 2)
+
+    all_events = [v for vs in lags_by_crop.values() for v in vs]
+    all_cens = [v for vs in censored_by_crop.values() for v in vs]
+    pooled = window(all_events, all_cens) or (default_lag, default_half)
+    out = {"*": pooled}
+    for crop, events in lags_by_crop.items():
+        out[crop] = window(events, censored_by_crop.get(crop, [])) or pooled
+    return out
+
+
 def predicted_stage(start, end, as_of):
     """Stage for a field with a predicted harvest window, judged from the window centre (the best point estimate):
     ready = expected within 3 days, maturing = within 14, else growing. Returns (stage, days_out)."""
@@ -130,25 +161,34 @@ def run(data_dir: Path):
         if f.get("field_id"):
             fires_by_field.setdefault(f["field_id"], []).append(f)
 
-    recs, lags = [], []
+    recs, lags, censored, crop_of = [], {}, {}, {}
     for feat in fields["features"]:
         p = feat["properties"]
         series = ts["fields"].get(p["field_id"])
         if not series:
             continue
+        crop = p.get("crop") or "unknown"
         rec, lag = analyze_field(p["field_id"], p["zone_id"], ts["dates"], series["ndvi"], series["nbr"], fires_by_field, th)
         recs.append(rec)
+        crop_of[rec["field_id"]] = crop
         if lag is not None:
-            lags.append(lag)
+            lags.setdefault(crop, []).append(lag)
+        elif rec["peak_date"] and not rec["harvest_date"] and rec["peak_ndvi"] and rec["peak_ndvi"] >= th["peak_ndvi_min"]:
+            censored.setdefault(crop, []).append((as_of - d(rec["peak_date"])).days)   # still standing: lag >= this
 
-    lag, half_spread = lag_window(lags, th["default_peak_to_harvest_days"])
-    print(f"  regional peak->harvest lag: {lag:.1f} d (+/-{half_spread:.1f}) from {len(lags)} harvested fields")
+    windows = lag_windows(lags, censored, th["default_peak_to_harvest_days"])
+    lag, half_spread = windows["*"]
+    n_harvested = sum(len(v) for v in lags.values())
+    by_crop = ", ".join(f"{c} {w[0]:.0f} d" for c, w in windows.items() if c != "*" and len(lags.get(c, [])) >= 10)
+    print(f"  regional peak->harvest lag: {lag:.1f} d (+/-{half_spread:.1f}) from {n_harvested} harvested fields"
+          + (f" | by crop: {by_crop}" if by_crop else ""))
 
     for rec in recs:
         if rec["harvest_date"]:
             rec["sowing_deadline"] = s(add_days(d(rec["harvest_date"]), window))
             continue
         if rec["peak_date"] and rec["stage"] in ("unknown",) and rec["peak_ndvi"] and rec["peak_ndvi"] >= th["peak_ndvi_min"]:
+            lag, half_spread = windows.get(crop_of.get(rec["field_id"], "unknown"), windows["*"])
             center = add_days(d(rec["peak_date"]), lag)
             start, end = add_days(center, -half_spread), add_days(center, half_spread)
             if end < as_of:  # overdue: probably harvested under clouds, or late
@@ -161,7 +201,9 @@ def run(data_dir: Path):
             rec["confidence"] = round(max(0.35, 0.75 - 0.02 * days_out), 2)
             rec["notes"] = rec["notes"] or f"peak {rec['peak_date']}; regional lag {lag:.0f} d"
 
-    out = {"as_of": s(as_of), "peak_to_harvest_days": round(lag, 1), "fields": recs}
+    out = {"as_of": s(as_of), "peak_to_harvest_days": round(windows["*"][0], 1),
+           "peak_to_harvest_days_by_crop": {c: round(w[0], 1) for c, w in windows.items() if c != "*"},
+           "fields": recs}
     write_json(data_dir, "status.json", out)
     counts = {}
     for r in recs:
