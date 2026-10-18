@@ -1,5 +1,5 @@
 {
- "generated_at": "2026-10-18T11:45:25Z",
+ "generated_at": "2026-10-18T14:37:59Z",
  "title": "Where Starship should land",
  "method": "Every 0.125 degree cell between -60 and 60 degrees latitude (about 7 km) gets four checks from public orbital data: ice within reach and low ground from SpaceX's stated criteria, plume-safe ground and science reach from us. Each check is go, watch or no-go with a 0 to 1 goodness; a cell's status is its worst check, the same rule as a farm's flag on Earth; the score is the weighted mean of goodness (ice 0.35, low_elevation 0.20, plume_safe_ground 0.25, science_reach 0.20). Sunlight, latitude and landing-scale rock hazards are shown but not scored: SpaceX screens for them and HiRISE is the right tool. Sites are the best go cells at least 300 km apart.",
  "grid": {
@@ -165,6 +165,7 @@
     "id": "ESP_060707_2160",
     "km": 1008
    },
+   "region": "Arcadia Planitia",
    "thumb": "thumbs/M01.jpg",
    "thumb_source": "THEMIS day IR controlled mosaic (mc07_cebrenia_nir) via USGS Astrogeology STAC"
   },
@@ -225,6 +226,7 @@
     "id": "ESP_060707_2160",
     "km": 6453
    },
+   "region": "Hellas Planitia",
    "thumb": "thumbs/M02.jpg",
    "thumb_source": "THEMIS day IR controlled mosaic (mc28_hellas_nir) via USGS Astrogeology STAC"
   },
@@ -285,6 +287,7 @@
     "id": "ESP_060707_2160",
     "km": 6782
    },
+   "region": "Hellas Planitia",
    "thumb": "thumbs/M03.jpg",
    "thumb_source": "THEMIS day IR controlled mosaic (mc28_hellas_nir) via USGS Astrogeology STAC"
   },
@@ -345,6 +348,7 @@
     "id": "ESP_060811_2205",
     "km": 2881
    },
+   "region": "Vastitas Borealis",
    "thumb": "thumbs/M04.jpg",
    "thumb_source": "THEMIS day IR controlled mosaic (mc03_arcadia_nir) via USGS Astrogeology STAC"
   },
@@ -405,6 +409,7 @@
     "id": "ESP_060707_2160",
     "km": 7181
    },
+   "region": "Hellas Planitia",
    "thumb": "thumbs/M05.jpg",
    "thumb_source": "THEMIS day IR controlled mosaic (mc28_hellas_nir) via USGS Astrogeology STAC"
   },
@@ -465,6 +470,7 @@
     "id": "ESP_060707_2160",
     "km": 5722
    },
+   "region": "Promethei Terra",
    "thumb": "thumbs/M06.jpg",
    "thumb_source": "THEMIS day IR controlled mosaic (mc28_hellas_nir) via USGS Astrogeology STAC"
   },
@@ -525,6 +531,7 @@
     "id": "ESP_060811_2205",
     "km": 3343
    },
+   "region": "Tempe Terra",
    "thumb": "thumbs/M07.jpg",
    "thumb_source": "THEMIS day IR controlled mosaic (mc03_arcadia_nir) via USGS Astrogeology STAC"
   },
@@ -585,6 +592,7 @@
     "id": "ESP_060707_2160",
     "km": 6676
    },
+   "region": "Hellas Planitia",
    "thumb": "thumbs/M08.jpg",
    "thumb_source": "THEMIS day IR controlled mosaic (mc21_iapygia_nir) via USGS Astrogeology STAC"
   },
@@ -645,6 +653,7 @@
     "id": "ESP_060707_2160",
     "km": 4392
    },
+   "region": "Vastitas Borealis",
    "thumb": "thumbs/M09.jpg",
    "thumb_source": "THEMIS day IR controlled mosaic (mc05_ismenius_lacus_nir) via USGS Astrogeology STAC"
   },
@@ -705,6 +714,7 @@
     "id": "ESP_060707_2160",
     "km": 6358
    },
+   "region": "Hellas Planitia",
    "thumb": "thumbs/M10.jpg",
    "thumb_source": "THEMIS day IR controlled mosaic (mc21_iapygia_nir) via USGS Astrogeology STAC"
   }
@@ -1365,6 +1375,11 @@
    "name": "Hellas Planitia floor",
    "lat": -42.4,
    "lon": 70.5
+  },
+  {
+   "name": "Arcadia Planitia",
+   "lat": 47.2,
+   "lon": -175.7
   }
  ],
  "assets": {

@@ -58,3 +58,16 @@ def write_json_atomic(path, doc, schema_path=None):
     tmp = path.with_suffix(path.suffix + ".tmp")
     tmp.write_text(json.dumps(doc, ensure_ascii=False, indent=1), encoding="utf-8")
     tmp.replace(path)
+
+
+def nearest_region(lat, lon, regions):
+    """Name the region a point is in: the smallest named region whose radius covers it, else the one whose edge is
+    nearest. Returns {"name", "km" (to the centre), "inside"}; None when the gazetteer is empty."""
+    best = None
+    for r in regions or []:
+        km = great_circle_km(lat, lon, r["lat"], to_east180(r["lon"]))
+        inside = km <= r["radius_km"]
+        key = (0, r["radius_km"]) if inside else (1, km - r["radius_km"])
+        if best is None or key < best[0]:
+            best = (key, {"name": r["name"], "km": round(km), "inside": inside})
+    return best[1] if best else None

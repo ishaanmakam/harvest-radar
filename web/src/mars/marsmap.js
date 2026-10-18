@@ -86,7 +86,7 @@ export function createMarsView({ host, onBack }) {
       },
       layers: [
         { id: "base", type: "raster", source: "base", paint: { "raster-fade-duration": 0 } },
-        { id: "score", type: "raster", source: "score", paint: { "raster-opacity": 0.75, "raster-fade-duration": 0 }, layout: { visibility: "visible" } },
+        { id: "score", type: "raster", source: "score", paint: { "raster-opacity": 0.55, "raster-fade-duration": 0, "raster-resampling": "linear" }, layout: { visibility: "visible" } },
         { id: "spacex-ring", type: "circle", source: "spacex", paint: { "circle-radius": 9, "circle-color": "rgba(0,0,0,0)", "circle-stroke-color": "#ffffff", "circle-stroke-width": 2.5 } },
         { id: "sites-dot", type: "circle", source: "sites", paint: {
           "circle-radius": 11, "circle-color": ["match", ["get", "status"], "go", STATUS_COLOR.go, "watch", STATUS_COLOR.watch, STATUS_COLOR.no_go],
@@ -101,6 +101,7 @@ export function createMarsView({ host, onBack }) {
     map.addControl(new maplibregl.AttributionControl({ compact: true, customAttribution: "MOLA, TES (NASA/USGS); ice: SWIM (PSI); geology: USGS SIM 3292" }));
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), "bottom-right");
     map.on("load", () => {
+      fitPlanet();
       for (const s of doc.sites) markers.push(marker(s.lon, s.lat, h("div", { class: "mars-site-marker", "data-status": s.status }, String(s.rank)), () => select(s.id)));
       for (const c of doc.spacex_candidates) {
         if (c.missing) continue;
@@ -110,6 +111,13 @@ export function createMarsView({ host, onBack }) {
     });
     map.on("click", "sites-dot", (e) => select(e.features[0].properties.id));
     map.on("click", "spacex-ring", (e) => select(e.features[0].properties.id));
+  }
+
+  /** Frame the whole mapped planet (70 S to 70 N) beside the dock, and never zoom out past it into the void. */
+  function fitPlanet() {
+    const wide = window.matchMedia("(min-width: 768px)").matches;
+    map.fitBounds([[-180, -70], [180, 70]], { duration: 0, padding: { top: 8, bottom: 8, left: wide ? 540 : 8, right: 8 } });
+    map.setMinZoom(Math.max(0.5, map.getZoom() - 0.1));
   }
 
   function featureCollection(items, props) {
@@ -134,7 +142,7 @@ export function createMarsView({ host, onBack }) {
   function siteRow(s) {
     return h("button", { class: `mars-row${selected === s.id ? " is-active" : ""}`, type: "button", "data-id": s.id, onclick: () => select(s.id) },
       h("span", { class: "mars-rank" }, String(s.rank)),
-      h("span", { class: "mars-row-main" }, h("strong", {}, s.id), h("span", { class: "muted small" }, ` ${coords(s)}`), h("div", { class: "small" }, s.reason)),
+      h("span", { class: "mars-row-main" }, h("strong", {}, s.id), s.region ? h("span", { class: "mars-region" }, ` ${s.region}`) : null, h("span", { class: "muted small" }, ` ${coords(s)}`), h("div", { class: "small" }, s.reason)),
       h("span", { class: "mars-row-side" }, statusChip(s.status), h("span", { class: "mono small" }, s.score.toFixed(2))),
     );
   }
@@ -229,7 +237,7 @@ export function createMarsView({ host, onBack }) {
     drawerBody.replaceChildren(
       h("div", { class: "row", style: { justifyContent: "space-between", alignItems: "center" } },
         h("div", {}, h("h2", { class: "panel-title" }, isCand ? cand.id : `${site.id} · rank ${site.rank}`),
-          h("p", { class: "muted small", style: { margin: "2px 0 0" } }, isCand ? `${cand.name || "HiRISE candidate"} · ${cand.region}${cand.acquired ? ` · imaged ${cand.acquired}` : ""}` : coords(site))),
+          h("p", { class: "muted small", style: { margin: "2px 0 0" } }, isCand ? `${cand.name || "HiRISE candidate"} · ${cand.region}${cand.acquired ? ` · imaged ${cand.acquired}` : ""}` : `${coords(site)}${site.region ? ` · ${site.region}` : ""}`)),
         h("button", { class: "btn btn-ghost", type: "button", "aria-label": "Close", onclick: closeDrawer }, "×")),
       h("div", { class: "row row-wrap", style: { gap: "8px", margin: "10px 0" } }, statusChip(p.status, true),
         h("span", { class: "mono" }, `score ${p.score != null ? p.score.toFixed(3) : "n/a"}`),

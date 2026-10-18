@@ -13,6 +13,7 @@ import { renderSeason } from "./views/season.js";
 import { renderYield } from "./views/yield.js";
 import { initPages } from "./pages.js";
 import { createMarsView } from "./mars/marsmap.js";
+import { renderRegionCard } from "./globe/region-card.js";
 import { createGlobe } from "./globe/globe.js";
 import { h, skeleton } from "./dom.js";
 import { CROP_LABEL, FLAG_LABEL, chip, fmtDate, fmtHa, isPhone, titleCase } from "./format.js";
@@ -138,6 +139,7 @@ async function start() {
 
   let globe = null;
   let worldsDoc = null;
+  let regionsDoc = null;
   const marsView = createMarsView({ host: $("mars-view"), onBack: backToWorlds });
   // A deep link opens the Mars view at once; it does not wait for the Earth season to load.
   const wantedWorld = new URLSearchParams(window.location.search).get("world");
@@ -505,6 +507,28 @@ async function start() {
   }
 
 
+  // A green region dot: its card takes the copy slot on the left until Back, a world change or Enter.
+  const regionCopy = h("div", { class: "world-copy region-copy" });
+  regionCopy.hidden = true;
+  $("intro-copy").append(regionCopy);
+  function showRegion(region) {
+    regionCopy.replaceChildren(renderRegionCard(region, {
+      onBack: hideRegion,
+      onMap: () => {
+        hideRegion();
+        handoff({ live: false, lat: region.lat, lng: region.lon, name: `${region.name}, ${region.country}` });
+      },
+    }));
+    $("earth-copy").hidden = true;
+    regionCopy.hidden = false;
+  }
+  function hideRegion() {
+    if (regionCopy.hidden) return;
+    regionCopy.hidden = true;
+    const world = globe?.currentWorld();
+    if (!world || world.kind === "home") $("earth-copy").hidden = false;
+  }
+
   function openMars() {
     if (!intro.classList.contains("is-hidden")) {
       intro.classList.add("is-leaving");
@@ -529,10 +553,12 @@ async function start() {
       onToast: showToast,
       worldsHosts: { copyHost: $("intro-copy"), navHost: $("world-nav") },
       onOpenMars: openMars,
+      onRegion: showRegion,
       introVisible: () => !intro.classList.contains("is-hidden") && !marsView.isOpen(),
       orbiters: () => worldsDoc?.orbiters || [],
     });
     globe.start();
+    globe.onWorldChange(() => hideRegion());
     if (marsView.isOpen()) globe.stop();
     // Worlds beyond Earth load lazily; without the file the globe shows Earth alone and hides the controls.
     (async () => {
@@ -550,6 +576,20 @@ async function start() {
         globe.setWorlds(worldsDoc, sites, "out/mars/");
       } catch (err) {
         console.warn("worlds.json not loaded", err);
+      }
+    })();
+    // World regions (data/global/regions.json): green dots anywhere on Earth, a card each.
+    (async () => {
+      try {
+        const res = await fetch("global/regions.json", { cache: "no-cache" });
+        if (!res.ok || !(res.headers.get("content-type") || "").includes("json")) return;
+        regionsDoc = await res.json();
+        globe.setRegions(regionsDoc.regions || []);
+        // ?region=<id> opens that region card once the dots exist.
+        const wantedRegion = new URLSearchParams(window.location.search).get("region");
+        if (wantedRegion) globe.focusRegion(wantedRegion);
+      } catch (err) {
+        console.warn("regions.json not loaded", err);
       }
     })();
   } catch (err) {

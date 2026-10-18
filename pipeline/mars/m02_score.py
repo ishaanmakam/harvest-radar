@@ -22,7 +22,7 @@ from rasterio.transform import from_origin
 from rasterio.warp import reproject
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[2]))
-from pipeline.mars import CACHE, CONTRACTS, MARS_SPHERE_CRS, OUT, bearing_deg, compass, config, great_circle_km, write_json_atomic  # noqa: E402
+from pipeline.mars import CACHE, CONTRACTS, MARS_SPHERE_CRS, OUT, bearing_deg, compass, config, great_circle_km, nearest_region, write_json_atomic  # noqa: E402
 from pipeline.mars.m01_fetch import unit_age  # noqa: E402
 
 CFG = config()
@@ -319,10 +319,11 @@ def main():
     for i, (lat, lon, r, c) in enumerate(chosen, start=1):
         p = place(r, c)
         near = min(((cd["id"], great_circle_km(lat, lon, cd["lat"], cd["lon"])) for cd in cands if cd.get("lat") is not None), key=lambda x: x[1])
+        region = nearest_region(lat, lon, CFG.get("regions", []))
         p.update({"id": f"M{i:02d}", "rank": i, "reason": reason(p), "nearest_spacex": {"id": near[0], "km": round(near[1])},
-                  "thumb": f"thumbs/M{i:02d}.jpg", "thumb_source": None})
+                  "region": region["name"] if region else None, "thumb": f"thumbs/M{i:02d}.jpg", "thumb_source": None})
         sites.append(p)
-        print(f"    M{i:02d} {lat:7.3f} {lon:8.3f} {p['status']:5} {p['score']:.3f}  {p['reason']}")
+        print(f"    M{i:02d} {lat:7.3f} {lon:8.3f} {p['status']:5} {p['score']:.3f}  {p['region']}: {p['reason']}")
 
     print("  SpaceX candidates")
     scored_scores = np.sort(score[valid])

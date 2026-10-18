@@ -144,7 +144,7 @@ function makeStars() {
   return points;
 }
 
-export function createGlobe(container, { bounds, onEnter, onToast, worldsHosts = null, onOpenMars = null, introVisible = null, orbiters = null }) {
+export function createGlobe(container, { bounds, onEnter, onToast, worldsHosts = null, onOpenMars = null, onRegion = null, introVisible = null, orbiters = null }) {
   const reduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
   const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   const pixelRatio = Math.min(window.devicePixelRatio || 1, 2);
@@ -287,6 +287,32 @@ export function createGlobe(container, { bounds, onEnter, onToast, worldsHosts =
     markerGroups.push(group);
   }
 
+  // World regions (data/global/regions.json): a green dot anywhere on Earth; a click turns the globe to it and opens
+  // its card. Once they arrive the plain featured places give way to them; the live county keeps its pulse.
+  const regionGroups = [];
+  function setRegions(regions) {
+    for (const g of regionGroups) earth.remove(g);
+    regionGroups.length = 0;
+    for (let i = pickMeshes.length - 1; i >= 0; i -= 1) if (pickMeshes[i].userData.region) pickMeshes.splice(i, 1);
+    for (const r of regions || []) {
+      if (r.lat == null || r.lon == null || r.id === "us-ia-story") continue;
+      const local = latLngToVector3(r.lat, r.lon, 1.012);
+      const group = new THREE.Group();
+      group.position.copy(local);
+      group.quaternion.setFromUnitVectors(new THREE.Vector3(0, 0, 1), local.clone().normalize());
+      group.add(new THREE.Mesh(new THREE.SphereGeometry(0.011, 14, 14), new THREE.MeshBasicMaterial({ color: 0x3bb273 })));
+      const pick = new THREE.Mesh(new THREE.SphereGeometry(0.04, 10, 10), new THREE.MeshBasicMaterial({ visible: false }));
+      pick.userData.place = { name: `${r.name}${r.country ? `, ${r.country}` : ""}` };
+      pick.userData.region = r;
+      group.add(pick);
+      pickMeshes.push(pick);
+      earth.add(group);
+      regionGroups.push(group);
+    }
+    const hasRegions = regionGroups.length > 0;
+    for (const [i, g] of markerGroups.entries()) g.visible = !hasRegions || FEATURED[i].live === true;
+  }
+
   // Real satellites from the CelesTrak snapshot; the visit arc below fires when a Sentinel-2 nears the farms.
   const sats = createSatellites({
     earth,
@@ -361,10 +387,20 @@ export function createGlobe(container, { bounds, onEnter, onToast, worldsHosts =
     raycaster.setFromCamera(pointer, camera);
   }
 
-  function beginAim(dir, duration, done) {
+  /** Turn the globe to a world region (by id) and open its card: what a click on its dot does, also for ?region= links. */
+  function focusRegion(id) {
+    const pick = pickMeshes.find((m) => m.userData.region?.id === id);
+    if (!pick || !worlds.isEarth() || fly.active) return false;
+    const region = pick.userData.region;
+    beginAim(latLngToVector3(region.lat, region.lon, 1).normalize(), 1.0, () => onRegion?.(region), { distance: camera.position.length(), mode: "turn" });
+    return true;
+  }
+
+  /** Turn Earth to face dir and move the camera onto that line: mode "in" dives to the farms, "turn" keeps the distance. */
+  function beginAim(dir, duration, done, { distance = 1.25, mode = "in" } = {}) {
     controls.enabled = false;
     fly.active = true;
-    fly.mode = "in";
+    fly.mode = mode;
     fly.start = elapsed;
     fly.dur = reduced ? 0 : duration;
     fly.yaw0 = earth.rotation.y;
@@ -373,7 +409,7 @@ export function createGlobe(container, { bounds, onEnter, onToast, worldsHosts =
     const targetYaw = shortestYaw(earth.rotation.y, yawFacing(dir));
     fly.yaw1 = targetYaw;
     const aimed = dir.clone().applyAxisAngle(Y_AXIS, targetYaw);
-    fly.cam1.copy(aimed.normalize()).multiplyScalar(1.25);
+    fly.cam1.copy(aimed.normalize()).multiplyScalar(distance);
     if (reduced) finishFly();
   }
 
@@ -405,7 +441,7 @@ export function createGlobe(container, { bounds, onEnter, onToast, worldsHosts =
         hovered.userData.place = { name: worlds.isEarth() ? "Mars · click to focus" : "Mars · click to open the landing map" };
       }
     } else if (worlds.isEarth()) {
-      hovered = raycaster.intersectObjects(pickMeshes, false).find((hit) => facingCamera(hit.object) > 0.08)?.object || null;
+      hovered = raycaster.intersectObjects(pickMeshes, false).find((hit) => hit.object.parent.visible && facingCamera(hit.object) > 0.08)?.object || null;
     } else {
       hovered = raycaster.intersectObject(earthMesh, false).length ? earthMesh : null;
       if (hovered) earthMesh.userData.place = { name: "Earth · click to focus" };
@@ -427,7 +463,11 @@ export function createGlobe(container, { bounds, onEnter, onToast, worldsHosts =
       if (raycaster.intersectObject(earthMesh, false).length) worlds.focusId("earth");
       return;
     }
-    const markerHit = raycaster.intersectObjects(pickMeshes, false).find((hit) => facingCamera(hit.object) > 0.08);
+    const markerHit = raycaster.intersectObjects(pickMeshes, false).find((hit) => hit.object.parent.visible && facingCamera(hit.object) > 0.08);
+    if (markerHit?.object.userData.region) {
+      focusRegion(markerHit.object.userData.region.id);
+      return;
+    }
     if (markerHit) {
       const place = markerHit.object.userData.place;
       const live = place.live === true || insideBounds(place.lat, place.lng, bounds);
@@ -641,6 +681,8 @@ export function createGlobe(container, { bounds, onEnter, onToast, worldsHosts =
     start,
     stop,
     setWorlds: worlds.setWorlds,
+    setRegions,
+    focusRegion,
     showWorld: (id) => worlds.focusId(id, { instant: true }),
     stepWorld: worlds.step,
     currentWorld: worlds.current,
