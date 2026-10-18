@@ -2139,8 +2139,10 @@ select {
     opacity: 0.85;
   }
 
+  /* Phones: top-left, so the panel never covers Mars in the top-right corner. */
   .sat-legend {
-    right: 12px;
+    left: 12px;
+    right: auto;
     top: 12px;
     bottom: auto;
     width: min(280px, calc(100% - 24px));
