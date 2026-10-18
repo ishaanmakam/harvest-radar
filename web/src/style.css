@@ -3957,6 +3957,102 @@ a {
   }
 }
 
+<<<<<<< HEAD
+/* ---- one-line top bar ---- */
+.topbar {
+  flex-wrap: nowrap;
+  gap: 20px;
+  padding: 0 20px;
+  overflow: hidden;
+}
+
+.wordmark {
+  font-size: 0.875rem;
+  letter-spacing: 0.12em;
+  flex: 0 0 auto;
+}
+
+.aspects,
+.tabs {
+  gap: 16px;
+  flex: 0 0 auto;
+}
+
+.tabs {
+  overflow-x: auto;
+  scrollbar-width: none;
+  max-width: 44vw;
+}
+
+.topbar-right {
+  flex: 1 1 auto;
+  flex-wrap: nowrap;
+  gap: 14px;
+  min-width: 0;
+}
+
+.topbar .page-links {
+  gap: 14px;
+}
+
+.topbar .page-links a,
+.topbar #orbit,
+.topbar .badge,
+.topbar .aspect,
+.topbar .tab {
+  font-size: 0.6875rem;
+  letter-spacing: 0.08em;
+  white-space: nowrap;
+}
+
+.topbar .signup {
+  font-size: 0.6875rem;
+  min-height: 32px;
+  padding: 0 12px;
+}
+
+.topbar-right:has(.badge-standin) #run-badge {
+  display: none;
+}
+
+/* ---- the region card: a column of actions, the switch outside the copy column, headlines one size smaller ---- */
+.region-actions {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+
+.region-actions .world-open,
+.world-copy .world-open {
+  display: inline-flex;
+  align-items: center;
+  width: auto;
+  min-height: 40px;
+  padding: 0 18px;
+  margin: 0;
+}
+
+#intro-copy h1,
+.world-copy h1 {
+  font-size: clamp(1.75rem, 1rem + 2.2vw, 3rem);
+}
+
+.world-copy .tagline,
+#intro-copy .tagline {
+  font-size: 0.9375rem;
+}
+
+.world-nav-foot {
+  left: calc(min(460px, 34vw) + 64px);
+  right: 332px;
+}
+
+@media (max-width: 767px) {
+  .world-nav-foot {
+    left: 0;
+    right: 0;
+  }
+=======
 /* ---- the mark beside the wordmark ---- */
 .wordmark svg {
   display: inline-block;
@@ -3964,4 +4060,5 @@ a {
   height: 22px;
   margin-right: 10px;
   color: var(--fg);
+>>>>>>> origin/main
 }
