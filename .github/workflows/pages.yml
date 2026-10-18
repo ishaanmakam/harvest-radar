@@ -32,6 +32,11 @@ jobs:
         env:
           # Repository variable SIGNUP_URL: the public sign-up page of the inbound server, once it has one.
           VITE_SIGNUP_URL: ${{ vars.SIGNUP_URL }}
+          # Repository variables SUPABASE_URL, SUPABASE_ANON_KEY and API_BASE: the accounts backend (backend/README.md).
+          # The anon (publishable) key is public by design; row-level security is the fence.
+          VITE_SUPABASE_URL: ${{ vars.SUPABASE_URL }}
+          VITE_SUPABASE_ANON_KEY: ${{ vars.SUPABASE_ANON_KEY }}
+          VITE_API_BASE: ${{ vars.API_BASE }}
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
