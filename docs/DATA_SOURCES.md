@@ -74,11 +74,11 @@ Overfield cross-checks several sources because no single one is enough on its ow
 
 | Source | Provider | What we use it for | Cadence | Resolution | Licence | Key | Live or cached |
 |---|---|---|---|---|---|---|---|
-| [USDA NASS QuickStats county yields](https://quickstats.nass.usda.gov/api) | USDA National Agricultural Statistics Service | Measured county corn and soybean yields that the yield model trains on when a key is set. | yearly | county | US government work, public domain; free API key | yes | code in place (yield_train.py); the committed model trained on the CropNet tables below, the NASS fetch needs NASS_API_KEY |
-| [CropNet USDA crop dataset](https://huggingface.co/datasets/CropNet/CropNet) | CropNet (Hugging Face) | The same county yield tables, 2016 to 2022, used as the training set until the NASS key is in place. | static (2016 to 2022) | county | CC BY-NC 4.0, research use only | no | downloaded once and cached |
+| [USDA NASS QuickStats county yields](https://quickstats.nass.usda.gov/api) | USDA National Agricultural Statistics Service | Measured county corn and soybean yields for all 99 Iowa counties, 2008 to 2025: the training set of the county yield model (yield_train.py). | yearly | county | US government work, public domain; free API key | yes | fetched with NASS_API_KEY and cached; the committed yield_model.json was trained on it |
+| [CropNet USDA crop dataset](https://huggingface.co/datasets/CropNet/CropNet) | CropNet (Hugging Face) | The same USDA county yield tables for 2016 to 2022, the fallback training set when no NASS key is set; the committed model no longer uses it. | static (2016 to 2022) | county | CC BY-NC 4.0, research use only | no | downloaded once and cached; fallback only |
 
-- **USDA NASS QuickStats county yields.** The ground truth for yield in the US; public domain. (.env.example:30, docs/tasks/E-yield-model.md:137-138, docs/tasks/E-yield-model.md:148, docs/tasks/E-yield-model.md:63 and 17 more)
-- **CropNet USDA crop dataset.** A ready-made, cleaned table of USDA county yields for every US county. (data/out/yield_model.json, docs/tasks/E-yield-model.md:110, docs/tasks/E-yield-model.md:120, intelligence/tests/test_yield_calibration.py:13 and 12 more)
+- **USDA NASS QuickStats county yields.** The ground truth for yield in the US, public domain; eighteen seasons lift the held-out R² to 0.62 for corn and 0.71 for soybeans. (.env.example:30, docs/tasks/E-yield-model.md:137-138, docs/tasks/E-yield-model.md:148, docs/tasks/E-yield-model.md:63 and 17 more)
+- **CropNet USDA crop dataset.** A ready-made, cleaned table of USDA county yields that lets the model train with no key at all. (data/out/yield_model.json, docs/tasks/E-yield-model.md:110, docs/tasks/E-yield-model.md:120, intelligence/tests/test_yield_calibration.py:13 and 12 more)
 
 ## Field boundaries and places
 
