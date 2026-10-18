@@ -30,6 +30,7 @@ from collections import defaultdict
 from datetime import date
 from pathlib import Path
 
+import weather_model as wm
 from common import ROOT, d, load_region, read_json, s, write_json
 
 KINDS = ["harvest_ready", "harvest_before_rain", "establishment", "burn_scar", "fire", "flood", "stress", "visible_change"]
@@ -130,11 +131,13 @@ def _cue_text(cue, default):
     return f"{text} ({tag})"
 
 
-def farm_plan(rec, passes, forecast, hotspots, insight, today: date, th=None, fallback_as_of=None, zone_drop=None):
+def farm_plan(rec, passes, forecast, hotspots, insight, today: date, th=None, fallback_as_of=None, zone_drop=None,
+              outlook=None):
     """One farm's plan. passes = [(date, ndvi, nbr)] clear passes; forecast = [(date, precip_mm)];
     hotspots = FIRMS detections in this field; insight = per-field Perceptron cues (kind -> cue) or None;
     fallback_as_of = the landscape's latest clear pass, used when this farm has no clear pass of its own;
-    zone_drop = the zone's typical NDVI drop between the last two passes (see zone_declines), or None."""
+    zone_drop = the zone's typical NDVI drop between the last two passes (see zone_declines), or None;
+    outlook = weather_model.harvest_outlook(...) for a standing crop (combine window, rain, frost), or None."""
     th = {**DEFAULTS, **(th or {})}
     passes = sorted(p for p in passes if p[1] is not None)
     latest = passes[-1] if passes else None
@@ -151,14 +154,27 @@ def farm_plan(rec, passes, forecast, hotspots, insight, today: date, th=None, fa
         pred = (d(rec["predicted_harvest_start"]), d(rec["predicted_harvest_end"]))
     checks = []
 
-    # 1. harvest readiness
+    # 1. harvest readiness (satellite says ready; the weather model adds the best combine window)
+    outlook = outlook if (outlook and standing) else None
     if ready:
         detail = "Crop looks ready to harvest" + (f": expected {_span(*pred)}" if pred else "")
-        checks.append(_check("harvest_ready", "watch", detail, window=_win(*pred) if pred else {}))
+        win = _win(*pred) if pred else {}
+        if outlook and outlook.get("window"):
+            w = outlook["window"]
+            win = {"start": w["start"], "end": w["end"]}
+            detail += f"; best combine window {w['start']} to {w['end']}"
+            if outlook.get("next_window"):
+                detail += f", next {outlook['next_window']['start']} to {outlook['next_window']['end']}"
+        elif outlook and outlook.get("summary"):
+            detail += "; " + outlook["summary"].rstrip(".")
+        checks.append(_check("harvest_ready", "watch", detail, window=win))
     elif harvest:
         checks.append(_check("harvest_ready", "clear", f"Looks harvested from the satellite: greenness collapsed around {s(harvest)}"))
     elif stage == "maturing" and pred:
-        checks.append(_check("harvest_ready", "clear", f"Maturing: harvest expected {_span(*pred)}"))
+        detail = f"Maturing: harvest expected {_span(*pred)}"
+        if outlook and outlook.get("combine_ready"):
+            detail += f"; combine-ready about {outlook['combine_ready']} by the weather"
+        checks.append(_check("harvest_ready", "clear", detail))
     elif stage == "growing":
         checks.append(_check("harvest_ready", "clear", "Still greening up; no harvest expected within two weeks"))
     else:
@@ -341,7 +357,7 @@ def farm_plan(rec, passes, forecast, hotspots, insight, today: date, th=None, fa
         today_line = "Too few clear satellite passes to judge the crop yet: the officer will check by phone."
     else:
         today_line = TODAY_TEXT[key]
-    return {
+    plan = {
         "farm_id": rec["field_id"],
         "as_of": s(as_of),
         "flag": FLAG[worst],
@@ -350,6 +366,9 @@ def farm_plan(rec, passes, forecast, hotspots, insight, today: date, th=None, fa
         "checks": checks,
         "risks": [c["detail"] for c in checks if c["status"] != "clear"],
     }
+    if outlook:
+        plan["harvest_outlook"] = outlook          # additive: the weather side of the harvest decision
+    return plan
 
 
 def build_route(plans, today: date):
@@ -405,6 +424,23 @@ def run(data_dir: Path):
     zone_of = {f["properties"]["field_id"]: f["properties"]["zone_id"] for f in fields["features"]}
     thr = {**DEFAULTS, **th}
     drops = zone_declines(ts, zone_of, thr["stress_max_gap_days"])
+    observed = weather.get("observed") or {}
+    have_weather = bool(observed.get("dates")) and bool(fc.get("dates"))
+
+    def outlook_for(rec, passes, crop):
+        """Weather side for a standing crop: the satellite's predicted harvest start is the ready date when it
+        exists, otherwise degree days from green-up decide."""
+        if not have_weather or rec.get("stage") not in ("growing", "maturing", "ready"):
+            return None
+        emergence = next((dt for dt, v, _ in passes if v is not None and v >= 0.4), None)
+        ready = d(rec["predicted_harvest_start"]) if rec.get("predicted_harvest_start") else None
+        if ready is None and emergence is None:
+            return None
+        try:
+            return wm.harvest_outlook(observed, fc, today, crop=crop, emergence=emergence, ready_override=ready)
+        except Exception as e:  # a weather quirk must never cost the farm its plan
+            print(f"  WARN outlook for {rec.get('field_id')}: {e}")
+            return None
 
     plans = []
     for feat in fields["features"]:
@@ -414,7 +450,8 @@ def run(data_dir: Path):
         series = ts["fields"].get(fid, {"ndvi": [], "nbr": []})
         passes = [(dt, v, b) for dt, v, b in zip(dates, series["ndvi"], series["nbr"]) if v is not None]
         plan = farm_plan(rec, passes, forecast, hotspots.get(fid, []), cues.get(fid), today, th,
-                         fallback_as_of=latest_clear, zone_drop=drops.get(p["zone_id"]))
+                         fallback_as_of=latest_clear, zone_drop=drops.get(p["zone_id"]),
+                         outlook=outlook_for(rec, passes, p.get("crop") or "corn"))
         plan["zone_id"] = p["zone_id"]
         plans.append(plan)
     route = build_route(plans, today)
