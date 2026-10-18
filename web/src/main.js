@@ -11,6 +11,7 @@ import { renderRoute } from "./views/route.js";
 import { renderDeliveries } from "./views/deliveries.js";
 import { renderSeason } from "./views/season.js";
 import { renderYield } from "./views/yield.js";
+import { initPages } from "./pages.js";
 import { createGlobe } from "./globe/globe.js";
 import { h, skeleton } from "./dom.js";
 import { CROP_LABEL, FLAG_LABEL, chip, fmtDate, fmtHa, isPhone, titleCase } from "./format.js";
@@ -59,6 +60,8 @@ function setBadge(data, mapApi) {
   badge.textContent = standIn ? `Imagery: ${imagery} · Farms & plans: ${farms}` : "Live season";
   badge.className = standIn ? "badge badge-standin" : "badge badge-live";
   badge.title = standIn ? "Stand-in season: at least one file came from data/mock" : "Every file came from data/out";
+  // run.json already says "Live · date" in its own badge; a second "Live season" pill next to it says nothing new.
+  badge.hidden = !standIn && Boolean(data.run?.mode);
 }
 
 /** run.json says whether the farm files came from a live run or a replay, and for which day. */
@@ -132,9 +135,13 @@ async function start() {
     event.currentTarget.setAttribute("aria-expanded", String(expanded));
   });
 
+  const dataPromise = loadData();
+  // Account, developers, admin and data pages open over the map from the header and from #hash routes.
+  initPages({ dataPromise });
+
   let data;
   try {
-    data = await loadData();
+    data = await dataPromise;
   } catch (err) {
     showError(err.message);
     intro.classList.add("is-hidden");
