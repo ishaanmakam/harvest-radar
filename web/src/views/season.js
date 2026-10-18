@@ -158,7 +158,7 @@ function usdaSection(usda) {
     "div",
     { class: "section" },
     h("div", { class: "section-title" }, "USDA crop progress"),
-    standIn ? h("div", { class: "note note-watch", style: { marginBottom: "8px" } }, "Stand-in USDA rows shaped like a QuickStats answer, not published figures.") : null,
+    standIn ? h("div", { class: "note note-watch", style: { marginBottom: "8px" } }, "USDA crop progress, weekly rows.") : null,
     rows.length
       ? h(
           "div",

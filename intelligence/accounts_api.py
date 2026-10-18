@@ -279,7 +279,7 @@ def _v1(ctx, method, path, query, headers):
     return status, body
 
 
-ACCOUNT_PREFIXES = ("/auth/", "/me", "/terms", "/keys", "/admin/", "/v1/")
+ACCOUNT_PREFIXES = ("/demo/", "/auth/", "/me", "/terms", "/keys", "/admin/", "/v1/")
 
 
 def handles(path):
@@ -287,6 +287,50 @@ def handles(path):
     p = path.split("?")[0]
     return any(p == pre.rstrip("/") or p.startswith(pre) for pre in ACCOUNT_PREFIXES)
 
+
+
+def _demo_text(ctx, method, headers, body):
+    """Send the morning plan for one farm to one phone, now, through Photon: the demo of the 08:00 text.
+    The signed-in account's phone and farm are the defaults; the body may name a phone and a farm id."""
+    if method != "POST":
+        raise Reply(405, "POST only")
+    acc = _need_account(ctx, headers)
+    doc = _json_body(body)
+    phone = str(doc.get("phone") or acc.get("phone") or "").strip()
+    if not phone:
+        raise Reply(400, "no phone: add one to your profile or send it in the body")
+    farm = str(doc.get("farm") or acc.get("farm_id") or "").strip()
+    language = str(doc.get("language") or acc.get("language") or "en").strip() or "en"
+    dry_run = bool(doc.get("dry_run"))  # render and answer, send nothing
+    try:
+        plans = {p["farm_id"]: p for p in json.loads((Path(ctx.data_dir) / "plans.json").read_text(encoding="utf-8"))["plans"]}
+    except (OSError, ValueError, KeyError) as e:
+        raise Reply(503, f"no plans on this server: {e}")
+    plan = plans.get(farm) or next(iter(plans.values()), None)
+    if plan is None:
+        raise Reply(503, "no plans on this server")
+    import providers
+    import queue_morning
+    photon = providers.photon_from_env()
+    if photon is None and not dry_run:
+        raise Reply(503, "Photon is not configured on this server (PHOTON_API_KEY, PHOTON_PROJECT_ID, PHOTON_FROM)")
+    text = queue_morning.render_plan(plan, language)
+    if dry_run:
+        return 200, {"sent": False, "dry_run": True, "to": phone, "farm": plan["farm_id"], "channel": "photon_sms",
+                     "configured": photon is not None, "preview": text[:240], "length": len(text)}
+    try:
+        result = photon.send(phone, text, language)
+    except Exception as e:  # provider errors come back as a plain message, never a crash
+        raise Reply(502, f"Photon did not accept the text: {e}")
+    today = datetime.now(timezone.utc).date().isoformat()
+    try:
+        ctx.accounts.push_deliveries({"date": today, "deliveries": [{
+            "date": today, "roster_id": acc.get("roster_id") or "", "farm_id": plan["farm_id"], "role": acc.get("role") or "farmer",
+            "channel": "photon_sms", "status": "sent", "detail": f"demo text to {phone}", "sent_at": datetime.now(timezone.utc).isoformat(timespec="seconds")}]}, dry_run=False)
+    except Exception:
+        pass  # the text went out; the log line is a courtesy
+    return 200, {"sent": True, "to": phone, "farm": plan["farm_id"], "channel": "photon_sms", "preview": text[:240],
+                 "result": result if isinstance(result, (dict, str, int)) else str(result)}
 
 def dispatch(method, raw_path, headers, body, ctx, client_ip="?"):
     """-> (status, headers, body bytes). headers is a plain dict (any case); body is bytes."""
@@ -303,6 +347,8 @@ def dispatch(method, raw_path, headers, body, ctx, client_ip="?"):
             status, out = _me(ctx, method, path, headers, body)
         elif path == "/terms" or path.startswith("/terms/") or path == "/keys" or path.startswith("/keys/"):
             status, out = _keys(ctx, method, path, headers, body)
+        elif path == "/demo/text":
+            status, out = _demo_text(ctx, method, headers, body)
         elif path.startswith("/admin/"):
             status, out = _admin(ctx, method, path, query, headers, body)
         elif path.startswith("/v1/"):

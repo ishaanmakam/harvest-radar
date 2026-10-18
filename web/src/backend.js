@@ -132,6 +132,7 @@ export async function updateMyProfile(_userId, patch) {
 
 export const myDeliveries = () => api("GET", "/me/deliveries").then((d) => d.deliveries || []);
 export const deleteMyAccount = () => api("POST", "/me/delete");
+export const demoText = (phone, farm) => api("POST", "/demo/text", { phone: String(phone || "").trim() || undefined, farm: String(farm || "").trim() || undefined });
 export const termsStatus = () => api("GET", "/terms");
 export const acceptTerms = (version = TERMS_VERSION, kind = "developer") => api("POST", "/terms/accept", { version, kind });
 export const listKeys = () => api("GET", "/keys").then((d) => d.keys || []);

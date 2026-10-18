@@ -18,7 +18,8 @@ class FakeHttp:
 
 
 class TestReport:
-    def test_everything_missing(self, tmp_path):
+    def test_everything_missing(self, tmp_path, monkeypatch):
+        monkeypatch.setenv("ACCOUNTS_DB", "")  # no sign-ups: no roster at all
         rep = cp.report({}, roster_path=None, http=FakeHttp({}))
         assert rep["twilio"]["configured"] is False and "TWILIO_ACCOUNT_SID" in rep["twilio"]["missing"]
         assert rep["photon"]["configured"] is False and "PHOTON_API_KEY" in rep["photon"]["missing"]

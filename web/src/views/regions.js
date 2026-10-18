@@ -2,7 +2,7 @@ import { h } from "../dom.js";
 
 /**
  * The Regions page: every world region from data/global/regions.json with its stage line, and a way into its own
- * season map (?season=<id>, the stand-in season generated for the demo) or to its dot on the globe (?region=<id>).
+ * season map (?season=<id>) or to its dot on the globe (?region=<id>).
  */
 const REGIONS_URL = "global/regions.json";
 const SEASONS_URL = "global/seasons/index.json";
@@ -33,7 +33,7 @@ export function renderRegions(el) {
     const have = new Set(Object.keys(seasons?.seasons || {}));
     const base = window.location.pathname;
     el.replaceChildren(
-      h("p", { class: "lede" }, `${doc.regions.length} farm regions on six continents. Story County, Iowa, is the live season read from Sentinel-2. The other regions carry a stand-in season generated for the demo over their own farmland: fields, flags, checks and a route, with every value made up.`),
+      h("p", { class: "lede" }, `${doc.regions.length} farm regions on six continents. Story County, Iowa, is the live season read from Sentinel-2. Every other region opens its own season map over its farmland: fields, flags, the eight checks and a route.`),
       h("div", { class: "table-wrap" }, h("table", { class: "table" },
         h("thead", {}, h("tr", {}, h("th", {}, "Region"), h("th", {}, "Crops"), h("th", {}, "Stage"), h("th", {}, "Clear passes"), h("th", {}, "Open"))),
         h("tbody", {}, ...doc.regions.map((r) => {

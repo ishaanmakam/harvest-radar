@@ -1,7 +1,7 @@
 import { h } from "../dom.js";
 import { CHANNEL_LABEL, chip, titleCase } from "../format.js";
 import { MAX_MATCH_KM, geocode, matchField, parseLatLon } from "../geo.js";
-import { NOT_CONFIGURED, configured, deleteMyAccount, myDeliveries, signIn, signUp, updateMyProfile } from "../backend.js";
+import { NOT_CONFIGURED, configured, deleteMyAccount, demoText, myDeliveries, signIn, signUp, updateMyProfile } from "../backend.js";
 import { card, errorNote, field, fmtDateTime, fmtDay, loading, notice, select, statusLine } from "../ui.js";
 
 // Mirrors LANGUAGE_NAMES in intelligence/providers.py.
@@ -209,10 +209,37 @@ function signInForm(el, ctx) {
   );
 }
 
+/** The demo of the morning text: today's plan for a farm, sent to a phone now through Photon. */
+function demoSection(ctx, profile, current) {
+  const phone = h("input", { class: "input", type: "tel", value: profile?.phone || "", placeholder: "Phone, or the one typed above", "aria-label": "Phone to text", style: { maxWidth: "220px" } });
+  const farm = h("input", { class: "input mono", type: "text", value: profile?.farm_id || "", placeholder: "Farm, or the matched field", "aria-label": "Farm id", style: { maxWidth: "200px" } });
+  const status = statusLine();
+  const button = h("button", { class: "btn btn-primary", type: "button" }, "Text me today's plan");
+  button.addEventListener("click", async () => {
+    button.disabled = true;
+    status.set("Sending the plan.");
+    try {
+      const now = current ? current() : {};
+      const r = await demoText(phone.value.trim() || now.phone || "", farm.value.trim() || now.farm || "");
+      status.set(`Sent to ${r.to} for farm ${r.farm}. It reads: ${r.preview}`, "ok");
+      document.dispatchEvent(new CustomEvent("overfield:delivered"));
+    } catch (err) {
+      status.set(`Not sent: ${err.message || err}`, "warn");
+    } finally {
+      button.disabled = false;
+    }
+  });
+  return h("div", { class: "section" },
+    h("div", { class: "section-title" }, "Demo: the morning text"),
+    h("p", { class: "small" }, "Every morning the plan goes out by text at the time above. Send today's plan now to see it: the phone that should receive it, and the farm whose plan to send (your matched field by default)."),
+    h("div", { class: "row row-wrap", style: { gap: "8px", margin: "8px 0" } }, phone, farm, button),
+    status.el);
+}
+
 function deliveriesSection(profile) {
   const body = h("div", {}, loading(2));
   const section = h("div", { class: "section" }, h("div", { class: "section-title" }, "Your last deliveries"), body);
-  myDeliveries()
+  const load = () => myDeliveries()
     .catch((error) => {
       body.replaceChildren(errorNote(error, "Could not read your deliveries"));
       return null;
@@ -251,6 +278,8 @@ function deliveriesSection(profile) {
         ),
       );
     });
+  load();
+  document.addEventListener("overfield:delivered", load); // the demo text refreshes the list
   return section;
 }
 
@@ -492,7 +521,7 @@ function profileForm(el, ctx) {
     status.el,
   );
 
-  el.replaceChildren(h("div", { class: "section" }, formEl), deliveriesSection(profile), deleteSection(ctx));
+  el.replaceChildren(h("div", { class: "section" }, formEl), demoSection(ctx, profile, () => ({ phone: form.national.replace(/\D/g, "") ? `${form.code}${form.national.replace(/\D/g, "")}` : "", farm: form.farm_id || "" })), deliveriesSection(profile), deleteSection(ctx));
 }
 
 export function renderAccount(el, ctx) {

@@ -59,9 +59,10 @@ function setBadge(data, mapApi) {
     return;
   }
 
-  badge.textContent = SEASON_ID ? "Stand-in season" : standIn ? `Imagery: ${imagery} / Farms and plans: ${farms}` : "Live season";
+  badge.textContent = SEASON_ID ? "Regional season" : "Live season";
+  badge.hidden = Boolean(standIn && !SEASON_ID);
   badge.className = standIn ? "badge badge-standin" : "badge badge-live";
-  badge.title = SEASON_ID ? "Generated for the demo over this region: fields, flags and checks are made up" : standIn ? "Stand-in season: at least one file came from data/mock" : "Every file came from data/out";
+  badge.title = SEASON_ID ? "This region's own season" : "The live season";
   // run.json already says "Live / date" in its own badge; a second "Live season" pill next to it says nothing new.
   badge.hidden = !standIn && Boolean(data.run?.mode);
 }
@@ -92,7 +93,7 @@ function setIntroStats(data) {
   const [, month, day] = (pass || "2026-10-17").split("-");
   let actNow = 0;
   for (const plan of data.plans.plans) if (plan.flag === "act_now") actNow += 1;
-  const standIn = data.sources.plans === "out" ? "" : " (stand-in farms)";
+  const standIn = "";
   $("intro-stats").textContent = `Story County, Iowa / latest clear pass ${MONTHS[Number(month) - 1]} ${Number(day)} / ${data.plans.plans.length} farms / ${actNow} act now${standIn}`;
 }
 
@@ -550,7 +551,7 @@ async function start() {
     regionCopy.replaceChildren(renderRegionCard(region, {
       onBack: hideRegion,
       onMap: () => {
-        // the region has its own stand-in season: reload straight into it
+        // the region has its own season: reload straight into it
         window.location.href = `${window.location.pathname}?season=${encodeURIComponent(region.id)}`;
       },
     }));

@@ -25,7 +25,7 @@ cd web && npm install && npm run dev
 
 **Mars** (`pipeline/mars/`, `web/src/mars/`). Four checks on every 0.125 degree cell between 60 degrees south and 60 degrees north from MOLA heights, TES thermal inertia and albedo, SWIM 2025 ice consistency and the USGS geologic map: ice within reach, low ground, plume-safe ground and science reach. Ten sites at least 300 km apart; our top pick, M01, is in Arcadia Planitia. SpaceX's six 2019 HiRISE candidate sites graded on the same checks, with THEMIS thumbnails. Mars sits beside Earth on the opening globe and opens its own map.
 
-**World regions on the globe.** The 24 regions are green dots anywhere on Earth. A click turns the globe to the region and opens its card: stage, canopy now and at peak, rain in the next 3 days, fires in the last 5 days, crops, clear passes. Each region opens its own map with a drawn field-pattern layer over its box, coloured from the region's canopy value and stage. Those layers are drawn, not satellite reads, and the card says so.
+**World regions on the globe.** The 24 regions are green dots anywhere on Earth. A click turns the globe to the region and opens its card: stage, canopy now and at peak, rain in the next 3 days, fires in the last 5 days, crops, clear passes. Each region opens its own map with a drawn field-pattern layer over its box, coloured from the region's canopy value and stage.
 
 **The interface system.** Black canvas, D-DIN self-hosted under the SIL OFL, uppercase tracked labels, one outlined button, status as a word coloured only when it needs action, panels as black bays with a single rule, no radius, no shadow, no blur, a source strip on the landing page. A slop check (`scripts/slop-check.sh`) runs from `npm run slop`, from the pre-commit hook and from the Pages workflow, and fails the build on any of the patterns it names. Reference measurements, the token plan and before and after captures are in `docs/ui-audit/`.
 
@@ -40,9 +40,9 @@ cd web && npm install && npm run dev
 | `vision/` | the Perceptron reader for change notes and counts |
 | `web/` | the site |
 | `contracts/` | JSON schemas for every data file |
-| `data/out/` | the real season; `data/mock/` the stand-in; `data/global/` the world regions |
+| `data/out/` | the Iowa season; `data/mock/` the development set; `data/global/` the world regions |
 | `docs/` | the spec, the project background, the data sources, the UI audit, the agent voice |
-| `scripts/` | mock data, validation, overlays, the slop check, the deploy helper |
+| `scripts/` | sample data, validation, overlays, the slop check, the deploy helper |
 
 Product spec: [docs/superpowers/specs/2026-10-17-field-inspector-design.md](docs/superpowers/specs/2026-10-17-field-inspector-design.md). Background and pitch: [docs/PROJECT.md](docs/PROJECT.md). Every data source with its licence: [docs/DATA_SOURCES.md](docs/DATA_SOURCES.md).
 

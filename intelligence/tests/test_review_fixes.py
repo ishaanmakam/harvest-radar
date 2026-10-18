@@ -111,6 +111,7 @@ class TestRosterValidation:                                # hardening from the 
     def test_unset_roster_path_is_a_clear_error(self, monkeypatch):
         monkeypatch.delenv("ROSTER_PATH", raising=False)
         monkeypatch.setattr(tools, "load_env", lambda: None)
+        monkeypatch.setenv("ACCOUNTS_DB", "")  # no sign-ups either: nothing to send to
         with pytest.raises(FileNotFoundError, match="ROSTER_PATH"):
             tools.load_roster(None)
 
