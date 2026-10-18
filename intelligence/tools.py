@@ -29,12 +29,28 @@ def normalize_phone(phone: str) -> str:
     return "+" + digits if (phone.strip().startswith("+") or len(digits) > 10) else digits
 
 
-def load_roster(path=None):
-    """Rows of the roster CSV, validated. path defaults to ROSTER_PATH from the environment / .env."""
+def roster_source(path=None):
+    """Where the roster comes from: "csv" (a path was given or ROSTER_PATH is set), "supabase" (SUPABASE_URL and
+    SUPABASE_SERVICE_ROLE_KEY are set and no path), or "none"."""
     load_env()
-    raw = str(path) if path else (os.environ.get("ROSTER_PATH") or "")
-    if not raw:
-        raise FileNotFoundError("ROSTER_PATH is not set in .env and no roster path was given; see intelligence/roster.example.csv")
+    if path or os.environ.get("ROSTER_PATH"):
+        return "csv"
+    import roster_supabase
+    return "supabase" if roster_supabase.configured() else "none"
+
+
+def load_roster(path=None, http=None):
+    """Rows of the roster, validated. An explicit path or ROSTER_PATH means the CSV; otherwise, when the Supabase
+    variables are set, the people who signed up on the site (see roster_supabase.py). http is for tests."""
+    source = roster_source(path)
+    if source == "none":
+        raise FileNotFoundError("no roster: set ROSTER_PATH in .env (see intelligence/roster.example.csv) or SUPABASE_URL and "
+                                "SUPABASE_SERVICE_ROLE_KEY (see backend/README.md)")
+    if source == "supabase":
+        import roster_supabase
+        rows = roster_supabase.fetch_roster(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_ROLE_KEY"], http=http)
+        return validate_rows(rows)
+    raw = str(path) if path else os.environ.get("ROSTER_PATH")
     path = Path(raw)
     if not path.is_file():
         raise FileNotFoundError(f"roster not found at {path}; see intelligence/roster.example.csv")
@@ -44,6 +60,12 @@ def load_roster(path=None):
         if missing:
             raise ValueError(f"roster is missing columns {missing}")
         rows = [{k: (v or "").strip() for k, v in r.items()} for r in reader]
+    return validate_rows(rows)
+
+
+def validate_rows(rows):
+    """The same checks for every roster source: ids unique, phones unique and normalised, roles known, language set,
+    farmers with a farm."""
     seen, phones = set(), set()
     for i, r in enumerate(rows, start=2):
         where = f"roster line {i} ({r.get('roster_id') or '?'})"
