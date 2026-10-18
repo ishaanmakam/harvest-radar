@@ -104,10 +104,10 @@ def ti_to_geotiff(mola_path):
     west_positive = "West" in header
     raw = np.fromfile(CACHE / "nmap2003.bin", dtype=">i2", offset=7200).reshape(3600, 7200).astype("float32")
     mask_path = CACHE / "nmsk2003.bin"
+    mask = None
     if mask_path.exists() and mask_path.stat().st_size >= 7200 + 7200 * 3600:
-        mask = np.fromfile(mask_path, dtype="u1", offset=7200).reshape(3600, 7200)
-        raw[mask == 0] = 0                                   # interpolated fill counts as no data
-        print("  applied the TES mask (interpolated pixels dropped)")
+        mask = np.fromfile(mask_path, dtype="u1", offset=7200).reshape(3600, 7200).astype("float32")
+        print(f"  TES mask read: {(mask == 1).mean() * 100:.1f}% measured, the rest is the authors' interpolated fill (kept, flagged in m02)")
     raw[raw <= 0] = np.nan
     if west_positive:
         # column c holds longitude c/20 West; east longitude e sits at column (7200 - e*20) % 7200
@@ -141,6 +141,17 @@ def ti_to_geotiff(mola_path):
                        transform=from_origin(-180, 90, 1 / 20, 1 / 20), compress="deflate", nodata=np.nan) as dst:
         dst.write(chosen.astype("float32"), 1)
     print(f"  wrote   {out.name}")
+    if mask is not None:
+        m = mask
+        if best.startswith("west-flipped"):
+            m = np.concatenate([m[:, :1], m[:, :0:-1]], axis=1)
+        m = np.roll(m, 3600, axis=1)
+        if best.endswith("90 S"):
+            m = m[::-1]
+        with rasterio.open(CACHE / "ti_mask_20ppd.tif", "w", driver="GTiff", height=3600, width=7200, count=1, dtype="float32", crs=MARS_SPHERE_CRS,
+                           transform=from_origin(-180, 90, 1 / 20, 1 / 20), compress="deflate", nodata=np.nan) as dst:
+            dst.write(m.astype("float32"), 1)
+        print("  wrote   ti_mask_20ppd.tif (1 = TES measured, 0 = interpolated fill)")
     return out
 
 
