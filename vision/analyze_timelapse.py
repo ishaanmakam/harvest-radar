@@ -1,8 +1,10 @@
 """Perceptron reads each zone's season as a time-lapse and reports when/where harvest and burning happened.
 
-    python vision/analyze_timelapse.py --data data/out [--mode images|video] [--zones Z01,Z05]
+    python vision/analyze_timelapse.py --data data/out [--out data/out] [--mode images|video] [--zones Z01,Z05] [--dry-run]
 
-Output: insights.json (contract: contracts/insights.schema.json), merged into the UI zone cards.
+Inputs (frames/frames.json, frame JPEGs, zones.geojson) come from --data.
+Outputs go to --out: insights.json and perceptron/crops/ (zone JPEGs, plus an mp4 in video mode).
+Writing into data/mock is refused. --dry-run builds crops and the prompt and makes no API call.
 
 mode=images (default, robust): sends the last N dated frames, cropped to the zone, as separate images.
 mode=video : stitches the cropped frames into an mp4 at 1 frame/second and asks for clip annotations;
@@ -49,13 +51,32 @@ def parse_counts(text):
     return counts
 
 
+def zone_prompt(mode, legend):
+    base_q = ("Sentinel-2 satellite images (10 m pixels, north up) of the same ~3 km patch of rice farmland in Punjab, India. "
+              "Green = standing rice, tan/light brown = harvested, very dark/black = burned stubble. ")
+    if mode == "video":
+        return (base_q + f"This video shows one satellite pass per second: {legend.replace('image', 'second')}. "
+                "Return clip annotations for when large-scale harvesting happens and when burn scars appear. "
+                "Then give approximate counts of standing, harvested and burned fields in the final frame.")
+    return (base_q + f"The images are in date order: {legend}. "
+            "In one or two sentences, describe when and where harvesting and burning happened across these dates. "
+            "Then give approximate counts of standing, harvested and burned fields in the last image, "
+            "formatted exactly as: standing=N harvested=N burned=N")
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", default="data/out")
+    ap.add_argument("--out", default="data/out")
     ap.add_argument("--mode", choices=["images", "video"], default="images")
     ap.add_argument("--frames", type=int, default=6, help="how many most-recent clear frames to send")
     ap.add_argument("--zones", default="")
+    ap.add_argument("--dry-run", action="store_true")
     args = ap.parse_args()
+    out_dir = Path(args.out)
+    if out_dir.resolve() == (ROOT / "data" / "mock").resolve():
+        print("refusing to write into data/mock (committed mock data); use --out data/out")
+        sys.exit(1)
     data = Path(args.data)
     frames = json.loads((data / "frames" / "frames.json").read_text())
     zones = json.loads((data / "zones.geojson").read_text())["features"]
@@ -63,30 +84,30 @@ def main():
         keep = set(args.zones.split(","))
         zones = [z for z in zones if z["properties"]["zone_id"] in keep]
     picks = frames["frames"][-args.frames:]
-    tmp = data / "perceptron" / "crops"
+    tmp = out_dir / "perceptron" / "crops"
     tmp.mkdir(parents=True, exist_ok=True)
 
     items = []
+    n_crops = 0
     for z in zones:
         zid, name = z["properties"]["zone_id"], z["properties"]["name"]
         crops = [crop_zone(data / f["rgb"], frames["bounds"], zone_bbox(z), tmp / f"{zid}_{f['date']}.jpg") for f in picks]
+        n_crops += len(crops)
         legend = ", ".join(f"image {i} = {f['date']}" for i, f in enumerate(picks))
-        base_q = ("Sentinel-2 satellite images (10 m pixels, north up) of the same ~3 km patch of rice farmland in Punjab, India. "
-                  "Green = standing rice, tan/light brown = harvested, very dark/black = burned stubble. ")
+        prompt = zone_prompt(args.mode, legend)
         if args.mode == "video":
             import imageio.v2 as imageio
             mp4 = tmp / f"{zid}.mp4"
             imageio.mimsave(mp4, [imageio.imread(c) for c in crops], fps=1)
-            text, _ = ask([mp4], base_q + f"This video shows one satellite pass per second: {legend.replace('image', 'second')}. "
-                          "Return clip annotations for when large-scale harvesting happens and when burn scars appear. "
-                          "Then give approximate counts of standing, harvested and burned fields in the final frame.",
-                          annotation_format="clip", label=f"timelapse_{zid}")
+        if args.dry_run:
+            with Image.open(crops[0]) as im:
+                w, h = im.size
+            print(f"{zid} crops={len(crops)} size={w}x{h} prompt_chars={len(prompt)}")
+            continue
+        if args.mode == "video":
+            text, _ = ask([mp4], prompt, annotation_format="clip", label=f"timelapse_{zid}")
         else:
-            text, _ = ask(crops, base_q + f"The images are in date order: {legend}. "
-                          "In one or two sentences, describe when and where harvesting and burning happened across these dates. "
-                          "Then give approximate counts of standing, harvested and burned fields in the last image, "
-                          "formatted exactly as: standing=N harvested=N burned=N",
-                          label=f"timelapse_{zid}")
+            text, _ = ask(crops, prompt, label=f"timelapse_{zid}")
         clips = []
         for a in parse_annotations(text):
             if a["kind"] == "clip" and a["t"]:
@@ -100,9 +121,15 @@ def main():
                       "counts": counts, "clips": clips, "raw": text})
         print(f"  {name}: {counts} | {summary[:120]}")
 
+    if args.dry_run:
+        print(f"dry run: {len(zones)} zones, {n_crops} crops written to {tmp}, 0 API calls")
+        return
+
     out = {"model": MODEL, "spent_usd": round(spent_usd(), 4), "items": items}
-    (data / "insights.json").write_text(json.dumps(out, separators=(",", ":")))
-    print(f"wrote {data / 'insights.json'}")
+    out_dir.mkdir(parents=True, exist_ok=True)
+    insights = out_dir / "insights.json"
+    insights.write_text(json.dumps(out, separators=(",", ":")))
+    print(f"wrote {insights}")
 
 
 if __name__ == "__main__":
