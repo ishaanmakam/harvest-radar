@@ -31,6 +31,29 @@ class TestCollapseMustPersist:
         assert rec["stage"] == "harvested" and rec["confidence"] == 0.7
 
 
+class TestMockWorldFollowsCropSystem:
+    def test_regenerated_mock_is_corn_and_soybeans_when_region_says_so(self):
+        import json
+        import subprocess
+        import sys
+        from pathlib import Path
+        root = Path(__file__).resolve().parents[2]
+        region = json.loads((root / "config" / "region.json").read_text())
+        subprocess.run([sys.executable, str(root / "scripts" / "make_mock_data.py")], check=True, cwd=root)
+        fields = json.loads((root / "data" / "mock" / "fields.geojson").read_text())["features"]
+        crops = {f["properties"]["crop"] for f in fields}
+        truth = json.loads((root / "data" / "mock" / "truth.json").read_text())
+        weather = json.loads((root / "data" / "mock" / "weather.json").read_text())
+        if region.get("crop_system") == "corn_soy":
+            assert crops == {"corn", "soybean", "other"}
+            assert truth["crop_system"] == "corn_soy"
+            assert 100 <= len(fields) <= 600                                  # 50-100 acre fields on an 8 x 10 km box
+            assert "tmin_c" in weather["forecast"] and min(weather["forecast"]["tmin_c"][:3]) <= 0   # a frost night in the lookahead
+            assert sum(1 for t in truth["fields"].values() if t["burned"]) < 0.05 * len(fields)
+        else:
+            assert crops == {"rice", "other"}
+
+
 class TestRegrowCheckIsOptional:
     def test_without_sown_threshold_regreening_weeks_later_never_reads_as_sown(self):
         dates = DATES + ["2026-10-29", "2026-11-03"]

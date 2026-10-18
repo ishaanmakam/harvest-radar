@@ -1,5 +1,6 @@
 {
   "name": "Story County, Iowa (demo AOI)",
+  "crop_system": "corn_soy",
   "bbox": [
     -93.52,
     41.98,
@@ -28,7 +29,8 @@
     "share_needing_chc": "ASSUMPTION: share of row-crop area combined by a custom operator rather than an owned machine; most Iowa operations own a combine, 15% is a scenario placeholder. Dispatch extension only.",
     "baseline_request_lag_days": "ASSUMPTION: a custom operator is booked about 2 days after the field is judged ready. Dispatch extension only.",
     "max_service_km": "ASSUMPTION: custom crews work a county-scale radius; 40 km covers the whole box from any simulated depot in config/chcs.json.",
-    "thresholds": "harvest_ndvi_max 0.25 separates residue (about 0.15 to 0.25) from dry standing corn and soybeans (about 0.25 to 0.40): on synthetic corn/soy seasons the old 0.35 called more than half the standing fields harvested weeks early. To be checked against real fields and USDA Crop Progress (intelligence/validate_usda.py). No sown_ndvi_min: no following crop inside the window, so the regrow check is off. frost_tmin_c: a forecast minimum at or below it within the rain lookahead triggers harvest-versus-weather on a ready crop; needs forecast tmin_c in weather.json."
+    "thresholds": "harvest_ndvi_max 0.25 separates residue (about 0.15 to 0.25) from dry standing corn and soybeans (about 0.25 to 0.40): on synthetic corn/soy seasons the old 0.35 called more than half the standing fields harvested weeks early. To be checked against real fields and USDA Crop Progress (intelligence/validate_usda.py). No sown_ndvi_min: no following crop inside the window, so the regrow check is off. frost_tmin_c: a forecast minimum at or below it within the rain lookahead triggers harvest-versus-weather on a ready crop; needs forecast tmin_c in weather.json.",
+    "crop_system": "corn_soy drives the mock generator (field sizes, dry-down phenology, rare burning, autumn frost) and nothing else; the models themselves are crop-agnostic. rice_wheat is the Punjab stand-in."
   },
   "thresholds": {
     "peak_ndvi_min": 0.55,
