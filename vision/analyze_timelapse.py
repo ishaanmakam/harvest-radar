@@ -30,8 +30,12 @@ CUE_KIND = {"flood": "flood", "stress": "stress", "change": "visible_change"}
 CROP_AREA = 1000.0 * 1000.0
 
 
-def crop_zone(img_path, bounds, zbbox, out_path):
-    """Save the zone crop. Also return the lon/lat box of the int-rounded pixel window, [W, S, E, N]."""
+def crop_zone(img_path, bounds, zbbox, out_path, crop_px):
+    """Save the zone crop. Also return the lon/lat box of the int-rounded pixel window, [W, S, E, N].
+
+    The saved image is resized so its long side is crop_px, and is never downscaled.
+    Bounds stay on the source pixel window; box coords are normalized 0-1000.
+    """
     im = Image.open(img_path)
     W, S, E, N = bounds
     x0 = (zbbox[0] - W) / (E - W) * im.width
@@ -39,7 +43,12 @@ def crop_zone(img_path, bounds, zbbox, out_path):
     y0 = (N - zbbox[3]) / (N - S) * im.height
     y1 = (N - zbbox[1]) / (N - S) * im.height
     ix0, iy0, ix1, iy1 = int(x0), int(y0), int(x1), int(y1)
-    im.crop((ix0, iy0, ix1, iy1)).save(out_path, quality=90)
+    cropped = im.crop((ix0, iy0, ix1, iy1))
+    long_side = max(cropped.size)
+    if 0 < long_side < crop_px:
+        scale = crop_px / long_side
+        cropped = cropped.resize((max(1, round(cropped.width * scale)), max(1, round(cropped.height * scale))), Image.LANCZOS)
+    cropped.save(out_path, quality=90)
     west = W + (ix0 / im.width) * (E - W)
     east = W + (ix1 / im.width) * (E - W)
     north = N - (iy0 / im.height) * (N - S)
@@ -74,17 +83,39 @@ def zone_prompt(mode, legend):
             "In one or two sentences, describe when and where harvesting and burning happened across these dates, "
             "and any standing water (flooding) or browning or declining patches inside green fields. "
             "Then give approximate counts of standing, harvested and burned fields in the last image, "
-            "formatted exactly as: standing=N harvested=N burned=N")
+            "formatted exactly as: standing=N harvested=N burned=N. "
+            "Finally, comparing the last image with the one before it, answer on one line exactly: "
+            "flood=yes|no stress=yes|no change=yes|no")
 
 
-def cue_prompt(prev_date, latest_date):
+CUE_DEFS = {
+    "flood": "'flood' = standing water on fields (dark blue/black, smooth, often along low ground)",
+    "stress": "'stress' = parts of green fields that are browning or patchy but not cleanly harvested",
+    "change": "'change' = areas that look clearly different from image 0",
+}
+_GATE = re.compile(r"flood\s*=\s*(yes|no)\s+stress\s*=\s*(yes|no)\s+change\s*=\s*(yes|no)", re.I)
+
+
+def parse_gate(text):
+    m = _GATE.search(text or "")
+    if not m:
+        return {"flood": False, "stress": False, "change": False}
+    return {"flood": m.group(1).lower() == "yes", "stress": m.group(2).lower() == "yes", "change": m.group(3).lower() == "yes"}
+
+
+def summary_text(text):
+    summary = clean_text(text)
+    summary = _GATE.sub("", summary)
+    summary = re.sub(r"standing\s*=.*$", "", summary, flags=re.I | re.S)
+    return re.sub(r"\s+", " ", summary).strip()
+
+
+def cue_prompt(prev_date, latest_date, kinds):
+    labels = "; ".join(CUE_DEFS[k] for k in ("flood", "stress", "change") if k in kinds)
     return (
         f"Two Sentinel-2 true-colour images (10 m pixels, north up) of the same ~3 km patch of farmland. "
-        f"Image 0 = {prev_date}, image 1 = {latest_date}. On image 1 only, draw boxes around: "
-        "'flood' = standing water on fields (dark blue/black, smooth, often along low ground); "
-        "'stress' = parts of green fields that are browning or patchy but not cleanly harvested; "
-        "'change' = areas that look clearly different from image 0. Use exactly those mention labels. "
-        "Mark at most 25 boxes in total. If there is none of a kind, draw no boxes for it."
+        f"Image 0 = {prev_date}, image 1 = {latest_date}. On image 1 only, draw boxes around: {labels}. "
+        "Use exactly those mention labels. Mark at most 25 boxes in total. If there is none of a kind, draw no boxes for it."
     )
 
 
@@ -119,27 +150,63 @@ def cue_detail(kind, pct, latest, prev):
     return f"Perceptron marked a clear change on about {pct}% of the field between {prev} and {latest}."
 
 
-def boxes_from_cues(text):
+def _round5(v):
+    return int(round(v / 5.0) * 5)
+
+
+def guard_kind(boxes):
+    """After the area filter. Returns (boxes to keep, note after the kind name)."""
+    n = len(boxes)
+    if n == 0:
+        return [], "kept 0 boxes"
+    groups = {}
+    for b in boxes:
+        (x0, y0), (x1, y1) = b["coords"]
+        key = (_round5(x0), _round5(y0), _round5(x1), _round5(y1))
+        groups.setdefault(key, b)
+    if n - len(groups) > n / 2:
+        return [], f"dropped (duplicates, {n} boxes)"
+    deduped = list(groups.values())
+
+    def edge_frac(idx):
+        return sum(1 for b in deduped if b["coords"][0][idx] <= 5) / len(deduped)
+
+    if len(deduped) >= 6 and (edge_frac(0) >= 0.7 or edge_frac(1) >= 0.7):
+        return [], f"dropped (edge_scan, {len(deduped)} boxes)"
+    if len(deduped) > 12:
+        return [], f"dropped (too_many, {len(deduped)} boxes)"
+    return deduped, f"kept {len(deduped)} boxes"
+
+
+def boxes_from_cues(text, allowed):
+    """Returns (boxes, notes). boxes is None when the response used an unknown box tag."""
     parsed = parse_annotations(text)
     boxes = []
     for a in parsed:
         mention = (a.get("mention") or "").strip().lower()
-        if a["kind"] == "point_box" and mention in CUE_MENTIONS and len(a["coords"]) == 2:
+        if a["kind"] == "point_box" and mention in allowed and len(a["coords"]) == 2:
             boxes.append({**a, "mention": mention})
     if not boxes and re.search(r"<(box|bbox|rect)\b", text or "", re.I):
-        print(text)
-        sys.exit("cue response used a box tag parse_annotations does not handle")
+        return None, ["cues: unknown tag"]
     on_latest = [b for b in boxes if b["asset_idx"] == 1]
     use = on_latest if on_latest else boxes
-    kept = []
+    by_kind = {k: [] for k in allowed}
     for b in use:
         (x0, y0), (x1, y1) = b["coords"]
         area = abs(x1 - x0) * abs(y1 - y0)
         if area > 0.40 * CROP_AREA or area < 0.0005 * CROP_AREA:
             continue
         b["area"] = area
-        kept.append(b)
-    return kept[:25]
+        by_kind[b["mention"]].append(b)
+    notes, kept = [], []
+    for kind in ("flood", "stress", "change"):
+        if kind not in allowed:
+            notes.append(f"{kind}: gate=no")
+            continue
+        kept_kind, note = guard_kind(by_kind[kind])
+        notes.append(f"{kind}: {note}")
+        kept.extend(kept_kind)
+    return kept, notes
 
 
 def cues_for_boxes(boxes, fields, crop_bounds, latest, prev):
@@ -188,6 +255,7 @@ def main():
     ap.add_argument("--zones", default="")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--verdict", choices=["perceptron", "vegetation_index"], default="vegetation_index")
+    ap.add_argument("--crop-px", type=int, default=768)
     args = ap.parse_args()
     out_dir = Path(args.out)
     mock = (ROOT / "data" / "mock").resolve()
@@ -212,7 +280,7 @@ def main():
     cue_totals = {"flood": 0, "stress": 0, "visible_change": 0}
     for z in zones:
         zid, name = z["properties"]["zone_id"], z["properties"]["name"]
-        cropped = [crop_zone(data / f["rgb"], frames["bounds"], zone_bbox(z), tmp / f"{zid}_{f['date']}.jpg") for f in picks]
+        cropped = [crop_zone(data / f["rgb"], frames["bounds"], zone_bbox(z), tmp / f"{zid}_{f['date']}.jpg", args.crop_px) for f in picks]
         crops = [path for path, _ in cropped]
         crop_bounds = [bounds for _, bounds in cropped]
         n_crops += len(crops)
@@ -236,10 +304,14 @@ def main():
             else:
                 print(f"{zid} cue_frames={prev_date} {latest_date} fields={len(zone_fields)}")
             continue
-        if args.mode == "video":
-            text, _ = ask([mp4], prompt, annotation_format="clip", label=f"timelapse_{zid}", max_tokens=1024)
-        else:
-            text, _ = ask(crops, prompt, label=f"timelapse_{zid}", max_tokens=1024)
+        try:
+            if args.mode == "video":
+                text, _ = ask([mp4], prompt, annotation_format="clip", label=f"timelapse_{zid}", max_tokens=1024)
+            else:
+                text, _ = ask(crops, prompt, label=f"timelapse_{zid}", max_tokens=1024)
+        except RuntimeError as e:
+            print(e)
+            break
         clips = []
         for a in parse_annotations(text):
             if a["kind"] == "clip" and a["t"]:
@@ -248,33 +320,43 @@ def main():
                 clips.append({"start": picks[i0]["date"], "end": picks[i1]["date"], "label": a["mention"] or ""})
         m = re.search(r"standing\s*=\s*(\d+).*?harvested\s*=\s*(\d+).*?burned\s*=\s*(\d+)", text, re.I | re.S)
         counts = ({"standing": int(m.group(1)), "harvested": int(m.group(2)), "burned": int(m.group(3))} if m else parse_counts(text))
-        summary = re.sub(r"standing\s*=.*$", "", clean_text(text), flags=re.I | re.S).strip()
+        summary = summary_text(text)
+        gate = parse_gate(text) if args.mode != "video" else {"flood": False, "stress": False, "change": False}
         raw_cues = ""
-        kept = []
         zone_cues = []
+        cue_notes = []
+        yes_kinds = {k for k, on in gate.items() if on}
         if args.mode == "video":
-            print(f"  {name}: cue call skipped in video mode")
+            cue_notes = ["cues: skipped in video mode"]
         elif fields_by_zone is None or prev_date is None:
-            print(f"  {name}: cue call skipped")
+            cue_notes = [f"{k}: gate={'yes' if gate[k] else 'no'}" for k in ("flood", "stress", "change")]
+            cue_notes.append("cues: skipped")
+        elif not yes_kinds:
+            cue_notes = [f"{k}: gate=no" for k in ("flood", "stress", "change")]
         else:
-            raw_cues, _ = ask(
-                [crops[-2], crops[-1]],
-                cue_prompt(prev_date, latest_date),
-                annotation_format="box",
-                label=f"cues_{zid}",
-                max_tokens=4096,
-            )
-            kept = boxes_from_cues(raw_cues)
-            zone_cues = cues_for_boxes(kept, zone_fields, crop_bounds[-1], latest_date, prev_date)
-            field_cues.extend(zone_cues)
-        box_counts = {k: 0 for k in ("flood", "stress", "change")}
-        for b in kept:
-            box_counts[b["mention"]] += 1
+            try:
+                raw_cues, _ = ask(
+                    [crops[-2], crops[-1]],
+                    cue_prompt(prev_date, latest_date, yes_kinds),
+                    annotation_format="box",
+                    label=f"cues_{zid}",
+                    max_tokens=4096,
+                )
+            except RuntimeError as e:
+                print(e)
+                break
+            kept, cue_notes = boxes_from_cues(raw_cues, yes_kinds)
+            if kept is None:
+                print(raw_cues)
+            else:
+                zone_cues = cues_for_boxes(kept, zone_fields, crop_bounds[-1], latest_date, prev_date)
+                field_cues.extend(zone_cues)
         for cue in zone_cues:
             cue_totals[cue["kind"]] += 1
         items.append({"zone_id": zid, "kind": "timelapse", "summary": summary[:400] or "(no summary)",
-                      "counts": counts, "clips": clips, "raw": text, "raw_cues": raw_cues})
-        print(f"  {name}: {counts} | boxes {box_counts} | cues {len(zone_cues)} | {summary[:120]}")
+                      "counts": counts, "clips": clips, "raw": text, "raw_cues": raw_cues,
+                      "gate": gate, "cue_notes": cue_notes})
+        print(f"  {name}: {counts} | {cue_notes} | cues {len(zone_cues)} | {summary[:120]}")
 
     if args.dry_run:
         print(f"dry run: {len(zones)} zones, {n_crops} crops written to {tmp}, 0 API calls")
