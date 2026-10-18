@@ -1,10 +1,11 @@
 """Perceptron reads each zone's season as a time-lapse and reports when/where harvest and burning happened.
 
-    python vision/analyze_timelapse.py --data data/out [--out data/out] [--mode images|video] [--zones Z01,Z05] [--dry-run] [--verdict vegetation_index]
+    python vision/analyze_timelapse.py --data data/out [--out data/out] [--mode images|video] [--zones Z01,Z05] [--dry-run] [--verdict vegetation_index] [--cues] [--min-clear 0.85]
 
 Inputs (frames/frames.json, frame JPEGs, zones.geojson) come from --data.
 Outputs go to --out: insights.json and perceptron/crops/ (zone JPEGs, plus an mp4 in video mode).
 Writing into data/mock is refused. --dry-run builds crops and the prompt and makes no API call.
+Frames used are those with clear_frac >= --min-clear, then the last --frames. Box cues run only with --cues.
 
 mode=images (default, robust): sends the last N dated frames, cropped to the zone, as separate images.
 mode=video : stitches the cropped frames into an mp4 at 1 frame/second and asks for clip annotations;
@@ -80,8 +81,8 @@ def zone_prompt(mode, legend, land):
                 "Also note any standing water (flooding) or browning or declining patches inside green fields. "
                 "Then give approximate counts of standing, harvested and burned fields in the final frame.")
     return (scene + f"The images are in date order: {legend}. "
-            "In one or two sentences, describe when and where harvesting and burning happened across these dates, "
-            "and any standing water (flooding) or browning or declining patches inside green fields. "
+            "In two short sentences, say which parts of this patch (north/south/east/west/centre) changed and on which dates, "
+            "e.g. fields drying down or being harvested, and mention any flooding or patchy damage only if clearly visible. "
             "Then give approximate counts of standing, harvested and burned fields in the last image, "
             "formatted exactly as: standing=N harvested=N burned=N. "
             "Finally, comparing the last image with the one before it, answer on one line exactly: "
@@ -242,13 +243,29 @@ def cues_for_boxes(boxes, fields, crop_bounds, latest, prev):
     return [cue for _, cue in best.values()]
 
 
+CUES_OFF = "cues: off (box annotations unreliable on real frames; see gate verdict)"
+
+
+def select_frames(all_frames, min_clear, n):
+    """Frames with clear_frac >= min_clear, then the last n. Prints the chosen dates once."""
+    clear = [f for f in all_frames if float(f.get("clear_frac") or 0) >= min_clear]
+    if len(clear) < 4:
+        print(f"STOP: {len(clear)} frames have clear_frac >= {min_clear}; need at least 4")
+        sys.exit(1)
+    picks = clear[-n:]
+    print("frames:", ", ".join(f["date"] for f in picks))
+    return picks
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", default="data/out")
     ap.add_argument("--out", default="data/out")
     ap.add_argument("--mode", choices=["images", "video"], default="images")
     ap.add_argument("--frames", type=int, default=6, help="how many most-recent clear frames to send")
+    ap.add_argument("--min-clear", type=float, default=0.85, help="keep frames with clear_frac at least this")
     ap.add_argument("--zones", default="")
+    ap.add_argument("--cues", action="store_true", help="box cues when the narration gate says yes (off by default)")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--verdict", choices=["perceptron", "vegetation_index"], default="vegetation_index")
     ap.add_argument("--crop-px", type=int, default=768)
@@ -265,7 +282,8 @@ def main():
     if args.zones:
         keep = set(args.zones.split(","))
         zones = [z for z in zones if z["properties"]["zone_id"] in keep]
-    picks = frames["frames"][-args.frames:]
+    picks = select_frames(frames["frames"], args.min_clear, args.frames)
+    chosen_dates = [f["date"] for f in picks]
     land = landscape()
     fields_by_zone = load_fields(data)
     tmp = out_dir / "perceptron" / "crops"
@@ -296,7 +314,10 @@ def main():
             if z is zones[0]:
                 print(prompt[:120])
             print(f"{zid} crops={len(crops)} size={w}x{h} prompt_chars={len(prompt)}")
-            if args.mode == "video":
+            if not args.cues:
+                if z is zones[0]:
+                    print(CUES_OFF)
+            elif args.mode == "video":
                 print(f"{zid} cue call skipped in video mode")
             elif fields_by_zone is None or prev_date is None:
                 print(f"{zid} cue call skipped fields={len(zone_fields)}")
@@ -325,7 +346,9 @@ def main():
         zone_cues = []
         cue_notes = []
         yes_kinds = {k for k, on in gate.items() if on}
-        if args.mode == "video":
+        if not args.cues:
+            cue_notes = [CUES_OFF]
+        elif args.mode == "video":
             cue_notes = ["cues: skipped in video mode"]
         elif fields_by_zone is None or prev_date is None:
             cue_notes = [f"{k}: gate={'yes' if gate[k] else 'no'}" for k in ("flood", "stress", "change")]
@@ -354,7 +377,7 @@ def main():
             cue_totals[cue["kind"]] += 1
         items.append({"zone_id": zid, "kind": "timelapse", "summary": summary[:400] or "(no summary)",
                       "counts": counts, "clips": clips, "raw": text, "raw_cues": raw_cues,
-                      "gate": gate, "cue_notes": cue_notes})
+                      "gate": gate, "cue_notes": cue_notes, "frames": chosen_dates})
         print(f"  {name}: {counts} | {cue_notes} | cues {len(zone_cues)} | {summary[:120]}")
 
     if args.dry_run:
