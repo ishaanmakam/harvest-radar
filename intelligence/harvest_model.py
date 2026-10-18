@@ -20,7 +20,7 @@ import argparse
 import statistics
 from pathlib import Path
 
-from common import add_days, d, load_region, read_json, s, write_json
+from common import add_days, d, load_region, read_json, s, season_as_of, write_json
 
 
 def median_smooth(vals):
@@ -177,7 +177,7 @@ def analyze_field(fid, zone_id, dates, ndvi, nbr, fires_by_field, th):
 def run(data_dir: Path):
     region = load_region()
     th = thresholds_for(region)
-    as_of = d(region["as_of"])
+    as_of = season_as_of(data_dir, region)       # run.json (live or replay) wins over config/region.json
     window = region["sowing_window_days"]
     fields = read_json(data_dir, "fields.geojson")
     ts = read_json(data_dir, "timeseries.json")

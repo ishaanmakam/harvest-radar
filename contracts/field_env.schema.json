@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "field_env.schema.json",
+  "title": "field_env.json: soil and terrain per field from SoilGrids 2.0 and Open-Meteo elevation (optional, additive)",
+  "type": "object",
+  "required": ["fetched_at", "sources", "fields"],
+  "properties": {
+    "fetched_at": {"type": "string"},
+    "sources": {"type": "array", "items": {"type": "string"}},
+    "fields": {
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["zone_id", "soc_g_kg", "clay_pct", "sand_pct", "ph", "texture", "elevation_m", "slope_pct", "aspect", "note"],
+        "properties": {
+          "zone_id": {"type": ["string", "null"]},
+          "lon": {"type": "number"},
+          "lat": {"type": "number"},
+          "soc_g_kg": {"type": ["number", "null"], "description": "soil organic carbon, 0-30 cm depth-weighted"},
+          "clay_pct": {"type": ["number", "null"]},
+          "sand_pct": {"type": ["number", "null"]},
+          "ph": {"type": ["number", "null"]},
+          "texture": {"type": ["string", "null"]},
+          "elevation_m": {"type": ["number", "null"]},
+          "slope_pct": {"type": ["number", "null"]},
+          "aspect": {"type": ["string", "null"]},
+          "note": {"type": "string"}
+        }
+      }
+    },
+    "landscape": {"type": "object"},
+    "zones": {"type": "object"}
+  },
+  "additionalProperties": true
+}

@@ -20,7 +20,7 @@ import harvest_model
 from common import ROOT, read_json
 
 INPUTS = ("fields.geojson", "zones.geojson", "timeseries.json", "weather.json", "fires.json", "insights.json",
-          "truth.json", "usda_crop_progress.json")
+          "truth.json", "usda_crop_progress.json", "run.json", "weather_ensemble.json", "yield_model.json", "field_env.json")
 EXTRAS = ("analytics.json",)        # additive outputs: replaced when produced, never block the plans
 OUTPUTS = ("status.json", "plans.json", "route.json")
 SCHEMAS = {"status.json": "status.schema.json", "plans.json": "plans.schema.json", "route.json": "route.schema.json"}
