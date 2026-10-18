@@ -183,14 +183,14 @@ export function createWorlds({ scene, camera, controls, domElement, earth, label
     copy.hidden = false;
     copy.replaceChildren();
     if (def.id === "mars") {
-      copy.append(
+      copy.append(...[
         h("span", { class: "world-pill is-open" }, "Mars · Open"),
         h("h1", {}, "The next home"),
         h("p", { class: "tagline" }, "A city on Mars starts with one landing: near water, through enough air to slow down, on ground that holds."),
         h("p", { class: "world-line" }, "Every 7 km of Mars between 60 S and 60 N, checked against four rules from public orbital data."),
         h("ul", { class: "world-facts" }, ...(def.facts || []).map((f) => h("li", {}, f))),
         h("button", { class: "world-open", type: "button", onclick: () => hooks.onOpenMars?.() }, "Open Mars map"),
-      );
+      ].filter(Boolean));
       return;
     }
     const numbers = [];
@@ -198,14 +198,14 @@ export function createWorlds({ scene, camera, controls, domElement, earth, label
     if (def.radius_earth != null) numbers.push(`${fmt(def.radius_earth, 2)} Earth radii`);
     if (def.eq_temp_k != null) numbers.push(`about ${fmt(def.eq_temp_k, 0)} K`);
     if (def.orbital_period_days != null) numbers.push(`a ${fmt(def.orbital_period_days, 1)}-day year`);
-    copy.append(
+    copy.append(...[
       h("span", { class: "world-pill is-soon" }, "Coming soon"),
       h("h1", {}, def.name),
       h("p", { class: "tagline" }, def.tagline || ""),
       numbers.length ? h("p", { class: "world-numbers" }, numbers.join(" · ")) : null,
       def.kind === "exoplanet" && def.host_star ? h("p", { class: "world-line" }, `Orbits ${def.host_star}${def.spectral_type ? ` (${def.spectral_type})` : ""}${def.discovered ? `, found ${def.discovered}` : ""}${def.method ? ` by ${String(def.method).toLowerCase()}` : ""}.`) : null,
       h("p", { class: "world-source" }, def.illustration ? "Illustration: no image of this world exists. " : "", def.source ? `Source: ${def.source}.` : ""),
-    );
+    ].filter(Boolean));
   }
 
   function renderLegend(entry, orbiters) {
