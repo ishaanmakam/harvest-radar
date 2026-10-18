@@ -10,7 +10,7 @@ Outputs  plans.json, route.json  (contracts/plans.schema.json, contracts/route.s
 
 Checks, in table order, and the rule each applies (numbers from the spec; index cues are ours):
   harvest_ready        watch    the harvest model calls the crop ready (harvest expected within ~3 days)
-  harvest_before_rain  act_now  crop ready and any forecast day in the next 3 days has >= 15 mm
+  harvest_before_rain  act_now  crop ready and any forecast day in the next 3 days has >= 15 mm (frost is information only)
   establishment        watch    peak NDVI never reached crop level (or too few clear passes to tell)
   burn_scar            act_now  NBR scar first seen in the latest clear pass; watch for an older scar; clear if none
   fire                 act_now  a FIRMS hotspot inside the field in the last 5 days
@@ -27,9 +27,10 @@ with any cue has source = "perceptron", also when observed is false (Perceptron 
 """
 import argparse
 from collections import defaultdict
-from datetime import date
+from datetime import date, timedelta
 from pathlib import Path
 
+import weather_model as wm
 from common import ROOT, d, load_region, read_json, s, write_json
 
 KINDS = ["harvest_ready", "harvest_before_rain", "establishment", "burn_scar", "fire", "flood", "stress", "visible_change"]
@@ -41,7 +42,7 @@ FLAG = {0: "fine", 1: "watch", 2: "act_now"}
 DEFAULTS = {
     "rain_act_now_mm": 15.0,       # spec: harvest-before-rain threshold
     "rain_lookahead_days": 3,      # spec: "any forecast day in the next 3 days"
-    "frost_tmin_c": 0.0,           # ours (Iowa): forecast Tmin at or below this within the same lookahead also triggers
+    "frost_tmin_c": 0.0,           # ours (Iowa): forecast Tmin at or below this is named in the row (never act_now: a frost after maturity does not hurt the grain)
     "fire_lookback_days": 5,       # spec: hotspot in the last 5 days
     "flood_ndvi_max": 0.0,         # ours: standing water reads as NDVI at or below zero
     "stress_ndvi_drop_min": 0.10,  # ours: drop between consecutive clear passes that is not a harvest (no zone context)
@@ -84,6 +85,15 @@ def _cue_norm(cue):
     dt = c.get("date")
     c["date"] = str(dt)[:10] if dt else None
     return c
+
+
+def green_up_date(passes):
+    """The first clear pass with NDVI >= 0.4 (roughly V6 for corn): the start of the degree-day budget. None when the
+    field was already that green on its first clear pass (the crossing is unknown) or never got there."""
+    greens = [i for i, p in enumerate(passes) if p[1] is not None and p[1] >= 0.4]
+    if not greens or greens[0] == 0:
+        return None
+    return passes[greens[0]][0]
 
 
 def forecast_pairs(dates, precip, tmin=None):
@@ -130,11 +140,13 @@ def _cue_text(cue, default):
     return f"{text} ({tag})"
 
 
-def farm_plan(rec, passes, forecast, hotspots, insight, today: date, th=None, fallback_as_of=None, zone_drop=None):
+def farm_plan(rec, passes, forecast, hotspots, insight, today: date, th=None, fallback_as_of=None, zone_drop=None,
+              outlook=None):
     """One farm's plan. passes = [(date, ndvi, nbr)] clear passes; forecast = [(date, precip_mm)];
     hotspots = FIRMS detections in this field; insight = per-field Perceptron cues (kind -> cue) or None;
     fallback_as_of = the landscape's latest clear pass, used when this farm has no clear pass of its own;
-    zone_drop = the zone's typical NDVI drop between the last two passes (see zone_declines), or None."""
+    zone_drop = the zone's typical NDVI drop between the last two passes (see zone_declines), or None;
+    outlook = weather_model.harvest_outlook(...) for a standing crop (combine window, rain, frost), or None."""
     th = {**DEFAULTS, **(th or {})}
     passes = sorted(p for p in passes if p[1] is not None)
     latest = passes[-1] if passes else None
@@ -151,49 +163,146 @@ def farm_plan(rec, passes, forecast, hotspots, insight, today: date, th=None, fa
         pred = (d(rec["predicted_harvest_start"]), d(rec["predicted_harvest_end"]))
     checks = []
 
-    # 1. harvest readiness
+    # 1. harvest readiness (satellite says ready; the weather model adds the best combine window)
+    outlook = outlook if (outlook and standing) else None
+    by_degree_days = bool(outlook) and outlook.get("ready_source") == "degree_days" and bool(outlook.get("combine_ready"))
+    ready_text = None
     if ready:
         detail = "Crop looks ready to harvest" + (f": expected {_span(*pred)}" if pred else "")
-        checks.append(_check("harvest_ready", "watch", detail, window=_win(*pred) if pred else {}))
+        win = _win(*pred) if pred else {}
+        ready_text = "Crop looks ready: line up the combine or your custom harvester" + (f" for {_span(*pred)}" if pred else "") + "."
+        if outlook:
+            w = outlook.get("window")
+            if not w:
+                # combine-ready but no workable day inside the forecast: no window in the headline (the row says why)
+                win = {}
+                if outlook.get("summary"):
+                    detail += "; " + outlook["summary"].rstrip(".")
+                ready_text = "Crop looks ready, but no workable day in the forecast: have the combine ready for the first dry day."
+            else:
+                win = {"start": w["start"], "end": w["end"]}
+                ws, we = d(w["start"]), d(w["end"])
+                rain_mm = {d(k): v for k, v in (outlook.get("rain_mm") or {}).items()}
+                breaker = next((k for k in sorted(rain_mm) if k > we), None)
+                if outlook.get("window_to_horizon") and breaker is None:
+                    # the window only ends because the forecast does: that is dry weather, not a deadline
+                    if ws <= today:
+                        detail += f"; dry weather through {w['end']}"
+                        ready_text = f"Crop looks ready and the forecast is dry through {w['end']}: start as soon as the combine is free."
+                    else:
+                        detail += f"; field fit from {w['start']}, then dry through {w['end']}"
+                        ready_text = f"Crop looks ready: the field should be fit from {w['start']}, and it stays dry through {w['end']}."
+                else:
+                    phrase = wm.window_phrase(ws, we, today)
+                    detail += f"; best combine window {phrase}"
+                    if breaker is not None:
+                        mm = rain_mm[breaker]
+                        detail += (f", before {mm:.0f} mm of rain on {s(breaker)}" if mm >= wm.RAIN_BLOCK_MM
+                                   else f", until a shower ({mm:.0f} mm) on {s(breaker)}")
+                    nw = outlook.get("next_window")
+                    if nw:
+                        detail += (f"; next from {nw['start']}" if nw.get("end") == outlook.get("horizon_end")
+                                   else f"; next {nw['start']} to {nw['end']}")
+                    ready_text = f"Crop looks ready: line up the combine or your custom harvester for {phrase}."
+        checks.append(_check("harvest_ready", "watch", detail, window=win))
     elif harvest:
         checks.append(_check("harvest_ready", "clear", f"Looks harvested from the satellite: greenness collapsed around {s(harvest)}"))
     elif stage == "maturing" and pred:
-        checks.append(_check("harvest_ready", "clear", f"Maturing: harvest expected {_span(*pred)}"))
+        detail = f"Maturing: harvest expected {_span(*pred)}"
+        if by_degree_days:
+            detail += f"; combine-ready about {outlook['combine_ready']} by the degree days"
+        checks.append(_check("harvest_ready", "clear", detail))
     elif stage == "growing":
-        checks.append(_check("harvest_ready", "clear", "Still greening up; no harvest expected within two weeks"))
+        detail = "Still greening up; no harvest expected within two weeks"
+        if by_degree_days:
+            detail += f"; combine-ready about {outlook['combine_ready']} by the degree days"
+        checks.append(_check("harvest_ready", "clear", detail))
     else:
         checks.append(_check("harvest_ready", "clear", "No harvest signal yet"))
 
-    # 2. harvest versus weather: heavy rain (spec) or frost (Iowa addition) in the next 3 days on a ready crop
-    horizon = [e for e in forecast if 0 <= (e[0] - today).days < th["rain_lookahead_days"]]
+    # 2. harvest versus weather: heavy rain in the next 3 days on a ready crop is act_now (spec). Frost is information:
+    #    after maturity it does not hurt corn or soybean grain, and nothing can be done for a crop still filling.
+    n_days = th["rain_lookahead_days"]
+    fresh = [e for e in forecast if e[0] >= today]
+    stale_end = max(e[0] for e in forecast) if forecast and not fresh else None
+    horizon = [e for e in fresh if (e[0] - today).days < n_days]
     rain = [(e[0], e[1]) for e in horizon if e[1] is not None and e[1] >= th["rain_act_now_mm"]]
+    wet = [(e[0], e[1]) for e in horizon if e[1] is not None and wm.SHOWER_MM <= e[1] < th["rain_act_now_mm"]]
     has_temps = any(len(e) > 2 for e in forecast)
     frost = [(e[0], e[2]) for e in horizon if len(e) > 2 and e[2] is not None and e[2] <= th["frost_tmin_c"]]
-    if ready and (rain or frost):
-        parts, days = [], []
-        if rain:
-            more = f" and more on {s(rain[-1][0])}" if len(rain) > 1 else ""
-            parts.append(f"{rain[0][1]:.0f} mm of rain forecast on {s(rain[0][0])}{more}")
-            days += [r[0] for r in rain]
-        if frost:
-            parts.append(f"frost forecast on {s(frost[0][0])} ({frost[0][1]:.0f} °C)")
-            days += [f[0] for f in frost]
-        what = "rain" if rain and not frost else ("frost" if frost and not rain else "rain and the frost")
-        checks.append(_check("harvest_before_rain", "act_now", f"Harvest before the {what}: " + "; ".join(parts),
-                             window=_win(min(days), max(days))))
-        today_text = f"Harvest before {s(min(days))}: " + "; ".join(parts) + "."
-    else:
+    precip = {e[0]: (e[1] or 0.0) for e in forecast}
+
+    def frost_temp():
+        t = frost[0][1]
+        return f"{t:.0f} °C, a hard freeze" if t <= wm.HARD_FREEZE_C else f"{t:.0f} °C"
+
+    def frost_words(mature):
+        if mature:
+            return f"frost expected on {s(frost[0][0])} ({frost_temp()}): the crop is mature, so it will not hurt the grain; no need to rush"
+        return f"frost expected on {s(frost[0][0])} ({frost_temp()}): if the crop is still filling it may lose some yield; nothing to do today"
+
+    def mature_at(day):
+        """Was the crop past physiological maturity on `day`? Ready crops are; otherwise the satellite's harvest estimate
+        less the dry-down fortnight decides, or the degree-day maturity when that path produced the estimate."""
         if ready:
-            detail = (f"No rain of {th['rain_act_now_mm']:.0f} mm or more" + (" and no frost" if has_temps else "")
-                      + f" in the next {th['rain_lookahead_days']} days")
-        elif rain or frost:
-            coming = ([f"{rain[0][1]:.0f} mm forecast on {s(rain[0][0])}"] if rain else []) + \
-                     ([f"frost forecast on {s(frost[0][0])}"] if frost else [])
-            detail = ", ".join(coming) + ", but the crop is not ready to cut"
+            return True
+        o = outlook or {}
+        if not o.get("combine_ready"):
+            return False
+        if o.get("ready_source") == "degree_days":
+            return o.get("maturity") is not None and d(o["maturity"]) <= day
+        return d(o["combine_ready"]) - timedelta(days=wm.DRYDOWN_BEFORE_HARVEST_DAYS) <= day
+
+    def fit_words(after):
+        fit = wm.first_fit_day(precip, after)
+        return (f"the field should be fit again from {s(fit)}" if fit else "the field will need a few dry days after"), fit
+
+    today_text = None
+    if ready and rain:
+        first_day, first_mm = rain[0]
+        more = f" and more on {s(rain[-1][0])}" if len(rain) > 1 else ""
+        fit_txt, fit = fit_words(first_day)
+        gap = (first_day - today).days
+        if gap == 0:
+            detail = f"{first_mm:.0f} mm of rain today{more}; {fit_txt}"
+            today_text = (f"Rain today ({first_mm:.0f} mm): the field will not be fit until {s(fit)}. Have the combine ready for then."
+                          if fit else f"Rain today ({first_mm:.0f} mm): the field will not be fit for several days. Have the combine ready for the first dry day.")
+        elif gap == 1:
+            detail = f"{first_mm:.0f} mm of rain forecast tomorrow ({s(first_day)}){more}; {fit_txt}"
+            today_text = f"Harvest today: {first_mm:.0f} mm of rain is expected tomorrow ({s(first_day)}){more}; {fit_txt}."
         else:
-            detail = "Crop not ready to cut; no heavy rain" + (" or frost" if has_temps else "") + " forecast"
+            detail = f"{first_mm:.0f} mm of rain forecast on {s(first_day)}{more}; {fit_txt}"
+            today_text = f"Harvest before {s(first_day)}: {first_mm:.0f} mm of rain forecast on {s(first_day)}{more}; {fit_txt}."
+        if frost:
+            detail += "; " + frost_words(True)
+        checks.append(_check("harvest_before_rain", "act_now", detail, window=_win(rain[0][0], rain[-1][0])))
+    else:
+        if stale_end:
+            detail = (f"No forecast for the next {n_days} days (weather.json ends {s(stale_end)}): refresh it"
+                      + ("; check the sky before cutting" if ready else ""))
+        elif ready:
+            if wet:
+                w_day, w_mm = wet[0]
+                fit_txt, _ = fit_words(w_day)
+                have = f"you have {wm.window_phrase(today, w_day - timedelta(days=1), today)}, then " if w_day > today else ""
+                detail = f"{w_mm:.0f} mm of rain expected on {s(w_day)} (under the {th['rain_act_now_mm']:.0f} mm act-now line): {have}{fit_txt}"
+            else:
+                detail = f"No rain of {th['rain_act_now_mm']:.0f} mm or more in the next {n_days} days"
+            if frost:
+                detail += "; " + frost_words(True)
+        elif harvest or stage == "harvested":
+            detail = "Field is already harvested; rain and frost no longer matter for this crop"
+        elif not standing:
+            detail = "No standing crop, so the weather does not change anything here"
+        else:
+            coming = ([f"{rain[0][1]:.0f} mm of rain expected on {s(rain[0][0])}"] if rain else [])                 + ([f"frost expected on {s(frost[0][0])} ({frost_temp()})"] if frost else [])
+            if coming:
+                detail = " and ".join(coming) + ": the crop is not ready yet, so nothing to do today"
+                if frost and not mature_at(frost[0][0]):
+                    detail += "; a crop still filling may lose some yield to the frost"
+            else:
+                detail = f"No heavy rain{' or frost' if has_temps else ''} in the next {n_days} days; the crop is not ready yet"
         checks.append(_check("harvest_before_rain", "clear", detail))
-        today_text = None
 
     # 3. establishment
     peak = rec.get("peak_ndvi")
@@ -334,14 +443,12 @@ def farm_plan(rec, passes, forecast, hotspots, insight, today: date, th=None, fa
     elif key == ("act_now", "harvest_before_rain"):
         today_line = today_text
     elif key == ("watch", "harvest_ready"):
-        w = by_kind["harvest_ready"]["window"]
-        when = f" for {w['start']} to {w['end']}" if w else ""
-        today_line = f"Crop looks ready: line up the combine or your custom harvester{when}."
+        today_line = ready_text
     elif key == ("watch", "establishment") and too_few:
         today_line = "Too few clear satellite passes to judge the crop yet: the officer will check by phone."
     else:
         today_line = TODAY_TEXT[key]
-    return {
+    plan = {
         "farm_id": rec["field_id"],
         "as_of": s(as_of),
         "flag": FLAG[worst],
@@ -350,6 +457,9 @@ def farm_plan(rec, passes, forecast, hotspots, insight, today: date, th=None, fa
         "checks": checks,
         "risks": [c["detail"] for c in checks if c["status"] != "clear"],
     }
+    if outlook:
+        plan["harvest_outlook"] = outlook          # additive: the weather side of the harvest decision
+    return plan
 
 
 def build_route(plans, today: date):
@@ -405,6 +515,29 @@ def run(data_dir: Path):
     zone_of = {f["properties"]["field_id"]: f["properties"]["zone_id"] for f in fields["features"]}
     thr = {**DEFAULTS, **th}
     drops = zone_declines(ts, zone_of, thr["stress_max_gap_days"])
+    observed = weather.get("observed") or {}
+    fc_dates = [d(x[:10]) for x in fc.get("dates", [])]
+    fresh_fc = any(x >= today for x in fc_dates)
+    have_weather = bool(observed.get("dates")) and fresh_fc
+    if fc_dates and not fresh_fc:
+        print(f"  WARN forecast ends {s(max(fc_dates))}, before as_of {s(today)}: no weather outlooks; refresh weather.json")
+
+    def outlook_for(rec, passes, crop):
+        """Weather side for a standing crop. The satellite's own estimate is the ready date when it has one: the
+        predicted harvest start for a ready field, the window centre for a maturing or growing one (harvest_model
+        clamps the start to as_of, so the start alone would call every maturing field ready today). Otherwise degree
+        days from green-up decide; with neither, the outlook still carries the rain and frost facts."""
+        if not have_weather or rec.get("stage") not in ("growing", "maturing", "ready"):
+            return None
+        ready = None
+        if rec.get("predicted_harvest_start") and rec.get("predicted_harvest_end"):
+            a, b = d(rec["predicted_harvest_start"]), d(rec["predicted_harvest_end"])
+            ready = a if rec.get("stage") == "ready" else a + (b - a) // 2
+        try:
+            return wm.harvest_outlook(observed, fc, today, crop=crop, green_up=green_up_date(passes), ready_override=ready)
+        except Exception as e:  # a weather quirk must never cost the farm its plan
+            print(f"  WARN outlook for {rec.get('field_id')}: {e}")
+            return None
 
     plans = []
     for feat in fields["features"]:
@@ -414,7 +547,8 @@ def run(data_dir: Path):
         series = ts["fields"].get(fid, {"ndvi": [], "nbr": []})
         passes = [(dt, v, b) for dt, v, b in zip(dates, series["ndvi"], series["nbr"]) if v is not None]
         plan = farm_plan(rec, passes, forecast, hotspots.get(fid, []), cues.get(fid), today, th,
-                         fallback_as_of=latest_clear, zone_drop=drops.get(p["zone_id"]))
+                         fallback_as_of=latest_clear, zone_drop=drops.get(p["zone_id"]),
+                         outlook=outlook_for(rec, passes, p.get("crop") or "corn"))
         plan["zone_id"] = p["zone_id"]
         plans.append(plan)
     route = build_route(plans, today)

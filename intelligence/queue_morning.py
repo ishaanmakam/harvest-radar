@@ -43,7 +43,7 @@ PACKS = {
     },
     "hi": {
         "head": "हार्वेस्ट रडार की सुबह की योजना, खेत {farm}, {date} के सैटेलाइट पास से।",
-        "flag": "स्थिति", "today": "आज", "checks": "जाँचें", "risks": "जोखिम", "all_clear": "सभी आठ जाँचें ठीक हैं।",
+        "flag": "स्थिति", "today": "आज", "checks": "जाँचें", "risks": "जोखिम", "all_clear": "सभी आठ जाँचें ठीक हैं।", "weather": "मौसम",
         "status": {"clear": "ठीक", "watch": "ध्यान दें", "act_now": "अभी कार्रवाई करें"},
         "flags": {"fine": "ठीक", "watch": "ध्यान दें", "act_now": "अभी कार्रवाई करें"},
         "labels": {"harvest_ready": "कटाई की तैयारी", "harvest_before_rain": "बारिश से पहले कटाई", "establishment": "फसल का जमाव",
@@ -54,7 +54,7 @@ PACKS = {
     },
     "pa": {
         "head": "ਹਾਰਵੈਸਟ ਰਾਡਾਰ ਸਵੇਰ ਦੀ ਯੋਜਨਾ, ਖੇਤ {farm}, {date} ਦੇ ਸੈਟੇਲਾਈਟ ਪਾਸ ਤੋਂ।",
-        "flag": "ਸਥਿਤੀ", "today": "ਅੱਜ", "checks": "ਜਾਂਚਾਂ", "risks": "ਖ਼ਤਰੇ", "all_clear": "ਸਾਰੀਆਂ ਅੱਠ ਜਾਂਚਾਂ ਠੀਕ ਹਨ।",
+        "flag": "ਸਥਿਤੀ", "today": "ਅੱਜ", "checks": "ਜਾਂਚਾਂ", "risks": "ਖ਼ਤਰੇ", "all_clear": "ਸਾਰੀਆਂ ਅੱਠ ਜਾਂਚਾਂ ਠੀਕ ਹਨ।", "weather": "ਮੌਸਮ",
         "status": {"clear": "ਠੀਕ", "watch": "ਧਿਆਨ ਦਿਓ", "act_now": "ਹੁਣੇ ਕਾਰਵਾਈ ਕਰੋ"},
         "flags": {"fine": "ਠੀਕ", "watch": "ਧਿਆਨ ਦਿਓ", "act_now": "ਹੁਣੇ ਕਾਰਵਾਈ ਕਰੋ"},
         "labels": {"harvest_ready": "ਵਾਢੀ ਦੀ ਤਿਆਰੀ", "harvest_before_rain": "ਮੀਂਹ ਤੋਂ ਪਹਿਲਾਂ ਵਾਢੀ", "establishment": "ਫ਼ਸਲ ਦਾ ਜੰਮਣਾ",
@@ -100,6 +100,8 @@ def render_plan(plan, language, translate=None):
     for c in plan["checks"]:
         lines.append(f"- {P['labels'].get(c['kind'], c['kind'])}: {P['status'][c['status']]}. {tr(c['detail'])}"
                      + (f" ({tr(c['where'])})" if c.get("where") else ""))
+    if plan.get("harvest_outlook", {}).get("summary"):
+        lines.append(f"{P.get('weather', 'Weather')}: {tr(plan['harvest_outlook']['summary'])}")
     lines.append(f"{P['risks']}: " + "; ".join(tr(r) for r in plan["risks"]) if plan["risks"] else P["all_clear"])
     return "\n".join(lines)
 
