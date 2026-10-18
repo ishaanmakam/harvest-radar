@@ -108,9 +108,31 @@ class TestRun:
         http, _ = self.http_factory(soil_fail_for=(f"lon={lon:.4f}",))
         doc = fe.run(data, cache_dir=tmp_path / "cache", http=http, fetched_at="2026-10-18T07:00Z", limit=3)
         bad = doc["fields"][fields[1]["properties"]["field_id"]]
-        assert bad["soc_g_kg"] is None and "soil" in bad["note"].lower() and bad["elevation_m"] == pytest.approx(300.0)
+        assert bad["soc_g_kg"] is None and "soil data not available" in bad["note"] and bad["elevation_m"] == pytest.approx(300.0)
         good = doc["fields"][fields[0]["properties"]["field_id"]]
         assert good["soc_g_kg"] is not None
+
+    def test_a_failing_elevation_batch_costs_only_its_own_fields(self, tmp_path):
+        data = tmp_path / "data"
+        data.mkdir()
+        (data / "fields.geojson").write_bytes((ROOT / "data" / "mock" / "fields.geojson").read_bytes())
+        state = {"elev_calls": 0}
+
+        def http(method, url, headers, body, timeout):
+            if "soilgrids" in url:
+                return 200, json.dumps(soilgrids_doc()).encode()
+            state["elev_calls"] += 1
+            if state["elev_calls"] in (2, 3, 4):                                   # the second batch fails on every retry
+                return 503, b"busy"
+            n = url.split("latitude=")[1].split("&")[0].count(",") + 1
+            return 200, json.dumps({"elevation": [300.0] * n}).encode()
+        doc = fe.run(data, cache_dir=tmp_path / "cache", http=http, fetched_at="2026-10-18T07:00Z", limit=2 * fe.ELEVATION_BATCH // 5,
+                     retry_sleep_s=0.0)
+        fields = list(doc["fields"].values())
+        first, second = fields[:fe.ELEVATION_BATCH // 5], fields[fe.ELEVATION_BATCH // 5:]
+        assert all(f["elevation_m"] == 300.0 for f in first)
+        assert all(f["elevation_m"] is None and "elevation not available" in f["note"] for f in second)
+        assert not any("Error" in f["note"] for f in second)
 
     def test_notes_compare_each_field_to_its_zone(self):
         fields = {"A": {"zone_id": "Z1", "soc_g_kg": 10.0, "slope_pct": 0.5, "texture": "loam"},

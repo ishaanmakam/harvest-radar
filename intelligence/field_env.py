@@ -140,19 +140,31 @@ def fetch_soil(lon, lat, http=None):
 
 
 # ---------------------------------------------------------------- terrain
-def fetch_elevations(points, http=None):
-    """Elevation in metres for a list of (lon, lat), batched; None where the service gave nothing."""
+def fetch_elevations(points, http=None, retries=3, retry_sleep_s=1.0):
+    """Elevation in metres for a list of (lon, lat), batched; None for every point of a batch that keeps failing
+    (one bad batch never costs the others)."""
     http = http or _urllib_http
     out = []
     for i in range(0, len(points), ELEVATION_BATCH):
         batch = points[i:i + ELEVATION_BATCH]
         url = ELEVATION + "?" + urllib.parse.urlencode({"latitude": ",".join(f"{p[1]:.5f}" for p in batch),
                                                         "longitude": ",".join(f"{p[0]:.5f}" for p in batch)}, safe=",")
-        status, body = http("GET", url, {"Accept": "application/json"}, None, 60)
-        if status != 200:
-            raise RuntimeError(f"elevation service returned HTTP {status}")
-        vals = (json.loads(body.decode("utf-8") if isinstance(body, (bytes, bytearray)) else body) or {}).get("elevation") or []
-        vals = list(vals) + [None] * (len(batch) - len(vals))
+        vals = None
+        for attempt in range(retries):
+            try:
+                status, body = http("GET", url, {"Accept": "application/json"}, None, 60)
+                if status == 200:
+                    doc = json.loads(body.decode("utf-8") if isinstance(body, (bytes, bytearray)) else body) or {}
+                    vals = list(doc.get("elevation") or [])
+                    break
+            except Exception:
+                pass
+            if retry_sleep_s:
+                time.sleep(retry_sleep_s * (attempt + 1))
+        if vals is None:
+            out += [None] * len(batch)
+            continue
+        vals = vals + [None] * (len(batch) - len(vals))
         out += [float(v) if isinstance(v, (int, float)) and not isinstance(v, bool) and math.isfinite(v) else None for v in vals[:len(batch)]]
     return out
 
@@ -213,7 +225,7 @@ def _cache_path(cache_dir, fid):
     return Path(cache_dir) / f"{fid}.json"
 
 
-def run(data_dir, cache_dir=None, http=None, fetched_at=None, limit=None, sleep_s=0.0, write=True):
+def run(data_dir, cache_dir=None, http=None, fetched_at=None, limit=None, sleep_s=0.0, write=True, retry_sleep_s=1.0):
     data_dir = Path(data_dir)
     cache_dir = Path(cache_dir) if cache_dir else ROOT / "data" / "cache" / "field_env"
     cache_dir.mkdir(parents=True, exist_ok=True)
@@ -245,7 +257,7 @@ def run(data_dir, cache_dir=None, http=None, fetched_at=None, limit=None, sleep_
                     time.sleep(sleep_s)
             except Exception as e:  # keep going: this field gets None values and a note
                 soil = {k: None for k in SOIL_KEYS}
-                notes_extra[fid] = f"soil lookup failed ({type(e).__name__})"
+                notes_extra[fid] = "soil data not available for this field yet"
         terrain = cached.get("terrain")
         if not terrain:
             pending_terrain.append((fid, c))
@@ -253,15 +265,12 @@ def run(data_dir, cache_dir=None, http=None, fetched_at=None, limit=None, sleep_
                        **(terrain or {"elevation_m": None, "slope_pct": None, "aspect": None})}
     if pending_terrain:
         points = [p for _, c in pending_terrain for p in stencil(c[0], c[1])]
-        try:
-            heights = fetch_elevations(points, http=http)
-        except Exception as e:
-            heights = [None] * len(points)
-            for fid, _ in pending_terrain:
-                notes_extra[fid] = (notes_extra.get(fid, "") + "; " if notes_extra.get(fid) else "") + f"elevation lookup failed ({type(e).__name__})"
+        heights = fetch_elevations(points, http=http, retry_sleep_s=retry_sleep_s)
         for i, (fid, _) in enumerate(pending_terrain):
             terrain = terrain_from_stencil(heights[i * 5:(i + 1) * 5])
             fields[fid].update(terrain)
+            if terrain["elevation_m"] is None:
+                notes_extra[fid] = (notes_extra.get(fid, "") + "; " if notes_extra.get(fid) else "") + "elevation not available for this field yet"
             if terrain["elevation_m"] is not None:
                 cp = _cache_path(cache_dir, fid)
                 try:
