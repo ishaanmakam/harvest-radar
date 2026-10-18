@@ -1,6 +1,7 @@
 .env
 data/cache/
 data/out/perceptron/crops/
+data/out/naip/
 __pycache__/
 *.pyc
 .venv/
