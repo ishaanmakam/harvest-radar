@@ -1,5 +1,5 @@
 import { SEVERITY } from "./format.js";
-/** ?season=<id> reads a regional stand-in season from data/global/seasons/<id>/; otherwise the real season. */
+/** ?season=<id> reads a regional season from data/global/seasons/<id>/; otherwise the Iowa season. */
 export const SEASON_ID = (() => {
   const id = new URLSearchParams(window.location.search).get("season");
   return id && /^[a-z0-9-]+$/.test(id) ? id : null;
@@ -71,7 +71,7 @@ async function loadFile(path, pinned) {
   }
   const out = await fetchJson(`${DATA_BASE}${path}`);
   if (out) return { data: out, source: "out", base: "out" };
-  // a regional stand-in season never borrows Iowa's mock files: a missing file there means none
+  // a regional season never borrows Iowa's files: a missing file there means none
   if (SEASON_ID) return { data: null, source: null, base: null };
   const mock = await fetchJson(`mock/${path}`);
   if (mock) return { data: mock, source: "mock", base: "mock" };

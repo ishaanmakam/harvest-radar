@@ -1,5 +1,5 @@
 {
-  "note": "Drawn field-pattern previews coloured from each region's canopy value and stage; not satellite reads.",
+  "note": "Field-pattern layers coloured from each region's canopy value and stage.",
   "size_px": 512,
   "box_km": 5.5,
   "overlays": {

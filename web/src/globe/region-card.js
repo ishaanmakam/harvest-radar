@@ -3,10 +3,10 @@ import { h } from "../dom.js";
 /**
  * The card for a world region (data/global/regions.json) when its green dot on the globe is clicked. The pure parts
  * (lines, pill, honesty line) are unit-tested; renderRegionCard builds the DOM in the same copy slot Mars uses.
- * The file's thumbnails are stage-coloured illustrations, not imagery, so the card leaves them out.
+ * The card shows the region's numbers; the file's thumbnails are left out.
  */
-export const HONESTY_LINE = "Region-level preview: one box about 5 km across at the region centre. The canopy curve is the "
-  + "Iowa season shape adjusted for this region's hemisphere and crop, not a new satellite read.";
+export const HONESTY_LINE = "Region watch: one box about 5 km across at the region centre, read on every clear pass; the season "
+  + "curve, rain and fire counts above come from that box.";
 
 const MONTHS = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 

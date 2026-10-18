@@ -20,7 +20,7 @@ satellite time-lapse to date and place what changed, and a map shows every farm'
 
 ## 2. The story
 
-Picture a rice farmer in central Punjab in mid-October (an illustrative composite, not a real person). The crop looks
+Picture a rice farmer in central Punjab in mid-October. The crop looks
 about ready. Heavy rain might be coming, or might not; harvesting wet grain risks spoilage, and waiting too long squeezes
 the short window before wheat has to go in. The extension officer for the area is responsible for hundreds of farms and
 can't come by. So the farmer guesses.

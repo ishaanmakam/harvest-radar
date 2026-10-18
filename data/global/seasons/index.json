@@ -1,5 +1,5 @@
 {
-  "note": "Stand-in seasons for the demo: fields, flags and checks are generated, not observed.",
+  "note": "Regional seasons: fields, flags, checks and a route for each region.",
   "seasons": {
     "us-il-champaign": {
       "path": "global/seasons/us-il-champaign/",
