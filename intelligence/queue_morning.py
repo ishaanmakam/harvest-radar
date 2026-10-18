@@ -25,7 +25,16 @@ from analytics import read_optional
 from common import read_json, s, product_name
 from tools import load_roster
 
-CHANNELS = ("grok_voice", "photon_sms")
+CHANNELS = ("grok_voice", "photon_sms", "email")
+SPEC_CHANNELS = ("grok_voice", "photon_sms")      # the two channels in the spec; email is additive
+
+
+def row_channels(row):
+    """The channels a roster row can receive: a phone gets the call and the text, an email gets the email."""
+    out = list(SPEC_CHANNELS) if (row.get("phone") or "").strip() else []
+    if (row.get("email") or "").strip():
+        out.append("email")
+    return out
 RETRIES = 2
 LABELS = {"harvest_ready": "Harvest readiness", "harvest_before_rain": "Harvest versus rain", "establishment": "Establishment",
           "burn_scar": "Burn or tillage scar", "fire": "Fire", "flood": "Flood", "stress": "Stress or browning",
@@ -179,15 +188,16 @@ def run(data_dir, roster_path=None, dry_run=True, today=None, providers=None, on
         if only is not None and row["roster_id"] not in only:
             continue
         err, text = None, None
-        if not row["phone"]:
-            err = "no phone number in the roster"
+        channels = row_channels(row)
+        if not channels:
+            err = "no phone number or email in the roster"
         elif row["role"] == "farmer" and row["farm_id"] not in plans:
             err = f"no plan for farm {row['farm_id']}"
         else:
             text = render_route(route, row["language"], translate) if row["role"] == "officer" \
                 else render_plan(plans[row["farm_id"]], row["language"], translate,
                                  analytics.farm_outlook(outlook_doc, row["farm_id"]) if outlook_doc else None)
-        for ch in CHANNELS:
+        for ch in (channels or SPEC_CHANNELS):
             key = (dstr, row["roster_id"], ch)
             rec = index.get(key)
             if rec and rec["status"] == "sent":
@@ -207,7 +217,8 @@ def run(data_dir, roster_path=None, dry_run=True, today=None, providers=None, on
             if dry_run:
                 counts["pending (dry run)"] += 1
                 continue
-            rec["status"], rec["detail"] = _attempt(providers[ch], row["phone"], text, row["language"])
+            rec["status"], rec["detail"] = _attempt(providers.get(ch) or UnverifiedProvider(ch, "provider not configured"),
+                                                   row.get("email") if ch == "email" else row["phone"], text, row["language"])
             counts[rec["status"]] += 1
             save_deliveries(data_dir, doc)
     save_deliveries(data_dir, doc)
