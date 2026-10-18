@@ -48,17 +48,17 @@ DEFAULTS = {
     "stress_zone_margin": 0.10,    # ours: with zone context, stress = this field's drop exceeds the zone's typical drop by this much
     "stress_max_gap_days": 12,     # ours: two clear passes further apart than this are not compared for stress
     "change_ndvi_min": 0.15,       # ours: swing between consecutive clear passes that counts as a visible change
-    "peak_ndvi_min": 0.55, "burn_nbr_max": -0.05, "harvest_ndvi_max": 0.35,   # shared with harvest_model
+    "peak_ndvi_min": 0.55, "burn_nbr_max": -0.05, "harvest_ndvi_max": 0.25,   # shared with harvest_model; region.json overrides
 }
 CONFIDENCE = {"l": "low", "n": "nominal", "h": "high"}
 TODAY_TEXT = {
-    ("act_now", "fire"): "Check the field for fire now and call the officer if it is burning.",
+    ("act_now", "fire"): "Check the field for fire now. If it is burning, call emergency services first; the officer will follow up today.",
     ("act_now", "flood"): "Water is standing on the field: check the drainage today.",
-    ("act_now", "burn_scar"): "A fresh burn scar was seen from orbit: the officer will visit today.",
-    ("watch", "stress"): "Walk the declining part of the field and check for pests or water stress.",
+    ("act_now", "burn_scar"): "The field went dark after harvest in the latest pass (a burn or a fresh tillage pass): the officer will visit today.",
+    ("watch", "stress"): "Walk the part of the field that is browning faster than its neighbours and check for pests, lodging or water stress.",
     ("watch", "visible_change"): "Something changed since the last pass: confirm what happened in the field.",
-    ("watch", "establishment"): "The crop never greened up: check whether the field was sown.",
-    ("watch", "burn_scar"): "An older burn scar is on record: no action today.",
+    ("watch", "establishment"): "This field never greened up: check whether it was planted, or whether it is not a crop field at all.",
+    ("watch", "burn_scar"): "An older dark scar (burn or tillage) is on record: no action today.",
 }
 QUIET = "Nothing needs action today. Harvest, rain, fire, flood and stress were checked and are fine."
 
@@ -156,7 +156,7 @@ def farm_plan(rec, passes, forecast, hotspots, insight, today: date, th=None, fa
         detail = "Crop looks ready to harvest" + (f": expected {_span(*pred)}" if pred else "")
         checks.append(_check("harvest_ready", "watch", detail, window=_win(*pred) if pred else {}))
     elif harvest:
-        checks.append(_check("harvest_ready", "clear", f"Already cut, around {s(harvest)}"))
+        checks.append(_check("harvest_ready", "clear", f"Looks harvested from the satellite: greenness collapsed around {s(harvest)}"))
     elif stage == "maturing" and pred:
         checks.append(_check("harvest_ready", "clear", f"Maturing: harvest expected {_span(*pred)}"))
     elif stage == "growing":
@@ -222,13 +222,14 @@ def farm_plan(rec, passes, forecast, hotspots, insight, today: date, th=None, fa
         scar_date = min(scar_date, cue_date) if scar_date else cue_date
         scar_where, scar_note = cue.get("where", ""), "; " + _cue_text(cue, "confirmed by Perceptron")
     if scar_date and (latest is None or scar_date >= latest[0]):     # on or after the last index pass = new
-        checks.append(_check("burn_scar", "act_now", f"New burn scar seen in the latest pass ({s(scar_date)}){scar_note}",
+        checks.append(_check("burn_scar", "act_now",
+                             f"Field went dark after harvest in the latest pass ({s(scar_date)}): burn or tillage scar{scar_note}",
                              where=scar_where, window=_win(scar_date)))
     elif scar_date:
-        checks.append(_check("burn_scar", "watch", f"Burn scar on record since {s(scar_date)}{scar_note}",
+        checks.append(_check("burn_scar", "watch", f"Dark scar (burn or tillage) on record since {s(scar_date)}{scar_note}",
                              where=scar_where, window=_win(scar_date)))
     else:
-        checks.append(_check("burn_scar", "clear", "No burn scar"))
+        checks.append(_check("burn_scar", "clear", "No burn or tillage scar"))
 
     # 5. fire
     recent = sorted((h for h in hotspots if 0 <= (today - d(h["date"])).days <= th["fire_lookback_days"]), key=lambda h: h["date"])
@@ -311,10 +312,10 @@ def farm_plan(rec, passes, forecast, hotspots, insight, today: date, th=None, fa
     elif prev and latest:
         between = _span(prev[0], latest[0])
         if harvest and prev[0] < harvest <= latest[0]:
-            checks.append(_check("visible_change", "watch", f"Field cut between {s(prev[0])} and {s(latest[0])}",
+            checks.append(_check("visible_change", "watch", f"Field harvested between {s(prev[0])} and {s(latest[0])}",
                                  window=_win(prev[0], latest[0])))
         elif scar_date and scar_date >= latest[0]:
-            checks.append(_check("visible_change", "watch", f"Burn scar appeared between {s(prev[0])} and {s(latest[0])}",
+            checks.append(_check("visible_change", "watch", f"Field went dark (burn or tillage) between {s(prev[0])} and {s(latest[0])}",
                                  window=_win(prev[0], latest[0])))
         elif abs(latest[1] - prev[1]) >= th["change_ndvi_min"]:
             checks.append(_check("visible_change", "watch",
@@ -335,7 +336,7 @@ def farm_plan(rec, passes, forecast, hotspots, insight, today: date, th=None, fa
     elif key == ("watch", "harvest_ready"):
         w = by_kind["harvest_ready"]["window"]
         when = f" for {w['start']} to {w['end']}" if w else ""
-        today_line = f"Crop looks ready: line up the harvester and a residue machine{when}."
+        today_line = f"Crop looks ready: line up the combine or your custom harvester{when}."
     elif key == ("watch", "establishment") and too_few:
         today_line = "Too few clear satellite passes to judge the crop yet: the officer will check by phone."
     else:

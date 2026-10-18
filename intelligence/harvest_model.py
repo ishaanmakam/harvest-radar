@@ -6,7 +6,9 @@ Output:  status.json  (contract: contracts/status.schema.json)
 Logic (keep it explainable for judges):
   1. Peak greenness (NDVI) = heading/flowering. Dated at the time-centre of the NDVI plateau (steadier than
      argmax, which wanders with noise on a flat top).
-  2. Harvest = first clear pass after the peak where NDVI collapses (low and a big drop).
+  2. Harvest = first clear pass after the peak where NDVI is at or below harvest_ndvi_max (and dropped, or is
+     under half the peak) AND the next passes stay at that level. For crops peaking above ~0.7 the drop clause
+     never fires, so harvest_ndvi_max must sit between residue and dry standing crop (0.25 for corn/soybeans).
   3. Regional lag = median(harvest - peak) over fields ALREADY harvested this season.
      Unharvested fields: predicted harvest = their own peak + regional lag, +/- half the 10th-90th pct range
      (an ~80% window). Stage = ready / maturing / growing by how far out the window centre is.
@@ -73,7 +75,7 @@ def analyze_field(fid, zone_id, dates, ndvi, nbr, fires_by_field, th):
     peak_ndvi = sm[pk]   # the smoothed value the crop-level gate below uses (a raw spike would overstate it)
     rec["peak_date"], rec["peak_ndvi"] = s(peak_date), round(peak_ndvi, 3)
     if sm[pk] < th["peak_ndvi_min"]:
-        rec["notes"] = "never reached crop-level greenness (not paddy?)"
+        rec["notes"] = "never reached crop-level greenness (not a crop field?)"
         return rec, None
 
     # ---- harvest detection ----
@@ -82,7 +84,9 @@ def analyze_field(fid, zone_id, dates, ndvi, nbr, fires_by_field, th):
         v, prev = obs[j][1], obs[j - 1][1]
         if v <= th["harvest_ndvi_max"] and (prev - v >= th["harvest_drop_min"] or v <= 0.5 * peak_ndvi):
             later = [o[1] for o in obs[j + 1: j + 3]]
-            if all(x < 0.6 * peak_ndvi for x in later):  # not a cloud-shadow blip
+            # the collapse must persist at the harvested level: a noise dip on dry standing crop (corn and soybeans
+            # senesce to 0.25-0.40 before the combine) rebounds above the threshold, a harvest does not
+            if all(x <= th["harvest_ndvi_max"] for x in later):
                 harvest_idx = j
                 break
     if harvest_idx is None:
@@ -105,11 +109,11 @@ def analyze_field(fid, zone_id, dates, ndvi, nbr, fires_by_field, th):
         rec["burn_evidence"] = "scar+hotspot" if (scar and hot) else ("scar" if scar else "hotspot")
         candidates = ([scar[0]] if scar else []) + [d(f["date"]) for f in hot]
         rec["burn_date"] = s(min(candidates))
-    else:
+    elif th.get("sown_ndvi_min") is not None:   # regions with a following crop inside the window (rice -> wheat)
         regrow = [o for o in obs[harvest_idx + 1:] if o[1] >= th["sown_ndvi_min"] and (o[0] - harvest).days >= 10]
         if regrow:
             rec["stage"] = "sown"
-            rec["notes"] += f"; wheat emerging by {s(regrow[0][0])}"
+            rec["notes"] += f"; regreening after harvest (next crop, cover crop or volunteer) by {s(regrow[0][0])}"
     return rec, (harvest - peak_date).days
 
 
