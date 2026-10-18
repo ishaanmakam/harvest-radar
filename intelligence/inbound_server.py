@@ -29,6 +29,8 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from xml.sax.saxutils import escape
 
+import accounts as accounts_mod
+import accounts_api
 import inbound
 import signup
 from common import load_env, read_json, product_name
@@ -111,19 +113,26 @@ out.className=j.ok?"ok":"bad";out.textContent=j.ok?j.message:(j.error||"Somethin
 
 
 def make_handler(data_dir, roster_path, bridge_token=None, twilio_auth_token=None, public_url=None, public_ws_url=None,
-                 photon=None, photon_webhook_secret=None, geocode=None):
+                 photon=None, photon_webhook_secret=None, geocode=None, accounts_db=None, sources_path=None):
     """photon: a provider with send_to_space(space_id, text) used to answer Photon webhooks (None = reply only in the
-    HTTP response); photon_webhook_secret: verify Photon's HMAC signature when set."""
+    HTTP response); photon_webhook_secret: verify Photon's HMAC signature when set. accounts_db: the SQLite file of
+    Overfield's own accounts (sign-in, profiles, developer keys, admin); its routes are served here too."""
     data_dir = Path(data_dir)
     roster_state = {"mtime": None, "rows": []}
+    api_ctx = None
+    if accounts_db:
+        os.environ.setdefault("ACCOUNTS_DB", str(accounts_db))        # so load_roster merges the sign-ups in
+        api_ctx = accounts_api.Context(accounts=accounts_mod.Accounts(accounts_db), data_dir=data_dir,
+                                       sources_path=Path(sources_path) if sources_path else data_dir.parents[1] / "web" / "public" / "data" / "sources.json")
 
     def current_roster():
-        """The roster as it is now: re-read when the file changed (sign-ups and STOPs land without a restart)."""
+        """The roster as it is now: re-read when the CSV changed, and always when sign-ups come from the accounts
+        database (sign-ups, pauses and STOPs land without a restart)."""
         try:
             mtime = os.path.getmtime(roster_path) if roster_path else None
         except OSError:
             mtime = None
-        if roster_state["mtime"] != mtime or roster_state["rows"] is None:
+        if api_ctx is not None or roster_state["mtime"] != mtime or roster_state["rows"] is None:
             roster_state["rows"] = load_roster(roster_path)
             roster_state["mtime"] = mtime
         return roster_state["rows"]
@@ -169,8 +178,33 @@ def make_handler(data_dir, roster_path, bridge_token=None, twilio_auth_token=Non
         def _authorized(self):
             return not bridge_token or self.headers.get("Authorization") == f"Bearer {bridge_token}"
 
+        def _api(self):
+            """Accounts, admin and the /v1 developer API (accounts_api.dispatch)."""
+            if api_ctx is None:
+                return self._json(503, {"error": "accounts are not set up on this server (ACCOUNTS_DB)"})
+            ip = self.client_address[0] if self.client_address else "?"
+            status, hdr, body = accounts_api.dispatch(self.command, self.path, dict(self.headers.items()), self._body(), api_ctx, client_ip=ip)
+            self.send_response(status)
+            for k, v in hdr.items():
+                self.send_header(k, v)
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            if body:
+                self.wfile.write(body)
+
+        def do_OPTIONS(self):
+            return self._api()
+
+        def do_PATCH(self):
+            return self._api()
+
+        def do_DELETE(self):
+            return self._api()
+
         # ---- routes ----
         def do_GET(self):
+            if accounts_api.handles(self.path):
+                return self._api()
             if self.path.split("?")[0] == "/signup":
                 return self._send(200, signup_page(), "text/html; charset=utf-8")
             if self.path.split("?")[0] == "/health":
@@ -184,6 +218,8 @@ def make_handler(data_dir, roster_path, bridge_token=None, twilio_auth_token=Non
             return self._json(404, {"error": "not found"})
 
         def do_POST(self):
+            if accounts_api.handles(self.path):
+                return self._api()
             path = self.path.split("?")[0]
             raw = self._body()
             if path == "/twilio/stream":
@@ -284,16 +320,18 @@ def make_handler(data_dir, roster_path, bridge_token=None, twilio_auth_token=Non
     return Handler
 
 
-def serve(data_dir, roster_path=None, host="0.0.0.0", port=8788, public_url=None):
+def serve(data_dir, roster_path=None, host="0.0.0.0", port=8788, public_url=None, accounts_db=None):
     load_env()
     photon = photon_from_env()
+    accounts_db = accounts_db or os.environ.get("ACCOUNTS_DB") or "data/accounts.sqlite"
     handler = make_handler(data_dir, roster_path, bridge_token=os.environ.get("INBOUND_TOKEN") or None,
                            twilio_auth_token=os.environ.get("TWILIO_AUTH_TOKEN") or None,
                            public_url=public_url or os.environ.get("PUBLIC_URL"),
                            public_ws_url=os.environ.get("PUBLIC_WS_URL"),
-                           photon=photon, photon_webhook_secret=os.environ.get("PHOTON_WEBHOOK_SECRET") or None)
+                           photon=photon, photon_webhook_secret=os.environ.get("PHOTON_WEBHOOK_SECRET") or None,
+                           accounts_db=accounts_db)
     httpd = ThreadingHTTPServer((host, port), handler)
-    print(f"  inbound service on http://{host}:{port}  (data {data_dir}; Twilio signature check "
+    print(f"  inbound service on http://{host}:{port}  (data {data_dir}; accounts {accounts_db}; Twilio signature check "
           f"{'on' if os.environ.get('TWILIO_AUTH_TOKEN') else 'off'}; bearer token {'on' if os.environ.get('INBOUND_TOKEN') else 'off'}; "
           f"Photon replies {'on' if photon else 'off'}; Photon signature check {'on' if os.environ.get('PHOTON_WEBHOOK_SECRET') else 'off'})")
     httpd.serve_forever()
@@ -302,9 +340,10 @@ def serve(data_dir, roster_path=None, host="0.0.0.0", port=8788, public_url=None
 if __name__ == "__main__":
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", default="data/out")
-    ap.add_argument("--current_roster()", default=None, help="current_roster() CSV (default: ROSTER_PATH from .env)")
+    ap.add_argument("--roster", default=None, help="roster CSV (default: ROSTER_PATH from .env)")
     ap.add_argument("--host", default="0.0.0.0")
     ap.add_argument("--port", type=int, default=8788)
     ap.add_argument("--public-url", default=None, help="scheme+host Twilio calls, for signature checks (default PUBLIC_URL)")
+    ap.add_argument("--accounts-db", default=None, help="SQLite file for sign-ins, profiles and keys (default ACCOUNTS_DB, else data/accounts.sqlite)")
     a = ap.parse_args()
-    serve(Path(a.data), a.roster, a.host, a.port, a.public_url)
+    serve(Path(a.data), a.roster, a.host, a.port, a.public_url, a.accounts_db)

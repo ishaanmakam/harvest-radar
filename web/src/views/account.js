@@ -1,7 +1,7 @@
 import { h } from "../dom.js";
 import { CHANNEL_LABEL, chip, titleCase } from "../format.js";
 import { MAX_MATCH_KM, geocode, matchField, parseLatLon } from "../geo.js";
-import { NOT_CONFIGURED, client, configured, deleteMyAccount, signInWithEmail, updateMyProfile } from "../supabase.js";
+import { NOT_CONFIGURED, configured, deleteMyAccount, myDeliveries, signIn, signUp, updateMyProfile } from "../backend.js";
 import { card, errorNote, field, fmtDateTime, fmtDay, loading, notice, select, statusLine } from "../ui.js";
 
 // Mirrors LANGUAGE_NAMES in intelligence/providers.py.
@@ -137,8 +137,32 @@ function splitPhone(phone) {
 
 function signInForm(el, ctx) {
   const status = statusLine();
+  let mode = "in";
+  const name = h("input", { id: "acct-new-name", class: "input", type: "text", autocomplete: "name", placeholder: "Your name" });
   const email = h("input", { id: "acct-email", class: "input", type: "email", required: true, autocomplete: "email", placeholder: "you@example.com" });
-  const button = h("button", { class: "btn btn-primary", type: "submit" }, "Send me a sign-in link");
+  const password = h("input", { id: "acct-password", class: "input", type: "password", required: true, minlength: "8", autocomplete: "current-password", placeholder: "At least 8 characters" });
+  const button = h("button", { class: "btn btn-primary", type: "submit" }, "Sign in");
+  const nameField = field("Name", name);
+  const toggle = h("button", { class: "btn btn-link", type: "button" }, "New here? Create an account");
+  const title = h("h2", { class: "panel-title" }, "Sign in");
+  const blurb = h("p", { class: "muted small", style: { margin: "4px 0 12px" } }, "Your email and password; the session stays on this device until you sign out.");
+
+  function setMode(next) {
+    mode = next;
+    nameField.hidden = mode === "in";
+    title.textContent = mode === "in" ? "Sign in" : "Create your account";
+    button.textContent = mode === "in" ? "Sign in" : "Create account";
+    toggle.textContent = mode === "in" ? "New here? Create an account" : "Already have an account? Sign in";
+    password.autocomplete = mode === "in" ? "current-password" : "new-password";
+    blurb.textContent =
+      mode === "in"
+        ? "Your email and password; the session stays on this device until you sign out."
+        : "Pick a password of at least 8 characters. Overfield keeps only a salted hash of it, on its own server.";
+    status.set("");
+  }
+  toggle.addEventListener("click", () => setMode(mode === "in" ? "up" : "in"));
+  setMode("in");
+
   const form = h(
     "form",
     {
@@ -146,23 +170,25 @@ function signInForm(el, ctx) {
       onsubmit: async (event) => {
         event.preventDefault();
         const value = email.value.trim();
-        if (!value) return;
+        if (!value || !password.value) return;
         button.disabled = true;
-        status.set("Sending the link...");
+        status.set(mode === "in" ? "Signing in..." : "Creating your account...");
         try {
-          ctx.rememberAfterSignIn("account");
-          await signInWithEmail(value);
-          status.set(`Check ${value} for a link from Overfield. The link signs you in and brings you back here.`, "ok");
+          if (mode === "in") await signIn(value, password.value);
+          else await signUp(value, password.value, name.value);
+          status.set("Signed in.", "ok");
         } catch (err) {
           status.set(err.message, "warn");
           button.disabled = false;
         }
       },
     },
-    h("h2", { class: "panel-title" }, "Sign in or create your account"),
-    h("p", { class: "muted small", style: { margin: "4px 0 12px" } }, "No password is needed: we email you a link, and the link signs you in on this device."),
+    title,
+    blurb,
+    nameField,
     field("Email", email),
-    h("div", { class: "row row-wrap", style: { marginTop: "12px" } }, button),
+    field("Password", password),
+    h("div", { class: "row row-wrap", style: { marginTop: "12px" } }, button, toggle),
     status.el,
   );
   el.replaceChildren(
@@ -186,18 +212,13 @@ function signInForm(el, ctx) {
 function deliveriesSection(profile) {
   const body = h("div", {}, loading(2));
   const section = h("div", { class: "section" }, h("div", { class: "section-title" }, "Your last deliveries"), body);
-  client
-    .from("deliveries")
-    .select("id,run_date,farm_id,channel,status,detail,dry_run,sent_at")
-    .eq("roster_id", profile.roster_id)
-    .order("run_date", { ascending: false })
-    .order("id", { ascending: false })
-    .limit(20)
-    .then(({ data, error }) => {
-      if (error) {
-        body.replaceChildren(errorNote(error, "Could not read your deliveries"));
-        return;
-      }
+  myDeliveries()
+    .catch((error) => {
+      body.replaceChildren(errorNote(error, "Could not read your deliveries"));
+      return null;
+    })
+    .then((data) => {
+      if (data === null) return;
       if (!data?.length) {
         body.replaceChildren(h("div", { class: "empty" }, "Nothing has been sent to you yet. The first plan goes out the morning after your profile has a farm and a number or email."));
         return;

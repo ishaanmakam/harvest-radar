@@ -1,9 +1,9 @@
 import { h } from "../dom.js";
 import { fmtNum } from "../format.js";
-import { API_BASE, API_BASE_PLACEHOLDER, KEY_COLUMNS, TERMS_VERSION, acceptTerms, client, configured, issueApiKey, revokeApiKey } from "../supabase.js";
+import { API_BASE, API_BASE_PLACEHOLDER, TERMS_VERSION, acceptTerms, configured, issueApiKey, listKeys, revokeApiKey, termsStatus } from "../backend.js";
 import { codeBlock, copyButton, errorNote, fmtDateTime, loading, notice, signInPrompt, statusLine } from "../ui.js";
 
-// The endpoints of backend/supabase/functions/api/index.ts.
+// The endpoints of intelligence/accounts_api.py (served by the inbound server).
 const ENDPOINTS = [
   ["GET /v1/health", "No key needed. as_of and the endpoint list."],
   ["GET /v1/plans", "Every farm's plan for the latest morning (the published plans.json)."],
@@ -95,21 +95,10 @@ function docs() {
   ];
 }
 
-function fail(result) {
-  if (result.error) throw new Error(result.error.message);
-  return result.data || [];
-}
-
-async function loadKeys(userId) {
-  const since = new Date(Date.now() - 7 * 864e5).toISOString();
-  const [terms, keys, usage] = await Promise.all([
-    client.from("terms_acceptances").select("accepted_at,version").eq("kind", "developer").eq("version", TERMS_VERSION).order("accepted_at", { ascending: false }).limit(1).then(fail),
-    client.from("api_keys").select(KEY_COLUMNS).eq("user_id", userId).order("created_at", { ascending: false }).then(fail),
-    client.from("api_usage").select("key_id,at").gte("at", since).range(0, 9999).then(fail),
-  ]);
-  const calls = new Map();
-  for (const row of usage) calls.set(row.key_id, (calls.get(row.key_id) || 0) + 1);
-  return { accepted: terms[0]?.accepted_at || null, keys, calls };
+async function loadKeys() {
+  const [terms, keys] = await Promise.all([termsStatus(), listKeys()]);
+  const calls = new Map(keys.map((k) => [k.id, k.usage_7d || 0]));
+  return { accepted: terms.accepted || null, keys, calls };
 }
 
 function keysTable(keys, calls, onRevoke) {
@@ -156,7 +145,7 @@ function keysSection(ctx, el) {
   let newKey = null;
 
   if (!configured) {
-    body.append(notice("Keys need the backend. This copy of Overfield has no Supabase project configured; the docs above still describe the API. Setup steps: backend/README.md."));
+    body.append(notice("Keys need the Overfield server, and this copy of the site does not know where it is; the docs above still describe the API. Setup steps: backend/README.md."));
     return { section, destroy() {} };
   }
   if (!auth.ready) {
@@ -174,7 +163,7 @@ function keysSection(ctx, el) {
     body.replaceChildren(loading(2));
     let state;
     try {
-      state = await loadKeys(auth.user.id);
+      state = await loadKeys();
     } catch (err) {
       if (alive) body.replaceChildren(errorNote(err, "Could not read your keys"));
       return;

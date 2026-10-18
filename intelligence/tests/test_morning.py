@@ -71,20 +71,21 @@ class TestMockEndToEnd:
 
 
 class TestDeliveryLog:
-    def test_the_runs_rows_go_to_supabase_when_configured_and_never_fail_the_run(self, data, monkeypatch):
+    def test_the_runs_rows_go_to_the_delivery_log_when_configured_and_never_fail_the_run(self, data, monkeypatch):
         seen = {}
 
-        def push(doc, dry_run, env=None, http=None):
+        def push(doc, dry_run, env=None, run_date=None):
+            seen["run_date"] = run_date
             seen["dates"] = sorted({r["date"] for r in doc["deliveries"]})
             seen["dry_run"] = dry_run
             return 3
-        monkeypatch.setattr(morning.rs, "push_if_configured", push)
+        monkeypatch.setattr(morning.accounts, "push_if_configured", push)
         out = morning.run(data, roster_path=data / "roster.csv", today=TODAY)
-        assert seen["dry_run"] is True and str(TODAY) in seen["dates"]
-        assert out["summary"]["logged_to_supabase"] == 3
+        assert seen["dry_run"] is True and str(TODAY) in seen["dates"] and seen["run_date"] == str(TODAY)
+        assert out["summary"]["logged_deliveries"] == 3
 
-        def broken(doc, dry_run, env=None, http=None):
-            raise RuntimeError("Supabase delivery log write failed (500): boom")
-        monkeypatch.setattr(morning.rs, "push_if_configured", broken)
+        def broken(doc, dry_run, env=None, run_date=None):
+            raise RuntimeError("delivery log write failed: boom")
+        monkeypatch.setattr(morning.accounts, "push_if_configured", broken)
         out = morning.run(data, roster_path=data / "roster.csv", today=TODAY)
-        assert out["summary"]["logged_to_supabase"] is None and out["summary"]["deliveries"]["pending"] >= 1
+        assert out["summary"]["logged_deliveries"] is None and out["summary"]["deliveries"]["pending"] >= 1

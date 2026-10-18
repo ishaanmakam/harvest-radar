@@ -4,7 +4,7 @@ Generated 2026-10-18 from `web/public/data/sources.json`, the same list the site
 
 Overfield cross-checks several sources because no single one is enough on its own. Imagery says what a field looks like today, weather says what is coming, fire feeds say what happened overnight, soil and terrain say why two neighbouring fields differ, and official statistics say whether the satellite reading can be trusted. Every check in a morning plan traces back to the sources below.
 
-**Counts:** 34 sources; 24 need no key; 10 need a key or an account.
+**Counts:** 33 sources; 24 need no key; 9 need a key or an account.
 
 ## Satellite imagery
 
@@ -161,10 +161,8 @@ Overfield cross-checks several sources because no single one is enough on its ow
 | Source | Provider | What we use it for | Cadence | Resolution | Licence | Key | Live or cached |
 |---|---|---|---|---|---|---|---|
 | [GitHub Pages](https://ishaanmakam.github.io/harvest-radar/) | GitHub | Hosts the site and the published plan files that the developer API serves. | on every merge to main |  | GitHub terms of service | no | live |
-| [Supabase](https://supabase.com) | Supabase | Accounts, farm profiles, developer keys, terms acceptances and the delivery log, behind row-level security. | continuous |  | Supabase terms of service; keys required | yes | live when configured |
 
 - **GitHub Pages.** Free static hosting straight from the repository. (.github/workflows/digest.yml:1-30, .github/workflows/pages.yml:1, .github/workflows/pages.yml:1-48, .github/workflows/pages.yml:27 and 12 more)
-- **Supabase.** Sign-in and a database without running a server. (.env.example:31, .env.example:31-32, .env.example:32, backend/README.md:1-88 and 26 more)
 
 ## The globe
 

@@ -9,3 +9,5 @@ node_modules/
 web/dist/
 .DS_Store
 bots/team_log.jsonl
+data/accounts.sqlite
+data/accounts.sqlite-*

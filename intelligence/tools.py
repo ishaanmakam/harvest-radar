@@ -30,27 +30,17 @@ def normalize_phone(phone: str) -> str:
 
 
 def roster_source(path=None):
-    """Where the roster comes from: "csv" (a path was given or ROSTER_PATH is set), "supabase" (SUPABASE_URL and
-    SUPABASE_SERVICE_ROLE_KEY are set and no path), or "none"."""
+    """Where the roster comes from: "csv" (a path was given, or ROSTER_PATH is set), "accounts" (ACCOUNTS_DB is set:
+    the people who signed up on the site), "csv+accounts" (both, merged), or "none"."""
     load_env()
-    if path or os.environ.get("ROSTER_PATH"):
-        return "csv"
-    import roster_supabase
-    return "supabase" if roster_supabase.configured() else "none"
+    csv_on = bool(path or os.environ.get("ROSTER_PATH"))
+    db_on = bool(os.environ.get("ACCOUNTS_DB"))
+    if csv_on and db_on:
+        return "csv+accounts"
+    return "csv" if csv_on else ("accounts" if db_on else "none")
 
 
-def load_roster(path=None, http=None):
-    """Rows of the roster, validated. An explicit path or ROSTER_PATH means the CSV; otherwise, when the Supabase
-    variables are set, the people who signed up on the site (see roster_supabase.py). http is for tests."""
-    source = roster_source(path)
-    if source == "none":
-        raise FileNotFoundError("no roster: set ROSTER_PATH in .env (see intelligence/roster.example.csv) or SUPABASE_URL and "
-                                "SUPABASE_SERVICE_ROLE_KEY (see backend/README.md)")
-    if source == "supabase":
-        import roster_supabase
-        rows = roster_supabase.fetch_roster(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_ROLE_KEY"], http=http)
-        return validate_rows(rows)
-    raw = str(path) if path else os.environ.get("ROSTER_PATH")
+def _csv_rows(raw):
     path = Path(raw)
     if not path.is_file():
         raise FileNotFoundError(f"roster not found at {path}; see intelligence/roster.example.csv")
@@ -59,7 +49,23 @@ def load_roster(path=None, http=None):
         missing = [c for c in ROSTER_COLUMNS if c not in (reader.fieldnames or [])]
         if missing:
             raise ValueError(f"roster is missing columns {missing}")
-        rows = [{k: (v or "").strip() for k, v in r.items()} for r in reader]
+        return [{k: (v or "").strip() for k, v in r.items()} for r in reader]
+
+
+def load_roster(path=None, http=None):
+    """Rows of the roster, validated. An explicit path or ROSTER_PATH is the CSV (the officer and the demo farms);
+    ACCOUNTS_DB adds the people who signed up on the site (see accounts.py). Both together are one roster, so a phone
+    may appear only once across them. http is unused and kept for callers that pass it."""
+    source = roster_source(path)
+    if source == "none":
+        raise FileNotFoundError("no roster: set ROSTER_PATH in .env (see intelligence/roster.example.csv) and/or ACCOUNTS_DB "
+                                "(see backend/README.md)")
+    rows = []
+    if "csv" in source:
+        rows += _csv_rows(str(path) if path else os.environ.get("ROSTER_PATH"))
+    if "accounts" in source:
+        import accounts
+        rows += accounts.Accounts(os.environ["ACCOUNTS_DB"]).roster_rows()
     return validate_rows(rows)
 
 
