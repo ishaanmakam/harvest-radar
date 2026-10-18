@@ -47,7 +47,7 @@ function setBadge(data, mapApi) {
     badge = button;
     const render = () => {
       const on = mapApi.realOutlinesOn();
-      badge.textContent = `Imagery: ${imagery} · Farms & plans: ${farms} · Real field outlines: ${on ? "shown" : "hidden"}`;
+      badge.textContent = `Imagery: ${imagery} / Farms and plans: ${farms} / Real field outlines: ${on ? "shown" : "hidden"}`;
       badge.setAttribute("aria-pressed", String(on));
       badge.title = on ? "Hide the real field outlines (plans pending)" : "Show the real field outlines (plans pending)";
     };
@@ -59,10 +59,10 @@ function setBadge(data, mapApi) {
     return;
   }
 
-  badge.textContent = standIn ? `Imagery: ${imagery} · Farms & plans: ${farms}` : "Live season";
+  badge.textContent = standIn ? `Imagery: ${imagery} / Farms and plans: ${farms}` : "Live season";
   badge.className = standIn ? "badge badge-standin" : "badge badge-live";
   badge.title = standIn ? "Stand-in season: at least one file came from data/mock" : "Every file came from data/out";
-  // run.json already says "Live · date" in its own badge; a second "Live season" pill next to it says nothing new.
+  // run.json already says "Live / date" in its own badge; a second "Live season" pill next to it says nothing new.
   badge.hidden = !standIn && Boolean(data.run?.mode);
 }
 
@@ -75,7 +75,7 @@ function setRunBadge(data) {
     return;
   }
   const live = String(run.mode).toLowerCase() === "live";
-  badge.textContent = `${live ? "Live" : "Replay"} · ${fmtDate(run.as_of)}`;
+  badge.textContent = `${live ? "Live" : "Replay"} / ${fmtDate(run.as_of)}`;
   badge.className = `badge ${live ? "badge-live" : "badge-replay"}`;
   badge.title = [
     live ? "Live run" : "Replay of an earlier run",
@@ -83,7 +83,7 @@ function setRunBadge(data) {
     run.generated_at ? `generated ${run.generated_at}` : null,
   ]
     .filter(Boolean)
-    .join(" · ");
+    .join(" / ");
   badge.hidden = false;
 }
 
@@ -93,7 +93,7 @@ function setIntroStats(data) {
   let actNow = 0;
   for (const plan of data.plans.plans) if (plan.flag === "act_now") actNow += 1;
   const standIn = data.sources.plans === "out" ? "" : " (stand-in farms)";
-  $("intro-stats").textContent = `Story County, Iowa · latest clear pass ${MONTHS[Number(month) - 1]} ${Number(day)} · ${data.plans.plans.length} farms · ${actNow} act now${standIn}`;
+  $("intro-stats").textContent = `Story County, Iowa / latest clear pass ${MONTHS[Number(month) - 1]} ${Number(day)} / ${data.plans.plans.length} farms / ${actNow} act now${standIn}`;
 }
 
 async function start() {
@@ -368,7 +368,7 @@ async function start() {
     const props = data.featuresById.get(id)?.properties || {};
     tooltip.replaceChildren(
       h("div", { class: "tip-head" }, h("span", {}, id), chip(plan?.flag ?? "none")),
-      h("div", { class: "tip-meta" }, `${CROP_LABEL[props.crop] || titleCase(props.crop)} · ${fmtHa(props.area_ha)}${plan ? "" : ` · ${FLAG_LABEL.none}`}`),
+      h("div", { class: "tip-meta" }, `${CROP_LABEL[props.crop] || titleCase(props.crop)} / ${fmtHa(props.area_ha)}${plan ? "" : ` / ${FLAG_LABEL.none}`}`),
       plan ? h("div", { class: "tip-today" }, plan.today) : null,
     );
     tooltip.hidden = false;

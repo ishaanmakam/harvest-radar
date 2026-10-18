@@ -11,17 +11,19 @@
   <body>
     <a class="skip-link" href="#dock-body">Skip to the farm list</a>
     <section id="intro">
-      <div id="globe"></div>
+      <div id="globe" data-globe></div>
       <p id="toast" hidden></p>
       <div id="intro-copy">
         <div id="earth-copy">
-          <h1>Overfield</h1>
-          <p class="tagline">The satellite visits every farm. Every farmer gets a morning plan.</p>
+          <h1>Every farm, every pass</h1>
+          <!-- {MISSION_LINE} -->
+          <p class="tagline">Overfield reads each new Sentinel-2 pass over a farm and turns it into a morning plan for the grower.</p>
           <p id="intro-stats"></p>
           <button id="enter" type="button">Enter the season</button>
         </div>
       </div>
       <div id="world-nav"></div>
+      <p class="source-strip">Sentinel-2 L2A via Earth Search / NASA FIRMS VIIRS / NASA POWER and Open-Meteo / CelesTrak GP / Contains modified Copernicus Sentinel data 2026</p>
     </section>
     <section id="mars-view" hidden aria-label="Mars landing-site map">
       <div class="mars-top">
@@ -30,7 +32,7 @@
           <h1>Where Starship should land</h1>
           <p>Every 7 km of Mars between 60 S and 60 N, checked against four rules from public orbital data.</p>
         </div>
-        <a class="btn btn-ghost mars-data-link" href="#data">Data</a>
+        <a class="btn btn-ghost mars-data-link" href="#data">Data sources</a>
       </div>
       <div class="mars-stage">
         <div id="mars-map" class="map" aria-label="Mars map"></div>
@@ -67,13 +69,13 @@
         <div class="topbar-right">
           <span id="run-badge" class="badge" hidden></span>
           <span id="badge" class="badge"></span>
-          <button id="orbit" type="button" class="btn btn-ghost">Globe</button>
+          <button id="orbit" type="button" class="btn btn-ghost">Show the globe</button>
           <nav class="page-links" aria-label="Pages">
-            <a href="#data">Data</a>
+            <a href="#data">Data sources</a>
             <a href="#developers">Developers</a>
           </nav>
           <div id="auth" class="auth-slot"></div>
-          <a id="signup" class="signup" href="http://localhost:8788/signup" target="_blank" rel="noopener">Get your farm's morning plan</a>
+          <a id="signup" class="signup" href="http://localhost:8788/signup" target="_blank" rel="noopener">Get the morning plan</a>
         </div>
       </header>
       <p id="error" class="error-banner" role="alert" hidden></p>
@@ -86,9 +88,9 @@
         </aside>
         <aside id="panel" class="drawer" aria-label="Farm plan" hidden></aside>
         <div id="timelapse" class="timelapse" hidden>
-          <button id="play" type="button" class="btn btn-primary">Play</button>
-          <button id="frame-prev" type="button" class="btn btn-icon" aria-label="Previous pass">‹</button>
-          <button id="frame-next" type="button" class="btn btn-icon" aria-label="Next pass">›</button>
+          <button id="play" type="button" class="btn btn-primary">Play the season</button>
+          <button id="frame-prev" type="button" class="btn btn-icon" aria-label="Previous pass">Previous</button>
+          <button id="frame-next" type="button" class="btn btn-icon" aria-label="Next pass">Next</button>
           <div class="tl-track">
             <input id="frame-slider" type="range" min="0" value="0" aria-label="Season date" />
             <div class="tl-readout"><strong id="frame-date"></strong><span id="frame-clear" class="muted"></span></div>

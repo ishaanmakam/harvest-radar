@@ -1,0 +1,84 @@
+/* Overfield design tokens: black canvas, one typeface, two weights, no chrome colour.
+   Imported once from style.css. The globe mounts on [data-globe]; the resets below stay out of that subtree. */
+
+@font-face { font-family: "D-DIN"; src: url("/fonts/D-DIN.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: swap; }
+@font-face { font-family: "D-DIN"; src: url("/fonts/D-DIN-Bold.woff2") format("woff2"); font-weight: 700; font-style: normal; font-display: swap; }
+
+:root {
+  color-scheme: dark;
+
+  /* chrome: achromatic only */
+  --void: #000000;
+  --fg: #f0f0fa;
+  --fg-dim: rgba(240, 240, 250, 0.70);
+  --fg-faint: rgba(240, 240, 250, 0.50);
+  --rule: rgba(240, 240, 250, 0.16);
+  --rule-strong: rgba(240, 240, 250, 0.35);
+  --ghost: rgba(240, 240, 250, 0.10);
+
+  /* functional states: a check that needs action, a value on hold, a rate of change */
+  --hud-correction: #5bd75b;
+  --hud-rate: #4fb3ff;
+  --hold: #ffb020;
+  --abort: #ff4d3d;
+
+  /* data ramps: maps, legends and charts only */
+  --ndvi-ramp: #8c510a, #d8b365, #f6e8c3, #c7eae5, #5ab4ac, #01665e;
+  --moisture-ramp: #eff3ff, #bdd7e7, #6baed6, #3182bd, #08519c;
+  --stress-0: rgba(240, 240, 250, 0.14);
+  --stress-1: #f2d16b;
+  --stress-2: #f08a3c;
+  --stress-3: #d7301f;
+  --dnbr-regrowth-high: #7a8737;
+  --dnbr-regrowth-low: #acbe4d;
+  --dnbr-unburned: #0ae042;
+  --dnbr-low: #fff70b;
+  --dnbr-mod-low: #ffaf38;
+  --dnbr-mod-high: #ff641b;
+  --dnbr-high: #a41fd6;
+
+  --font: "D-DIN", "DIN Alternate", "Barlow", Arial, sans-serif;
+  --ease: cubic-bezier(0.2, 0.7, 0.2, 1);
+  --dur: 240ms;
+  --gutter: clamp(24px, 8vw, 128px);
+  --nav-h: 72px;
+}
+
+html, body { background: var(--void); color: var(--fg); font-family: var(--font); }
+:where(body *:not([data-globe], [data-globe] *)) { border-radius: 0; box-shadow: none; }
+:focus-visible { outline: 2px solid var(--fg); outline-offset: 3px; }
+
+.t-hero       { font: 700 clamp(2.25rem, 1.4rem + 3.2vw, 4rem)/1 var(--font); letter-spacing: 0.02em; text-transform: uppercase; }
+.t-h2         { font: 700 clamp(1.75rem, 1.2rem + 1.8vw, 2.75rem)/1.05 var(--font); letter-spacing: 0.02em; text-transform: uppercase; }
+.t-h3         { font: 700 1.25rem/1.1 var(--font); letter-spacing: 0.06em; text-transform: uppercase; }
+.t-stat       { font: 700 clamp(2.5rem, 1.6rem + 3vw, 4.5rem)/1 var(--font); letter-spacing: 0.01em; }
+.t-readout    { font: 700 1.75rem/1 var(--font); letter-spacing: 0.02em; }
+.t-readout-lg { font: 700 clamp(2.5rem, 1.8rem + 2.4vw, 3.75rem)/1 var(--font); letter-spacing: 0.02em; }
+.t-label      { font: 700 0.8125rem/1 var(--font); letter-spacing: 0.09em; text-transform: uppercase; }
+.t-micro      { font: 400 0.6875rem/1.2 var(--font); letter-spacing: 0.1em; text-transform: uppercase; }
+.t-body       { font: 400 1rem/1.6 var(--font); letter-spacing: 0; text-transform: none; }
+.t-num        { font-variant-numeric: tabular-nums lining-nums; }
+
+.scene-scrim { background: linear-gradient(to top, rgba(0, 0, 0, 0.82) 0%, rgba(0, 0, 0, 0.35) 45%, rgba(0, 0, 0, 0) 72%); }
+
+.nav-link { position: relative; }
+.nav-link::after { content: ""; position: absolute; left: 0; right: 0; bottom: -8px; height: 2px; background: var(--fg); transform: scaleX(0); transform-origin: left; transition: transform var(--dur) var(--ease); }
+.nav-link:hover::after, .nav-link[aria-current="page"]::after, .nav-link[aria-pressed="true"]::after { transform: scaleX(1); }
+
+/* The one button: outline, uppercase, fill sweeps up on hover and focus. Measured on the reference site: 49px tall,
+   20px side padding, 1px border at 35 percent white, 4px radius (the one radius in the system). */
+.ghost-btn { position: relative; isolation: isolate; overflow: hidden; display: inline-flex; align-items: center; justify-content: center; min-height: 49px; padding: 0 20px; border: 1px solid var(--rule-strong); border-radius: 4px; color: var(--fg); background: rgba(0, 0, 0, 0.5); font: 700 0.8125rem/1 var(--font); letter-spacing: 0.09em; text-transform: uppercase; text-decoration: none; cursor: pointer; transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease); }
+.ghost-btn::before { content: ""; position: absolute; inset: 0; z-index: -1; background: var(--fg); transform: translateY(101%); transition: transform var(--dur) var(--ease); }
+.ghost-btn:hover, .ghost-btn:focus-visible { color: var(--void); border-color: var(--fg); }
+.ghost-btn:hover::before, .ghost-btn:focus-visible::before { transform: translateY(0); }
+.ghost-btn:disabled { opacity: 0.4; pointer-events: none; }
+
+[data-status="correction"] { color: var(--hud-correction); }
+[data-status="rate"]       { color: var(--hud-rate); }
+[data-status="hold"]       { color: var(--hold); }
+[data-status="nogo"], [data-status="abort"] { color: var(--abort); }
+[data-verdict="NO-GO"]     { color: var(--abort); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0ms !important; animation-duration: 0ms !important; }
+}
