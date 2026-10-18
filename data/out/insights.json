@@ -1,0 +1,288 @@
+{
+  "model": "perceptron-mk1.5",
+  "spent_usd": 0.00581,
+  "items": [
+    {
+      "zone_id": "Z01",
+      "kind": "tile",
+      "topic": "yield_cues",
+      "summary": "The fields are mostly uniform green with a closed canopy by late season, and no clearly visible drowned spots, stand gaps, weeds, or lodging problems can be seen across the patch.",
+      "dates": [
+        "2026-06-29",
+        "2026-07-14",
+        "2026-08-20",
+        "2026-08-28"
+      ],
+      "cues": [
+        {
+          "cue": "drowned_spots",
+          "seen": "no"
+        },
+        {
+          "cue": "stand_gaps",
+          "seen": "no"
+        },
+        {
+          "cue": "weed_pressure",
+          "seen": "no"
+        },
+        {
+          "cue": "lodging",
+          "seen": "no"
+        }
+      ],
+      "raw": "The fields are mostly uniform green with a closed canopy by late season, and no clearly visible drowned spots, stand gaps, weeds, or lodging problems can be seen across the patch.\n\ndrowned=no gaps=no weeds=no lodging=no"
+    },
+    {
+      "zone_id": "Z02",
+      "kind": "tile",
+      "topic": "yield_cues",
+      "summary": "The fields are mostly uniform and green, with no clearly visible drowned spots, stand gaps, weeds, or lodging across the patch. The vegetation appears healthy and consistent throughout the area.",
+      "dates": [
+        "2026-06-29",
+        "2026-07-14",
+        "2026-08-20",
+        "2026-08-28"
+      ],
+      "cues": [
+        {
+          "cue": "drowned_spots",
+          "seen": "no"
+        },
+        {
+          "cue": "stand_gaps",
+          "seen": "no"
+        },
+        {
+          "cue": "weed_pressure",
+          "seen": "no"
+        },
+        {
+          "cue": "lodging",
+          "seen": "no"
+        }
+      ],
+      "raw": "The fields are mostly uniform and green, with no clearly visible drowned spots, stand gaps, weeds, or lodging across the patch. The vegetation appears healthy and consistent throughout the area.\ndrowned=no gaps=no weeds=no lodging=no"
+    },
+    {
+      "zone_id": "Z03",
+      "kind": "tile",
+      "topic": "yield_cues",
+      "summary": "Across the patch, fields are mostly uniform green with a few small bare or thin spots in low areas early on; no clear stand gaps, weeds, or lodging are visible.",
+      "dates": [
+        "2026-06-29",
+        "2026-07-14",
+        "2026-08-20",
+        "2026-08-28"
+      ],
+      "cues": [
+        {
+          "cue": "drowned_spots",
+          "seen": "yes"
+        },
+        {
+          "cue": "stand_gaps",
+          "seen": "no"
+        },
+        {
+          "cue": "weed_pressure",
+          "seen": "no"
+        },
+        {
+          "cue": "lodging",
+          "seen": "no"
+        }
+      ],
+      "raw": "Across the patch, fields are mostly uniform green with a few small bare or thin spots in low areas early on; no clear stand gaps, weeds, or lodging are visible.\ndrowned=yes gaps=no weeds=no lodging=no"
+    },
+    {
+      "zone_id": "Z04",
+      "kind": "tile",
+      "topic": "yield_cues",
+      "summary": "The fields are mostly uniform green with a closed canopy by late season, and no clearly visible drowned spots, stand gaps, weeds, or lodging problems. The centre of the patch shows slightly more variation in texture but nothing definitive.",
+      "dates": [
+        "2026-06-29",
+        "2026-07-14",
+        "2026-08-20",
+        "2026-08-28"
+      ],
+      "cues": [
+        {
+          "cue": "drowned_spots",
+          "seen": "no"
+        },
+        {
+          "cue": "stand_gaps",
+          "seen": "no"
+        },
+        {
+          "cue": "weed_pressure",
+          "seen": "no"
+        },
+        {
+          "cue": "lodging",
+          "seen": "no"
+        }
+      ],
+      "raw": "The fields are mostly uniform green with a closed canopy by late season, and no clearly visible drowned spots, stand gaps, weeds, or lodging problems. The centre of the patch shows slightly more variation in texture but nothing definitive.\n\ndrowned=no gaps=no weeds=no lodging=no"
+    },
+    {
+      "zone_id": "Z05",
+      "kind": "tile",
+      "topic": "yield_cues",
+      "summary": "The fields are mostly uniform green with a healthy canopy by late season, and no clear drowned spots, stand gaps, weeds, or lodging are visible. Any minor variations are too small or indistinct to confidently identify as problems.",
+      "dates": [
+        "2026-06-29",
+        "2026-07-14",
+        "2026-08-20",
+        "2026-08-28"
+      ],
+      "cues": [
+        {
+          "cue": "drowned_spots",
+          "seen": "no"
+        },
+        {
+          "cue": "stand_gaps",
+          "seen": "no"
+        },
+        {
+          "cue": "weed_pressure",
+          "seen": "no"
+        },
+        {
+          "cue": "lodging",
+          "seen": "no"
+        }
+      ],
+      "raw": "The fields are mostly uniform green with a healthy canopy by late season, and no clear drowned spots, stand gaps, weeds, or lodging are visible. Any minor variations are too small or indistinct to confidently identify as problems.\n\ndrowned=no gaps=no weeds=no lodging=no"
+    },
+    {
+      "zone_id": "Z06",
+      "kind": "tile",
+      "topic": "yield_cues",
+      "summary": "The fields are mostly uniform green with a closed canopy by late season, and no clear drowned spots, stand gaps, weeds, or lodging are visible across the patch.",
+      "dates": [
+        "2026-06-29",
+        "2026-07-14",
+        "2026-08-20",
+        "2026-08-28"
+      ],
+      "cues": [
+        {
+          "cue": "drowned_spots",
+          "seen": "no"
+        },
+        {
+          "cue": "stand_gaps",
+          "seen": "no"
+        },
+        {
+          "cue": "weed_pressure",
+          "seen": "no"
+        },
+        {
+          "cue": "lodging",
+          "seen": "no"
+        }
+      ],
+      "raw": "The fields are mostly uniform green with a closed canopy by late season, and no clear drowned spots, stand gaps, weeds, or lodging are visible across the patch.\ndrowned=no gaps=no weeds=no lodging=no"
+    },
+    {
+      "zone_id": "Z07",
+      "kind": "tile",
+      "topic": "yield_cues",
+      "summary": "Across the patch, fields are mostly uniform green with dense canopy by late season; no clear drowned spots, stand gaps, weeds, or lodging are visible. The centre and south-east appear particularly healthy and consistent.",
+      "dates": [
+        "2026-06-29",
+        "2026-07-14",
+        "2026-08-20",
+        "2026-08-28"
+      ],
+      "cues": [
+        {
+          "cue": "drowned_spots",
+          "seen": "no"
+        },
+        {
+          "cue": "stand_gaps",
+          "seen": "no"
+        },
+        {
+          "cue": "weed_pressure",
+          "seen": "no"
+        },
+        {
+          "cue": "lodging",
+          "seen": "no"
+        }
+      ],
+      "raw": "Across the patch, fields are mostly uniform green with dense canopy by late season; no clear drowned spots, stand gaps, weeds, or lodging are visible. The centre and south-east appear particularly healthy and consistent.\n\ndrowned=no gaps=no weeds=no lodging=no"
+    },
+    {
+      "zone_id": "Z08",
+      "kind": "tile",
+      "topic": "yield_cues",
+      "summary": "The fields are mostly uniform green with a closed canopy by late season, and no clear drowned spots, stand gaps, weeds, or lodging are visible across the patch.",
+      "dates": [
+        "2026-06-29",
+        "2026-07-14",
+        "2026-08-20",
+        "2026-08-28"
+      ],
+      "cues": [
+        {
+          "cue": "drowned_spots",
+          "seen": "no"
+        },
+        {
+          "cue": "stand_gaps",
+          "seen": "no"
+        },
+        {
+          "cue": "weed_pressure",
+          "seen": "no"
+        },
+        {
+          "cue": "lodging",
+          "seen": "no"
+        }
+      ],
+      "raw": "The fields are mostly uniform green with a closed canopy by late season, and no clear drowned spots, stand gaps, weeds, or lodging are visible across the patch.\ndrowned=no gaps=no weeds=no lodging=no"
+    },
+    {
+      "zone_id": "Z09",
+      "kind": "tile",
+      "topic": "yield_cues",
+      "summary": "The fields are mostly uniform green with a healthy canopy, though the centre field shows some thinning and patchiness. No clear drowned spots, weeds, or lodging are evident across the rest of the patch.",
+      "dates": [
+        "2026-06-29",
+        "2026-07-14",
+        "2026-08-20",
+        "2026-08-28"
+      ],
+      "cues": [
+        {
+          "cue": "drowned_spots",
+          "seen": "no"
+        },
+        {
+          "cue": "stand_gaps",
+          "seen": "yes"
+        },
+        {
+          "cue": "weed_pressure",
+          "seen": "unclear"
+        },
+        {
+          "cue": "lodging",
+          "seen": "no"
+        }
+      ],
+      "raw": "The fields are mostly uniform green with a healthy canopy, though the centre field shows some thinning and patchiness. No clear drowned spots, weeds, or lodging are evident across the rest of the patch.\ndrowned=no gaps=yes weeds=unclear lodging=no"
+    }
+  ],
+  "field_cues": [],
+  "yield_cues_model": "perceptron-mk1.5",
+  "yield_cues_spent_usd": 0.00474
+}
