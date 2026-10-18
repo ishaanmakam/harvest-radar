@@ -1,6 +1,7 @@
 import { FLAGS } from "./format.js";
 
 const state = {
+  aspect: "health",
   view: "fields",
   selected: null,
   list: [],

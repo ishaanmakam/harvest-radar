@@ -68,23 +68,71 @@ function pctOf(value) {
   return fmtPct(value <= 1 ? value * 100 : value);
 }
 
-/** The Outlook block reads the per-field modules of analytics.json. Every module and key is optional. */
-function outlookBlock(modules) {
-  if (!modules || typeof modules !== "object") return null;
+/**
+ * The Outlook block reads the per-field modules of analytics.json plus the field's soil and terrain
+ * from field_env.json. Every module and key is optional.
+ */
+function outlookBlock(modules, env) {
+  const m = modules && typeof modules === "object" ? modules : {};
   const cards = [];
 
-  const y = modules.yield;
-  if (y && (y.band || y.index != null || y.estimate)) {
+  const y = m.yield;
+  if (y && typeof y.bu_per_acre_calibrated === "number") {
+    cards.push(
+      card(
+        "Calibrated yield",
+        `${fmtNum(y.bu_per_acre_calibrated, 1)} bu/acre`,
+        joinParts([
+          Array.isArray(y.interval_bu_per_acre) ? `band ${fmtNum(y.interval_bu_per_acre[0])} to ${fmtNum(y.interval_bu_per_acre[1])}` : null,
+          y.calibration ? `from the ${y.calibration}` : null,
+          y.band ? `${y.band} for its zone` : null,
+          y.index != null ? `relative index ${fmtNum(y.index, 2)}` : null,
+          y.confidence != null ? `${typeof y.confidence === "number" ? fmtPct(y.confidence * 100) : y.confidence} confidence` : null,
+        ]),
+      ),
+    );
+  } else if (y && (y.band || y.index != null || y.estimate)) {
     cards.push(
       card(
         "Yield outlook",
         y.band ? `${titleCase(y.band)} for its zone` : null,
         joinParts([
           y.index != null ? `relative index ${fmtNum(y.index, 2)}` : null,
-          y.estimate?.bu_per_acre != null ? `about ${fmtNum(y.estimate.bu_per_acre)} bu/acre` : null,
+          y.estimate?.bu_per_acre != null ? `about ${fmtNum(y.estimate.bu_per_acre)} bu/acre (reference only)` : null,
           y.estimate?.t_per_ha != null ? `${fmtNum(y.estimate.t_per_ha, 1)} t/ha` : null,
           y.production?.bu != null ? `${fmtNum(y.production.bu)} bu on the field` : null,
           y.confidence != null ? `${typeof y.confidence === "number" ? fmtPct(y.confidence * 100) : y.confidence} confidence` : null,
+        ]),
+      ),
+    );
+  }
+
+  const soil = y?.soil || env || null;
+  const terrain = y?.terrain || env || null;
+  const envNote = y?.env_note || env?.note || null;
+  if (soil && (soil.texture || soil.soc_g_kg != null)) {
+    cards.push(
+      card(
+        "Soil",
+        soil.texture ? titleCase(soil.texture) : null,
+        joinParts([
+          soil.soc_g_kg != null ? `organic carbon ${fmtNum(soil.soc_g_kg, 1)} g/kg` : null,
+          soil.clay_pct != null ? `clay ${fmtNum(soil.clay_pct)}%` : null,
+          soil.sand_pct != null ? `sand ${fmtNum(soil.sand_pct)}%` : null,
+          soil.ph != null ? `pH ${fmtNum(soil.ph, 1)}` : null,
+          envNote,
+        ]),
+      ),
+    );
+  }
+  if (terrain && (terrain.slope_pct != null || terrain.elevation_m != null)) {
+    cards.push(
+      card(
+        "Terrain",
+        terrain.slope_pct != null ? `${fmtNum(terrain.slope_pct, 1)}% slope` : null,
+        joinParts([
+          terrain.elevation_m != null ? `${fmtNum(terrain.elevation_m)} m elevation` : null,
+          terrain.aspect ? `faces ${terrain.aspect}` : null,
         ]),
       ),
     );
@@ -270,7 +318,7 @@ export function renderPlan(el, ctx, farmId) {
       ),
     );
 
-    const outlook = outlookBlock(data.analytics?.fields?.[farmId]);
+    const outlook = outlookBlock(data.analytics?.fields?.[farmId], data.fieldEnv?.fields?.[farmId]);
     if (outlook) body.append(outlook);
 
     const series = data.timeseries?.fields?.[farmId];

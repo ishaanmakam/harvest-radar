@@ -137,6 +137,8 @@ class TestWindowWords:
         assert wm.window_phrase(TODAY, TODAY, TODAY) == "today only (2026-10-17)"
         assert wm.window_phrase(TODAY, TODAY + timedelta(days=1), TODAY) == "today and tomorrow (2026-10-17 to 2026-10-18)"
         assert wm.window_phrase(TODAY + timedelta(days=2), TODAY + timedelta(days=4), TODAY) == "2026-10-19 to 2026-10-21"
+        assert wm.window_phrase(TODAY + timedelta(days=1), TODAY + timedelta(days=1), TODAY) == "tomorrow only (2026-10-18)"
+        assert wm.window_phrase(TODAY + timedelta(days=3), TODAY + timedelta(days=3), TODAY) == "2026-10-20 only"
 
     def test_satellite_future_date_is_not_echoed_as_combine_ready(self):
         obs = observed(D("2026-09-01"), 46)
