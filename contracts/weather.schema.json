@@ -3,28 +3,137 @@
   "$id": "weather.schema.json",
   "title": "weather.json — observed (NASA POWER / GPM) and forecast (Open-Meteo) weather at the AOI centre",
   "type": "object",
-  "required": ["observed", "forecast"],
+  "required": [
+    "observed",
+    "forecast"
+  ],
   "properties": {
     "observed": {
       "type": "object",
-      "required": ["source", "dates", "precip_mm", "tmax_c", "tmin_c"],
+      "required": [
+        "source",
+        "dates",
+        "precip_mm",
+        "tmax_c",
+        "tmin_c"
+      ],
       "properties": {
-        "source": {"type": "string"},
-        "dates": {"type": "array", "items": {"type": "string"}},
-        "precip_mm": {"type": "array", "items": {"type": ["number", "null"]}},
-        "tmax_c": {"type": "array", "items": {"type": ["number", "null"]}},
-        "tmin_c": {"type": "array", "items": {"type": ["number", "null"]}}
+        "source": {
+          "type": "string"
+        },
+        "dates": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "precip_mm": {
+          "type": "array",
+          "items": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "tmax_c": {
+          "type": "array",
+          "items": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "tmin_c": {
+          "type": "array",
+          "items": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        }
       }
     },
     "forecast": {
       "type": "object",
-      "required": ["source", "dates", "precip_mm", "precip_prob"],
+      "required": [
+        "source",
+        "dates",
+        "precip_mm",
+        "precip_prob"
+      ],
       "properties": {
-        "source": {"type": "string"},
-        "dates": {"type": "array", "items": {"type": "string"}},
-        "precip_mm": {"type": "array", "items": {"type": ["number", "null"]}},
-        "precip_prob": {"type": "array", "items": {"type": ["number", "null"]}}
-      }
+        "source": {
+          "type": "string"
+        },
+        "dates": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "precip_mm": {
+          "type": "array",
+          "items": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "precip_prob": {
+          "type": "array",
+          "items": {
+            "type": [
+              "number",
+              "null"
+            ]
+          }
+        },
+        "tmin_c": {
+          "type": "array",
+          "items": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "description": "Daily 2 m minimum temperature, C (Open-Meteo daily temperature_2m_min). Frost trigger: tmin_c <= thresholds.frost_tmin_c within the rain lookahead on a ready crop."
+        },
+        "tmax_c": {
+          "type": "array",
+          "items": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "description": "Daily 2 m maximum temperature, C (Open-Meteo temperature_2m_max). Dry-down / growing degree days."
+        },
+        "rh_mean_pct": {
+          "type": "array",
+          "items": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "description": "Daily mean relative humidity, % (Open-Meteo relative_humidity_2m_mean). Field workability and grain rewetting; optional."
+        },
+        "wind_gust_ms": {
+          "type": "array",
+          "items": {
+            "type": [
+              "number",
+              "null"
+            ]
+          },
+          "description": "Daily maximum wind gust, m/s (Open-Meteo wind_gusts_10m_max). Storm / lodging risk; optional."
+        }
+      },
+      "description": "Daily forecast from as_of. Arrays are aligned with dates; null = unknown. precip_mm/precip_prob are required (harvest-before-rain: any day >= 15 mm in the next 3). The optional arrays below feed the frost trigger and the dry-down / workability models in intelligence/decide.py; they are additive."
     }
   }
 }
