@@ -191,7 +191,8 @@ while d < AS_OF:
 fc_dates = [d2s(AS_OF + timedelta(days=k)) for k in range(14)]
 fc_precip = [0.0] * 14
 fc_prob = [5] * 14
-fc_precip[5], fc_prob[5] = 14.0, 65  # a rain event ~5 days out -> urgency
+fc_precip[2], fc_prob[2] = 16.0, 70  # heavy rain 2 days out: ready farms get "harvest before the rain" (act_now)
+fc_precip[5], fc_prob[5] = 14.0, 65  # a second, lighter event ~5 days out
 fc_precip[6], fc_prob[6] = 6.0, 55
 weather = {
     "observed": {"source": "mock", "dates": obs_dates, "precip_mm": precip, "tmax_c": tmax, "tmin_c": tmin},

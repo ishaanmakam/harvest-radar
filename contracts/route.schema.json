@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "route.schema.json",
+  "title": "route.json — the officer's morning route (spec: field-inspector design, Data)",
+  "type": "object",
+  "required": ["as_of", "stops"],
+  "properties": {
+    "as_of": {"type": "string"},
+    "stops": {
+      "type": "array",
+      "description": "Ordered: act_now farms first (fire, flood, harvest-before-rain, new burn scar), then watch farms (stress, visible change, harvest readiness, establishment, older burn scar). fine farms are not stops.",
+      "items": {
+        "type": "object",
+        "required": ["farm_id", "action", "why"],
+        "properties": {
+          "farm_id": {"type": "string"},
+          "action": {"enum": ["visit", "call"]},
+          "why": {"type": "string"},
+          "kind": {"type": "string", "description": "The check that put the farm here (optional)"},
+          "status": {"enum": ["watch", "act_now"], "description": "That check's status (optional)"}
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,48 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "plans.schema.json",
+  "title": "plans.json — one morning plan per farm, every check listed (spec: field-inspector design, Data)",
+  "type": "object",
+  "required": ["as_of", "plans"],
+  "properties": {
+    "as_of": {"type": "string", "description": "Latest clear pass used anywhere in this run"},
+    "source": {"type": "string", "description": "Who wrote the plans, e.g. 'intelligence/decide.py'"},
+    "plans": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["farm_id", "as_of", "flag", "source", "today", "checks", "risks"],
+        "properties": {
+          "farm_id": {"type": "string", "description": "= field_id in fields.geojson"},
+          "as_of": {"type": "string", "description": "Date of the clear pass this plan uses"},
+          "flag": {"enum": ["fine", "watch", "act_now"], "description": "Worst check status"},
+          "source": {"enum": ["perceptron", "vegetation_index"], "description": "What the visual checks used"},
+          "today": {"type": "string", "description": "What to do today"},
+          "checks": {
+            "type": "array",
+            "minItems": 8,
+            "maxItems": 8,
+            "description": "All eight checks, always present, in table order",
+            "items": {
+              "type": "object",
+              "required": ["kind", "status", "detail", "where", "window"],
+              "properties": {
+                "kind": {"enum": ["harvest_ready", "harvest_before_rain", "establishment", "burn_scar", "fire", "flood", "stress", "visible_change"]},
+                "status": {"enum": ["clear", "watch", "act_now"]},
+                "detail": {"type": "string"},
+                "where": {"type": "string", "description": "Place in the field; empty when it does not apply"},
+                "window": {
+                  "type": "object",
+                  "description": "Start and end dates; empty object when it does not apply",
+                  "properties": {"start": {"type": "string"}, "end": {"type": "string"}},
+                  "additionalProperties": false
+                }
+              }
+            }
+          },
+          "risks": {"type": "array", "items": {"type": "string"}, "description": "detail of every check whose status is not clear"}
+        }
+      }
+    }
+  }
+}
