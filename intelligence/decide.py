@@ -41,6 +41,7 @@ FLAG = {0: "fine", 1: "watch", 2: "act_now"}
 DEFAULTS = {
     "rain_act_now_mm": 15.0,       # spec: harvest-before-rain threshold
     "rain_lookahead_days": 3,      # spec: "any forecast day in the next 3 days"
+    "frost_tmin_c": 0.0,           # ours (Iowa): forecast Tmin at or below this within the same lookahead also triggers
     "fire_lookback_days": 5,       # spec: hotspot in the last 5 days
     "flood_ndvi_max": 0.0,         # ours: standing water reads as NDVI at or below zero
     "stress_ndvi_drop_min": 0.10,  # ours: drop between consecutive clear passes that is not a harvest (no zone context)
@@ -85,13 +86,19 @@ def _cue_norm(cue):
     return c
 
 
-def forecast_pairs(dates, precip):
-    """(date, mm) per forecast day. A precip array that is shorter or longer than the dates is padded with None /
-    cut, with a warning, instead of silently dropping days (zip would)."""
+def forecast_pairs(dates, precip, tmin=None):
+    """(date, mm) per forecast day, or (date, mm, tmin_c) when the forecast carries minimum temperatures. Arrays
+    shorter or longer than the dates are padded with None / cut, with a warning, instead of silently dropping days."""
     dates, precip = list(dates or []), list(precip or [])
     if len(precip) != len(dates):
         print(f"  WARN weather forecast has {len(dates)} dates but {len(precip)} precip values; padding with null")
         precip = (precip + [None] * len(dates))[:len(dates)]
+    if tmin:
+        tmin = list(tmin)
+        if len(tmin) != len(dates):
+            print(f"  WARN weather forecast has {len(dates)} dates but {len(tmin)} tmin values; padding with null")
+            tmin = (tmin + [None] * len(dates))[:len(dates)]
+        return [(d(x), mm, t) for x, mm, t in zip(dates, precip, tmin)]
     return [(d(x), mm) for x, mm in zip(dates, precip)]
 
 
@@ -157,22 +164,34 @@ def farm_plan(rec, passes, forecast, hotspots, insight, today: date, th=None, fa
     else:
         checks.append(_check("harvest_ready", "clear", "No harvest signal yet"))
 
-    # 2. harvest versus rain
-    rain = [(dt, mm) for dt, mm in forecast
-            if mm is not None and 0 <= (dt - today).days < th["rain_lookahead_days"] and mm >= th["rain_act_now_mm"]]
-    if ready and rain:
-        first, last = rain[0], rain[-1]
-        more = f" and more on {s(last[0])}" if len(rain) > 1 else ""
-        detail = f"Harvest before the rain: {first[1]:.0f} mm forecast on {s(first[0])}{more}"
-        checks.append(_check("harvest_before_rain", "act_now", detail, window=_win(first[0], last[0])))
-        today_text = f"Harvest before {s(first[0])}: {first[1]:.0f} mm of rain is forecast."
+    # 2. harvest versus weather: heavy rain (spec) or frost (Iowa addition) in the next 3 days on a ready crop
+    horizon = [e for e in forecast if 0 <= (e[0] - today).days < th["rain_lookahead_days"]]
+    rain = [(e[0], e[1]) for e in horizon if e[1] is not None and e[1] >= th["rain_act_now_mm"]]
+    has_temps = any(len(e) > 2 for e in forecast)
+    frost = [(e[0], e[2]) for e in horizon if len(e) > 2 and e[2] is not None and e[2] <= th["frost_tmin_c"]]
+    if ready and (rain or frost):
+        parts, days = [], []
+        if rain:
+            more = f" and more on {s(rain[-1][0])}" if len(rain) > 1 else ""
+            parts.append(f"{rain[0][1]:.0f} mm of rain forecast on {s(rain[0][0])}{more}")
+            days += [r[0] for r in rain]
+        if frost:
+            parts.append(f"frost forecast on {s(frost[0][0])} ({frost[0][1]:.0f} °C)")
+            days += [f[0] for f in frost]
+        what = "rain" if rain and not frost else ("frost" if frost and not rain else "rain and the frost")
+        checks.append(_check("harvest_before_rain", "act_now", f"Harvest before the {what}: " + "; ".join(parts),
+                             window=_win(min(days), max(days))))
+        today_text = f"Harvest before {s(min(days))}: " + "; ".join(parts) + "."
     else:
         if ready:
-            detail = f"No rain of {th['rain_act_now_mm']:.0f} mm or more in the next {th['rain_lookahead_days']} days"
-        elif rain:
-            detail = f"{rain[0][1]:.0f} mm forecast on {s(rain[0][0])}, but the crop is not ready to cut"
+            detail = (f"No rain of {th['rain_act_now_mm']:.0f} mm or more" + (" and no frost" if has_temps else "")
+                      + f" in the next {th['rain_lookahead_days']} days")
+        elif rain or frost:
+            coming = ([f"{rain[0][1]:.0f} mm forecast on {s(rain[0][0])}"] if rain else []) + \
+                     ([f"frost forecast on {s(frost[0][0])}"] if frost else [])
+            detail = ", ".join(coming) + ", but the crop is not ready to cut"
         else:
-            detail = "Crop not ready to cut; no heavy rain forecast"
+            detail = "Crop not ready to cut; no heavy rain" + (" or frost" if has_temps else "") + " forecast"
         checks.append(_check("harvest_before_rain", "clear", detail))
         today_text = None
 
@@ -368,7 +387,7 @@ def run(data_dir: Path):
 
     dates = [d(x) for x in ts["dates"]]
     fc = weather.get("forecast") or {}
-    forecast = forecast_pairs(fc.get("dates", []), fc.get("precip_mm", []))
+    forecast = forecast_pairs(fc.get("dates", []), fc.get("precip_mm", []), fc.get("tmin_c"))
     # the landscape's latest clear pass: the as_of for a farm that has no clear pass of its own, and the document's
     clear_days = [i for i, _ in enumerate(dates)
                   if any(i < len(sr["ndvi"]) and sr["ndvi"][i] is not None for sr in ts["fields"].values())]
