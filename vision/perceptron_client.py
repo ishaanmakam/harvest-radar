@@ -37,6 +37,7 @@ def _load_env():
 _load_env()
 MODEL = os.environ.get("PERCEPTRON_MODEL", "perceptron-mk1.5")
 BUDGET = float(os.environ.get("PERCEPTRON_BUDGET_USD", "40"))
+LAST_FINISH_REASON = None
 
 
 def spent_usd():
@@ -59,6 +60,7 @@ def _record(usage, label):
 
 def ask(media, prompt, annotation_format=None, label="call", max_tokens=2048, reasoning_effort=None):
     """media: list of local paths (images .jpg/.png or videos .mp4). Returns (text, cost_usd)."""
+    global LAST_FINISH_REASON
     if spent_usd() >= BUDGET:
         raise RuntimeError(f"Perceptron budget cap reached (${BUDGET}). Raise PERCEPTRON_BUDGET_USD deliberately.")
     from perceptron import Client, image, video  # imported lazily so the rest of the repo runs without the SDK
@@ -77,6 +79,7 @@ def ask(media, prompt, annotation_format=None, label="call", max_tokens=2048, re
     cost = _record(resp.usage, label)
     choice = resp.choices[0]
     text = choice.message.content or ""
+    LAST_FINISH_REASON = choice.finish_reason
     if choice.finish_reason != "stop":
         print(f"  WARN finish_reason={choice.finish_reason} (answer may be cut off)")
     print(f"  [{label}] ${cost:.4f}  (total ${spent_usd():.3f} of ${BUDGET})")

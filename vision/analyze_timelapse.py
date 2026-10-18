@@ -22,6 +22,7 @@ from shapely.geometry import box as shapely_box
 from shapely.geometry import shape
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from landscape import landscape  # noqa: E402
 from perceptron_client import MODEL, ask, clean_text, norm_to_lonlat, parse_annotations, spent_usd  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -71,15 +72,14 @@ def parse_counts(text):
     return counts
 
 
-def zone_prompt(mode, legend):
-    base_q = ("Sentinel-2 satellite images (10 m pixels, north up) of the same ~3 km patch of rice farmland in Punjab, India. "
-              "Green = standing rice, tan/light brown = harvested, very dark/black = burned stubble. ")
+def zone_prompt(mode, legend, land):
+    scene = land["scene"] + " "
     if mode == "video":
-        return (base_q + f"This video shows one satellite pass per second: {legend.replace('image', 'second')}. "
+        return (scene + f"This video shows one satellite pass per second: {legend.replace('image', 'second')}. "
                 "Return clip annotations for when large-scale harvesting happens and when burn scars appear. "
                 "Also note any standing water (flooding) or browning or declining patches inside green fields. "
                 "Then give approximate counts of standing, harvested and burned fields in the final frame.")
-    return (base_q + f"The images are in date order: {legend}. "
+    return (scene + f"The images are in date order: {legend}. "
             "In one or two sentences, describe when and where harvesting and burning happened across these dates, "
             "and any standing water (flooding) or browning or declining patches inside green fields. "
             "Then give approximate counts of standing, harvested and burned fields in the last image, "
@@ -88,33 +88,29 @@ def zone_prompt(mode, legend):
             "flood=yes|no stress=yes|no change=yes|no")
 
 
-CUE_DEFS = {
-    "flood": "'flood' = standing water on fields (dark blue/black, smooth, often along low ground)",
-    "stress": "'stress' = parts of green fields that are browning or patchy but not cleanly harvested",
-    "change": "'change' = areas that look clearly different from image 0",
-}
-_GATE = re.compile(r"flood\s*=\s*(yes|no)\s+stress\s*=\s*(yes|no)\s+change\s*=\s*(yes|no)", re.I)
+CHANGE_DEF = "'change' = areas that look clearly different from image 0"
+_GATE_KEY = re.compile(r"\b(flood|stress|change)\s*=\s*(yes|no)", re.I)
 
 
 def parse_gate(text):
-    m = _GATE.search(text or "")
-    if not m:
-        return {"flood": False, "stress": False, "change": False}
-    return {"flood": m.group(1).lower() == "yes", "stress": m.group(2).lower() == "yes", "change": m.group(3).lower() == "yes"}
+    found = {}
+    for match in _GATE_KEY.finditer(text or ""):
+        found[match.group(1).lower()] = match.group(2).lower() == "yes"
+    return {"flood": found.get("flood", False), "stress": found.get("stress", False), "change": found.get("change", False)}
 
 
 def summary_text(text):
     summary = clean_text(text)
-    summary = _GATE.sub("", summary)
+    summary = _GATE_KEY.sub("", summary)
     summary = re.sub(r"standing\s*=.*$", "", summary, flags=re.I | re.S)
     return re.sub(r"\s+", " ", summary).strip()
 
 
-def cue_prompt(prev_date, latest_date, kinds):
-    labels = "; ".join(CUE_DEFS[k] for k in ("flood", "stress", "change") if k in kinds)
+def cue_prompt(prev_date, latest_date, kinds, land):
+    defs = {"flood": land["flood_def"], "stress": land["stress_def"], "change": CHANGE_DEF}
+    labels = "; ".join(defs[k] for k in ("flood", "stress", "change") if k in kinds)
     return (
-        f"Two Sentinel-2 true-colour images (10 m pixels, north up) of the same ~3 km patch of farmland. "
-        f"Image 0 = {prev_date}, image 1 = {latest_date}. On image 1 only, draw boxes around: {labels}. "
+        f"{land['scene']} Image 0 = {prev_date}, image 1 = {latest_date}. On image 1 only, draw boxes around: {labels}. "
         "Use exactly those mention labels. Mark at most 25 boxes in total. If there is none of a kind, draw no boxes for it."
     )
 
@@ -270,6 +266,7 @@ def main():
         keep = set(args.zones.split(","))
         zones = [z for z in zones if z["properties"]["zone_id"] in keep]
     picks = frames["frames"][-args.frames:]
+    land = landscape()
     fields_by_zone = load_fields(data)
     tmp = out_dir / "perceptron" / "crops"
     tmp.mkdir(parents=True, exist_ok=True)
@@ -285,7 +282,7 @@ def main():
         crop_bounds = [bounds for _, bounds in cropped]
         n_crops += len(crops)
         legend = ", ".join(f"image {i} = {f['date']}" for i, f in enumerate(picks))
-        prompt = zone_prompt(args.mode, legend)
+        prompt = zone_prompt(args.mode, legend, land)
         zone_fields = fields_by_zone.get(zid, []) if fields_by_zone is not None else []
         prev_date = picks[-2]["date"] if len(picks) >= 2 else None
         latest_date = picks[-1]["date"]
@@ -296,6 +293,8 @@ def main():
         if args.dry_run:
             with Image.open(crops[0]) as im:
                 w, h = im.size
+            if z is zones[0]:
+                print(prompt[:120])
             print(f"{zid} crops={len(crops)} size={w}x{h} prompt_chars={len(prompt)}")
             if args.mode == "video":
                 print(f"{zid} cue call skipped in video mode")
@@ -337,7 +336,7 @@ def main():
             try:
                 raw_cues, _ = ask(
                     [crops[-2], crops[-1]],
-                    cue_prompt(prev_date, latest_date, yes_kinds),
+                    cue_prompt(prev_date, latest_date, yes_kinds, land),
                     annotation_format="box",
                     label=f"cues_{zid}",
                     max_tokens=4096,
