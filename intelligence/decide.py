@@ -238,13 +238,19 @@ def farm_plan(rec, passes, forecast, hotspots, insight, today: date, th=None, fa
 
     ens = ensemble or {}
 
-    def agree(day, key):
-        """'k of n weather models agree' for a day the ensemble knows, else ''."""
-        e = ens.get(day) or {}
-        n = e.get("n_models") or 0
-        if not n or e.get(key) is None:
+    def agree(day, kind):
+        """A clause to append after a rain amount or a frost: which of the latest weather models also expect it.
+        Empty when the ensemble does not know the day or fewer than MIN_MODELS reach it; honest when they disagree."""
+        k, n = fm.count_of(ens.get(day), kind)
+        if n < fm.MIN_MODELS:
             return ""
-        return f"{round(e[key] * n)} of {n} weather models agree"
+        thing = {"rain": "that much", "frost": "it", "hard_freeze": "it"}[kind]
+        if k == 0:
+            return ", though no other weather model expects " + ("that much" if kind == "rain" else
+                                                                  ("a hard freeze" if kind == "hard_freeze" else "frost"))
+        if k * 2 < n:
+            return f", though only {k} of {n} weather models expect {thing}"
+        return f", which {k} of {n} weather models also expect"
 
     def split_days():
         """Days inside the lookahead where a real share of the models put the act-now rain that the single feed does not."""
@@ -252,25 +258,27 @@ def farm_plan(rec, passes, forecast, hotspots, insight, today: date, th=None, fa
         for e in horizon:
             day = e[0]
             info = ens.get(day) or {}
-            n = info.get("n_models") or 0
-            share = info.get("p_rain_15mm") or 0.0
-            if n and share >= ENSEMBLE_SPLIT_MIN and (e[1] is None or e[1] < th["rain_act_now_mm"]):
-                out.append(f"{round(share * n)} of {n} weather models put {th['rain_act_now_mm']:.0f} mm or more on {s(day)}")
+            if info.get("rain_act_now_mm", th["rain_act_now_mm"]) != th["rain_act_now_mm"]:
+                continue                                  # the file counted at a different line: say nothing
+            k, n = fm.count_of(info, "rain")
+            if n >= fm.MIN_MODELS and k / n >= ENSEMBLE_SPLIT_MIN and (e[1] is None or e[1] < th["rain_act_now_mm"]):
+                out.append(f"{k} of {n} weather models put {th['rain_act_now_mm']:.0f} mm or more on {s(day)}")
         return out
 
-    def frost_temp():
-        t = frost[0][1]
+    def frost_head():
+        """'frost expected on D (-3 °C, a hard freeze), which k of n weather models also expect'."""
+        day, t = frost[0]
         shown = f"{t:.1f}".rstrip("0").rstrip(".")          # -0.5 stays -0.5; -2.0 reads -2; never "-0"
         if shown == "-0":
             shown = "0"
-        a = agree(frost[0][0], "p_frost").replace(" weather models agree", " models agree")
-        shown = f"{shown} °C" + (f"; {a}" if a else "")
-        return f"{shown}, a hard freeze" if t <= wm.HARD_FREEZE_C else shown
+        hard = t <= wm.HARD_FREEZE_C
+        return (f"frost expected on {s(day)} ({shown} °C{', a hard freeze' if hard else ''})"
+                + agree(day, "hard_freeze" if hard else "frost"))
 
     def frost_words(mature):
         if mature:
-            return f"frost expected on {s(frost[0][0])} ({frost_temp()}): the crop is mature, so it will not hurt the grain; no need to rush"
-        return f"frost expected on {s(frost[0][0])} ({frost_temp()}): if the crop is still filling it may lose some yield; nothing to do today"
+            return frost_head() + ": the crop is mature, so it will not hurt the grain; no need to rush"
+        return frost_head() + ": if the crop is still filling it may lose some yield; nothing to do today"
 
     def mature_at(day):
         """Was the crop past physiological maturity on `day`? Ready crops are; otherwise the satellite's harvest estimate
@@ -291,21 +299,20 @@ def farm_plan(rec, passes, forecast, hotspots, insight, today: date, th=None, fa
     today_text = None
     if ready and rain:
         first_day, first_mm = rain[0]
-        more = f" and more on {s(rain[-1][0])}" if len(rain) > 1 else ""
-        a = agree(first_day, "p_rain_15mm")
-        more = (f" ({a})" if a else "") + more
+        suffix = f" and more on {s(rain[-1][0])}" if len(rain) > 1 else ""
+        a = agree(first_day, "rain")
         fit_txt, fit = fit_words(first_day)
         gap = (first_day - today).days
         if gap == 0:
-            detail = f"{first_mm:.0f} mm of rain today{more}; {fit_txt}"
-            today_text = (f"Rain today ({first_mm:.0f} mm): the field will not be fit until {s(fit)}. Have the combine ready for then."
-                          if fit else f"Rain today ({first_mm:.0f} mm): the field will not be fit for several days. Have the combine ready for the first dry day.")
+            detail = f"{first_mm:.0f} mm of rain today{a}{suffix}; {fit_txt}"
+            today_text = (f"Rain today ({first_mm:.0f} mm{a}): the field will not be fit until {s(fit)}. Have the combine ready for then."
+                          if fit else f"Rain today ({first_mm:.0f} mm{a}): the field will not be fit for several days. Have the combine ready for the first dry day.")
         elif gap == 1:
-            detail = f"{first_mm:.0f} mm of rain forecast tomorrow ({s(first_day)}){more}; {fit_txt}"
-            today_text = f"Harvest today: {first_mm:.0f} mm of rain is expected tomorrow ({s(first_day)}){more}; {fit_txt}."
+            detail = f"{first_mm:.0f} mm of rain forecast tomorrow ({s(first_day)}){a}{suffix}; {fit_txt}"
+            today_text = f"Harvest today: {first_mm:.0f} mm of rain is expected tomorrow ({s(first_day)}){a}{suffix}; {fit_txt}."
         else:
-            detail = f"{first_mm:.0f} mm of rain forecast on {s(first_day)}{more}; {fit_txt}"
-            today_text = f"Harvest before {s(first_day)}: {first_mm:.0f} mm of rain forecast on {s(first_day)}{more}; {fit_txt}."
+            detail = f"{first_mm:.0f} mm of rain forecast on {s(first_day)}{a}{suffix}; {fit_txt}"
+            today_text = f"Harvest before {s(first_day)}: {first_mm:.0f} mm of rain forecast on {s(first_day)}{a}{suffix}; {fit_txt}."
         if frost:
             detail += "; " + frost_words(True)
         checks.append(_check("harvest_before_rain", "act_now", detail, window=_win(rain[0][0], rain[-1][0])))
@@ -331,7 +338,7 @@ def farm_plan(rec, passes, forecast, hotspots, insight, today: date, th=None, fa
         elif not standing:
             detail = "No standing crop, so the weather does not change anything here"
         else:
-            coming = ([f"{rain[0][1]:.0f} mm of rain expected on {s(rain[0][0])}"] if rain else [])                 + ([f"frost expected on {s(frost[0][0])} ({frost_temp()})"] if frost else [])
+            coming = ([f"{rain[0][1]:.0f} mm of rain expected on {s(rain[0][0])}"] if rain else [])                 + ([frost_head()] if frost else [])
             if coming:
                 detail = " and ".join(coming) + ": the crop is not ready yet, so nothing to do today"
                 if frost and not mature_at(frost[0][0]):
@@ -551,7 +558,7 @@ def run(data_dir: Path):
     zone_of = {f["properties"]["field_id"]: f["properties"]["zone_id"] for f in fields["features"]}
     thr = {**DEFAULTS, **th}
     drops = zone_declines(ts, zone_of, thr["stress_max_gap_days"])
-    ensemble = fm.load_ensemble(data_dir)         # optional: the latest weather models' agreement, words only
+    ensemble = fm.load_ensemble(data_dir, as_of=today)   # optional: the latest weather models' agreement, words only; stale files ignored
     observed = weather.get("observed") or {}
     fc_dates = [d(x[:10]) for x in fc.get("dates", [])]
     fresh_fc = any(x >= today for x in fc_dates)

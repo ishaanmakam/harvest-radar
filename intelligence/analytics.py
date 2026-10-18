@@ -14,6 +14,7 @@ Layout of analytics.json:
   landscape {key: {...}}, zones {zone_id: {key: {...}}}, fields {field_id: {key: {...}}}
 """
 import argparse
+from datetime import date
 import importlib
 import json
 import math
@@ -23,6 +24,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import forecast_models as fm  # noqa: E402
 from common import ROOT, load_region, read_json, write_json  # noqa: E402
 
 # (module file, key) in dependency order: coverage and phenology feed nothing but are cheap; yield and workability feed
@@ -56,7 +58,15 @@ def load_data(data_dir: Path):
     except (OSError, ValueError):
         pass
     weather = read_json(data_dir, "weather.json", default={})
-    ensemble = read_optional(data_dir, "weather_ensemble.json")
+    ensemble = fm.load_ensemble_doc(data_dir)                      # tolerant shared reader (None when absent or malformed)
+    as_of = None
+    try:
+        as_of = date.fromisoformat(load_region().get("as_of"))
+    except (TypeError, ValueError):
+        pass
+    if ensemble and fm.is_stale(ensemble, as_of):
+        print(f"  WARN weather_ensemble.json fetched {ensemble.get('fetched_at')} is stale for {as_of}: analytics use the pipeline forecast")
+        ensemble = None
     overlay_ensemble(weather, ensemble)
     return {
         "fields": read_json(data_dir, "fields.geojson"),
@@ -90,19 +100,28 @@ def overlay_ensemble(weather, ensemble):
     mm = list(fc.get("precip_mm") or [None] * len(dates))
     prob = list(fc.get("precip_prob") or [None] * len(dates))
     mm_single, prob_single = list(mm), list(prob)
+    n_models = [0] * len(dates)
     for i, dt in enumerate(dates):
         day = by_date.get(str(dt)[:10])
-        if not day or not day.get("n_models"):
+        n = (day or {}).get("n_precip", (day or {}).get("n_models"))
+        n = int(n) if isinstance(n, (int, float)) and not isinstance(n, bool) and math.isfinite(n) else 0
+        if not day or n < fm.MIN_MODELS:
+            continue                                  # one or two opinions are not an ensemble: keep the feed's value
+        med, share = day.get("precip_median_mm"), day.get("p_rain_5mm")
+        med = float(med) if isinstance(med, (int, float)) and not isinstance(med, bool) and math.isfinite(med) else None
+        share = float(share) if isinstance(share, (int, float)) and not isinstance(share, bool) and math.isfinite(share) and 0 <= share <= 1 else None
+        if med is None and share is None:
             continue
         hit = True
-        if day.get("precip_median_mm") is not None and i < len(mm):
-            mm[i] = day["precip_median_mm"]
-        if day.get("p_rain_5mm") is not None and i < len(prob):
-            prob[i] = round(100 * day["p_rain_5mm"])
+        n_models[i] = n
+        if med is not None and i < len(mm):
+            mm[i] = med
+        if share is not None and i < len(prob):
+            prob[i] = round(100 * share)
     if not hit:
         return False
     fc["precip_mm_single_model"], fc["precip_prob_single_model"] = mm_single, prob_single
-    fc["precip_mm"], fc["precip_prob"] = mm, prob
+    fc["precip_mm"], fc["precip_prob"], fc["precip_n_models"] = mm, prob, n_models
     n = len(ensemble.get("models") or [])
     fc["source"] = f"{fc.get('source') or 'pipeline'} + multi-model ensemble ({n} models)"
     weather["forecast"] = fc
@@ -174,12 +193,18 @@ def assemble(results, failed, timings, data, config):
     status = data.get("status") or {}
     ens = data.get("ensemble") or {}
     fc_src = (data.get("weather") or {}).get("forecast", {}).get("source") or ""
+    overlaid = bool(ens) and "ensemble" in fc_src
     forecast_source = (f"multi-model ensemble ({len(ens.get('models') or [])} models) over the pipeline forecast"
-                       if ens and "ensemble" in fc_src else "pipeline forecast")
+                       if overlaid else "pipeline forecast")
+    forecast_note = ((f"Rain amounts and probabilities in the analytics are the ensemble median and the share of models at "
+                      f"{fm.SHOWER_MM:.0f} mm or more, on days at least {fm.MIN_MODELS} models reach (precip_n_models in the forecast block); "
+                      f"other days keep the pipeline forecast. The plan's rain line follows the pipeline forecast and quotes the agreement.")
+                     if overlaid else "The analytics run on the pipeline forecast (weather.json).")
     return {
         "as_of": status.get("as_of") or config.get("as_of"),
         "source": "intelligence/analytics.py",
         "forecast_source": forecast_source,
+        "forecast_note": forecast_note,
         "modules": list(results),
         "failed": failed,
         "timings_s": timings,
