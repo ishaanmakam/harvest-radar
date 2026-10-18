@@ -1,7 +1,8 @@
 """Send each roster row its morning plan at its own local time.
 
     python intelligence/scheduler.py --data data/out --roster roster.csv              # dry run, one tick
-    python intelligence/scheduler.py --data data/out --roster roster.csv --real --forever   # every 30 s with .env providers
+    python intelligence/scheduler.py --data data/out --real --forever        # every 30 s with .env providers, the text only
+    python intelligence/scheduler.py --data data/out --real --forever --channels photon_sms,grok_voice
 
 Rows carry send_time (HH:MM local) and timezone (an IANA name such as America/Chicago or Asia/Kolkata); missing or bad
 values fall back to DEFAULT_SEND_TIME in DEFAULT_TIMEZONE. A row is due from its minute until LATE_MINUTES after it
@@ -68,9 +69,10 @@ def due_rows(roster, now_utc):
     return [r for r in roster if is_due(r, now_utc)]
 
 
-def tick(data_dir, roster_path=None, now_utc=None, dry_run=True, providers=None, translate=None):
+def tick(data_dir, roster_path=None, now_utc=None, dry_run=True, providers=None, translate=None, channels=None):
     """One pass: every due row that still has a channel to send today goes through the morning queue (grouped by its
-    local date, so the checkpoint date is the farmer's own morning). Returns the roster ids that were processed."""
+    local date, so the checkpoint date is the farmer's own morning). channels, when given, limits the send to those
+    channels (the text only, for example). Returns the roster ids that were processed."""
     data_dir = Path(data_dir)
     now_utc = now_utc or datetime.now(timezone.utc)
     roster = load_roster(roster_path)
@@ -79,23 +81,27 @@ def tick(data_dir, roster_path=None, now_utc=None, dry_run=True, providers=None,
     for row in due_rows(roster, now_utc):
         day = s(local_date(row, now_utc))
         chans = q.row_channels(row)
+        if channels:
+            chans = [c for c in chans if c in channels]
         if chans and all((day, row["roster_id"], ch) in sent for ch in chans):
             continue
         todo[day].append(row["roster_id"])
     for day, ids in todo.items():
-        q.run(data_dir, roster_path, dry_run=dry_run, today=d(day), providers=providers, only=ids, translate=translate)
+        q.run(data_dir, roster_path, dry_run=dry_run, today=d(day), providers=providers, only=ids, translate=translate,
+              channel_filter=channels)
     return [rid for ids in todo.values() for rid in ids]
 
 
-def run_forever(data_dir, roster_path=None, interval_s=30, dry_run=True, providers=None, translate=None):
-    print(f"scheduler: every {interval_s} s, {'dry run' if dry_run else 'REAL sends'}, defaults {DEFAULT_SEND_TIME} {DEFAULT_TIMEZONE}")
+def run_forever(data_dir, roster_path=None, interval_s=30, dry_run=True, providers=None, translate=None, channels=None):
+    print(f"scheduler: every {interval_s} s, {'dry run' if dry_run else 'REAL sends'}, channels {', '.join(channels) if channels else 'all'}, "
+          f"defaults {DEFAULT_SEND_TIME} {DEFAULT_TIMEZONE}", flush=True)
     while True:
         try:
-            ids = tick(data_dir, roster_path, dry_run=dry_run, providers=providers, translate=translate)
+            ids = tick(data_dir, roster_path, dry_run=dry_run, providers=providers, translate=translate, channels=channels)
             if ids:
-                print(f"  {datetime.now(timezone.utc).strftime('%H:%M')}Z sent to {', '.join(ids)}")
+                print(f"  {datetime.now(timezone.utc).strftime('%H:%M')}Z sent to {', '.join(ids)}", flush=True)
         except Exception as e:  # keep the loop alive: a bad roster line or a provider outage is logged, not fatal
-            print(f"  scheduler tick failed: {e}")
+            print(f"  scheduler tick failed: {e}", flush=True)
         time.sleep(interval_s)
 
 
@@ -107,14 +113,18 @@ if __name__ == "__main__":
     ap.add_argument("--forever", action="store_true", help="keep ticking every --interval seconds")
     ap.add_argument("--interval", type=int, default=30)
     ap.add_argument("--translate", action="store_true", help="translate free text with Grok (XAI_API_KEY)")
+    ap.add_argument("--channels", default="photon_sms", help="comma list of channels to send; default the text only")
     a = ap.parse_args()
+    from common import load_env
+    load_env()
+    channels = tuple(c.strip() for c in a.channels.split(",") if c.strip()) or None
     providers = translate = None
     if a.real:
         from providers import from_env, translator_from_env
         providers = from_env()
         translate = translator_from_env() if a.translate else None
     if a.forever:
-        run_forever(a.data, a.roster, a.interval, dry_run=not a.real, providers=providers, translate=translate)
+        run_forever(a.data, a.roster, a.interval, dry_run=not a.real, providers=providers, translate=translate, channels=channels)
     else:
-        ids = tick(a.data, a.roster, dry_run=not a.real, providers=providers, translate=translate)
+        ids = tick(a.data, a.roster, dry_run=not a.real, providers=providers, translate=translate, channels=channels)
         print("due now:", ", ".join(ids) if ids else "nobody")

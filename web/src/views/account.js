@@ -371,11 +371,12 @@ function profileForm(el, ctx) {
   showMatch();
 
   const findButton = h("button", { class: "btn", type: "button" }, "Find my field");
-  findButton.addEventListener("click", async () => {
-    const text = address.value.trim();
+  /** Geocode the address box and match the nearest field; true when a field is set. Save runs this too. */
+  async function findField() {
+    const text = address.value.trim() || String(form.address || "").trim();
     if (!text) {
       findStatus.set("Type an address or lat, lon first.", "warn");
-      return;
+      return false;
     }
     findButton.disabled = true;
     findStatus.set("Looking up the address.");
@@ -386,15 +387,15 @@ function profileForm(el, ctx) {
         const hit = await geocode(text);
         if (!hit) {
           findStatus.set("Could not find that address. Add the town and state, or type lat, lon.", "warn");
-          return;
+          return false;
         }
         point = [hit.lon, hit.lat];
-        where = hit.display_name;
+        where = hit.approximate ? `${hit.display_name} (the nearest place the map knows for that address)` : hit.display_name;
       }
       const data = await ctx.dataPromise.catch(() => null);
       if (!data?.fields) {
         findStatus.set("The field map has not loaded, so the address cannot be matched yet. Try again in a moment.", "warn");
-        return;
+        return false;
       }
       form.lon = Math.round(point[0] * 1e5) / 1e5;
       form.lat = Math.round(point[1] * 1e5) / 1e5;
@@ -403,17 +404,20 @@ function profileForm(el, ctx) {
         form.farm_id = null;
         showMatch();
         findStatus.set(`Overfield does not cover that location yet (${form.lat}, ${form.lon}). No field is within ${MAX_MATCH_KM} km.`, "warn");
-        return;
+        return false;
       }
       form.farm_id = match.field_id;
       showMatch(match.inside ? "(the address is inside this field)" : `(nearest field, ${match.distance_km} km away)`);
       findStatus.set(where ? `Found: ${where}. Save the profile to keep this field.` : "Matched. Save the profile to keep this field.", "ok");
+      return true;
     } catch (err) {
       findStatus.set(err.message, "warn");
     } finally {
       findButton.disabled = false;
     }
-  });
+    return false;
+  }
+  findButton.addEventListener("click", findField);
 
   const code = select("acct-code", COUNTRY_CODES, form.code, { class: "select select-code", "aria-label": "Country code", onchange: (e) => (form.code = e.target.value) });
   const national = h("input", {
@@ -467,6 +471,7 @@ function profileForm(el, ctx) {
       class: "card",
       onsubmit: async (event) => {
         event.preventDefault();
+        if (!form.farm_id && String(form.address || "").trim() && !findButton.disabled) await findField(); // an address without a field: match it first
         const digits = form.national.replace(/\D/g, "");
         const channelList = CHANNELS.map(([k]) => k).filter((k) => form.channels.has(k));
         const patch = {
