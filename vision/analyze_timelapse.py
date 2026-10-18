@@ -244,6 +244,64 @@ def select_frames(all_frames, min_clear, n):
     return picks
 
 
+def cues_from_file(path):
+    preds = json.loads(Path(path).read_text())["predictions"]
+    cues = []
+    for field_id, label in sorted(preds.items()):
+        if label not in ("changed", "unchanged"):
+            continue
+        cues.append({
+            "field_id": field_id,
+            "kind": "visible_change",
+            "observed": label == "changed",
+            "date": "2026-10-17",
+            "where": "whole field",
+            "detail": "Perceptron saw this field change between 2026-10-10 and 2026-10-17 (harvested or tilled).",
+            "confidence": 0.8,
+            "window": ["2026-10-10", "2026-10-17"],
+        })
+    return cues
+
+
+def states_from_file(path):
+    preds = json.loads(Path(path).read_text())["predictions"]
+    return [{"field_id": field_id, "state": label, "date": "2026-10-17"}
+            for field_id, label in sorted(preds.items())]
+
+
+def publish_products(out, cues_path, states_path, fields_by_zone):
+    """Attach set-of-marks results. A missing file means that test did not pass."""
+    if cues_path:
+        out["field_cues"] = cues_from_file(cues_path)
+        for item in out["items"]:
+            item["cue_notes"] = ["cues: set-of-marks change labels"]
+    else:
+        out["field_cues"] = []
+    if states_path:
+        states = states_from_file(states_path)
+        out["field_states"] = states
+        zone_of = {}
+        for zone_id, pairs in (fields_by_zone or {}).items():
+            for field_id, _geom in pairs:
+                zone_of[field_id] = zone_id
+        grouped = {}
+        for row in states:
+            grouped.setdefault(zone_of.get(row["field_id"]), []).append(row)
+        for item in out["items"]:
+            rows = grouped.get(item["zone_id"], [])
+            item["counts"] = {
+                "standing": sum(1 for row in rows if row["state"] == "standing"),
+                "harvested": sum(1 for row in rows if row["state"] == "harvested"),
+                "burned": 0,
+            }
+            item["counts_source"] = "field_states"
+    else:
+        out.pop("field_states", None)
+        for item in out["items"]:
+            item["counts_source"] = "model_estimate"
+    return out
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--data", default="data/out")
@@ -253,6 +311,9 @@ def main():
     ap.add_argument("--min-clear", type=float, default=0.85, help="keep frames with clear_frac at least this")
     ap.add_argument("--zones", default="")
     ap.add_argument("--cues", action="store_true", help="box cues when the narration gate says yes (off by default)")
+    ap.add_argument("--field-cues-from", default="", help="classify change json; replaces box cues")
+    ap.add_argument("--field-states-from", default="", help="classify state json; replaces zone counts")
+    ap.add_argument("--reuse", action="store_true", help="patch an existing insights.json and make no API call")
     ap.add_argument("--dry-run", action="store_true")
     ap.add_argument("--verdict", choices=["perceptron", "vegetation_index"], default="vegetation_index")
     ap.add_argument("--crop-px", type=int, default=768)
@@ -273,6 +334,13 @@ def main():
     chosen_dates = [f["date"] for f in picks]
     land = landscape()
     fields_by_zone = load_fields(data)
+    insights = out_dir / "insights.json"
+    if args.reuse:
+        out = json.loads(insights.read_text())
+        publish_products(out, args.field_cues_from, args.field_states_from, fields_by_zone)
+        insights.write_text(json.dumps(out, separators=(",", ":")))
+        print(f"reused {insights} cues={len(out['field_cues'])} states={len(out.get('field_states') or [])}")
+        return
     tmp = out_dir / "perceptron" / "crops"
     tmp.mkdir(parents=True, exist_ok=True)
 
@@ -380,8 +448,9 @@ def main():
         "field_cues": field_cues,
         "items": items,
     }
+    if args.field_cues_from or args.field_states_from:
+        publish_products(out, args.field_cues_from, args.field_states_from, fields_by_zone)
     out_dir.mkdir(parents=True, exist_ok=True)
-    insights = out_dir / "insights.json"
     insights.write_text(json.dumps(out, separators=(",", ":")))
     print(f"cues: {cue_totals} spend ${out['spent_usd']}")
     print(f"wrote {insights}")
