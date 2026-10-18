@@ -133,8 +133,11 @@ def _inside(box, width, height):
     return box[0] >= 0 and box[1] >= 0 and box[2] <= width and box[3] <= height
 
 
-def draw_marks(img, window_bounds, fields, colour="#ffe14d"):
-    """Outline each field (3 px) and put a 1..N label inside it. Returns (img, {n: field_id})."""
+def draw_marks(img, window_bounds, fields, colour="#ffe14d", colours=None):
+    """Outline each field (3 px) and put a 1..N label inside it. Returns (img, {n: field_id}).
+
+    colours, when set, is {field_id: outline colour} and overrides colour per field.
+    """
     canvas = img.convert("RGB") if img.mode != "RGB" else img.copy()
     draw = ImageDraw.Draw(canvas)
     width, height = canvas.size
@@ -142,13 +145,15 @@ def draw_marks(img, window_bounds, fields, colour="#ffe14d"):
     prepared = []
     for index, field in enumerate(fields, start=1):
         geom = _as_geom(field)
+        fid = _field_id(field, index)
+        outline = (colours or {}).get(fid, colour)
         for poly in _polygons(geom):
             for ring in (poly.exterior, *poly.interiors):
                 pts = [lonlat_to_px(x, y, window_bounds, width, height) for x, y in ring.coords]
                 if len(pts) >= 2:
-                    draw.line(pts, fill=colour, width=3)
+                    draw.line(pts, fill=outline, width=3)
         point = geom.representative_point()
-        prepared.append((index, _field_id(field, index), point.x, point.y))
+        prepared.append((index, fid, point.x, point.y))
 
     placed = []
     id_map = {}
