@@ -267,8 +267,9 @@ while d < AS_OF:
     d += timedelta(days=1)
 fc_dates = [d2s(AS_OF + timedelta(days=k)) for k in range(14)]
 if IOWA:
-    fc_precip = [0.0, 0.0, 0.0, 0.0, 0.8, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.3, 0.0]     # the real Oct 17 forecast shape
+    fc_precip = [0.0, 0.0, 16.0, 0.0, 0.8, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 3.3, 0.0]    # the real Oct 17 shape plus one 16 mm day two days out, so ready farms exercise harvest-before-rain
     fc_prob = [0, 0, 0, 0, 2, 1, 1, 9, 12, 10, 22, 16, 23, 24]
+    fc_prob[2] = 70
     fc_tmin = [6.0, 3.0, -1.5, 2.0, 5.0, 7.0, 8.0, 6.0, 4.0, 3.0, 1.0, 2.0, 4.0, 5.0]      # frost night two days out
     fc_tmax = [19.0, 16.0, 12.0, 15.0, 18.0, 20.0, 21.0, 19.0, 17.0, 15.0, 13.0, 14.0, 15.0, 16.0]
     forecast = {"source": "mock", "dates": fc_dates, "precip_mm": fc_precip, "precip_prob": fc_prob, "tmin_c": fc_tmin, "tmax_c": fc_tmax}
