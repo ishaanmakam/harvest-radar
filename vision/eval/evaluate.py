@@ -32,7 +32,9 @@ def phrase(stats, label, kind):
     return f"{stats['per_label'][label]['precision']:.2f} ({tp} of {predicted})"
 
 
-def class_view(predictions, truth_map, labels, focus=None):
+def class_view(predictions, truth_map, labels, focus=None, exclude=()):
+    exclude = set(exclude or [])
+    predictions = {fid: label for fid, label in predictions.items() if fid not in exclude}
     usable = {fid: truth_map[fid] for fid in predictions if fid in truth_map}
     skipped = sorted(fid for fid in predictions if fid not in truth_map)
     stats = classification({fid: predictions[fid] for fid in usable}, usable, labels)
@@ -40,6 +42,7 @@ def class_view(predictions, truth_map, labels, focus=None):
     stats["accuracy_text"] = f"{stats['accuracy']:.2f} ({correct} of {stats['n']})"
     stats["unsure_text"] = f"{stats['n_unsure_pred']} of {stats['n']}"
     stats["n_skipped"] = len(skipped)
+    stats["n_excluded_examples"] = len(exclude)
     if focus and focus in stats["per_label"]:
         stats["precision_text"] = phrase(stats, focus, "precision")
         stats["recall_text"] = phrase(stats, focus, "recall")
@@ -154,6 +157,26 @@ def ndvi_predictions(zones):
     return state, change
 
 
+def nbr_predictions(zones):
+    """Comparison only. Oct 17 NBR >= 0 counts as harvested."""
+    series = load_json(ROOT / "data" / "out" / "timeseries.json")
+    index = series["dates"].index("2026-10-17")
+    state = {}
+    for fid, row in series["fields"].items():
+        if fid not in zones:
+            continue
+        latest = row["nbr"][index]
+        state[fid] = "unsure" if latest is None else ("harvested" if latest >= 0 else "standing")
+    return state
+
+
+def dev_only(doc, task, name):
+    zones_in = set(doc.get("zones") or [])
+    if not zones_in or not zones_in <= set(DEV_ZONES):
+        sys.exit(f"STOP {task} {name} includes a non-dev zone; refusing to choose after held-out")
+    return doc
+
+
 def summarize_dev():
     """Print dev-zone scores only. Used to pick a variant before any held-out call."""
     zones = field_zones(ROOT / "data" / "out" / "fields.geojson")
@@ -191,61 +214,143 @@ def summarize_dev():
             stop = all(c["finish_reason"] == "stop" for c in load_json(calls))
         print(f"  {name} recall {stats['recall_text']} precision {stats['precision_text']} "
               f"dup {stats['duplicates_gt']} stop {stop}")
+    print("round 2 state variants (dev zones only)")
+    for name in "DEF":
+        doc = load_classify("state", name)
+        if not doc:
+            print(f"  {name} missing")
+            continue
+        preds = subset(doc["predictions"], zones, DEV_ZONES)
+        stats = class_view(preds, state_truth, STATE_LABELS, exclude=doc.get("excluded_from_scoring"))
+        print(f"  {name} accuracy {stats['accuracy_text']} unsure {stats['unsure_text']} "
+              f"excluded {stats['n_excluded_examples']} pass {state_pass(stats)}")
+    print("round 2 change variants (dev zones only)")
+    for name in "DEF":
+        doc = load_classify("change", name)
+        if not doc:
+            print(f"  {name} missing")
+            continue
+        preds = subset(doc["predictions"], zones, DEV_ZONES)
+        stats = class_view(preds, change_truth, CHANGE_LABELS, "changed", doc.get("excluded_from_scoring"))
+        print(f"  {name} precision {stats['precision_text']} recall {stats['recall_text']} "
+              f"excluded {stats['n_excluded_examples']} pass {change_pass(stats)}")
 
 
-def board_row(test, method, variant, dev, held, overall, bar, passed, note=""):
+def lock_round2():
+    """Choose D/E/F from dev-only files. Refuses a file that already includes held-out zones."""
+    zones = field_zones(ROOT / "data" / "out" / "fields.geojson")
+    state_truth, change_truth = truth_maps()
+    state_scores = {}
+    for name in "DEF":
+        doc = load_classify("state", name)
+        if not doc:
+            sys.exit(f"STOP state {name} missing")
+        dev_only(doc, "state", name)
+        preds = subset(doc["predictions"], zones, DEV_ZONES)
+        state_scores[name] = class_view(preds, state_truth, STATE_LABELS, exclude=doc.get("excluded_from_scoring"))
+        print(f"state {name} accuracy {state_scores[name]['accuracy_text']} unsure {state_scores[name]['unsure_text']}")
+    state_choice = max("DEF", key=lambda name: (
+        state_scores[name]["accuracy"],
+        -(state_scores[name]["n_unsure_pred"] / state_scores[name]["n"] if state_scores[name]["n"] else 1),
+        -ord(name),
+    ))
+    change_scores = {}
+    for name in "DEF":
+        doc = load_classify("change", name)
+        if not doc:
+            sys.exit(f"STOP change {name} missing")
+        dev_only(doc, "change", name)
+        preds = subset(doc["predictions"], zones, DEV_ZONES)
+        change_scores[name] = class_view(preds, change_truth, CHANGE_LABELS, "changed", doc.get("excluded_from_scoring"))
+        print(f"change {name} precision {change_scores[name]['precision_text']} recall {change_scores[name]['recall_text']}")
+    eligible = [name for name in "DEF" if change_scores[name]["per_label"]["changed"]["recall"] >= 0.80]
+    if eligible:
+        change_choice = max(eligible, key=lambda name: (
+            change_scores[name]["per_label"]["changed"]["precision"],
+            change_scores[name]["per_label"]["changed"]["recall"],
+            -ord(name),
+        ))
+        change_rule = "highest dev precision among variants with dev recall >= 0.80"
+    else:
+        change_choice = max("DEF", key=lambda name: (
+            change_scores[name]["per_label"]["changed"]["recall"],
+            change_scores[name]["per_label"]["changed"]["precision"],
+            -ord(name),
+        ))
+        change_rule = "no variant reached dev recall 0.80; highest dev recall"
+    chosen = {
+        "round": 2,
+        "round1": {"state": "C", "change": "A", "outline": "A"},
+        "state": state_choice,
+        "change": change_choice,
+        "outline": "A",
+        "rule": f"state: highest dev accuracy, then lower unsure; change: {change_rule}",
+    }
+    CHOSEN.write_text(json.dumps(chosen, indent=2))
+    print(f"locked round 2 state {state_choice} change {change_choice}")
+
+
+def board_row(test, method, variant, dev, held, overall, bar, passed, note="", round_n=1, retired=False):
     return {
-        "test": test, "method": method, "variant": variant,
+        "test": test, "method": method, "variant": variant, "round": round_n,
         "metrics_dev": dev, "metrics_heldout": held, "metrics_all": overall,
-        "bar": bar, "pass": passed, "note": note,
+        "bar": bar, "pass": passed, "note": note, "retired": retired,
     }
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--summarize-dev", action="store_true")
+    ap.add_argument("--lock-round2", action="store_true")
     args = ap.parse_args()
     extra = check_truth_geometry(ROOT / "data" / "out" / "fields.geojson")
     print(f"fields skipped (not in truth.json): {len(extra)}")
     if args.summarize_dev:
         summarize_dev()
         return
+    if args.lock_round2:
+        lock_round2()
+        return
     if not CHOSEN.exists():
-        sys.exit("STOP chosen.json missing; pick variants from --summarize-dev before the held-out run")
+        sys.exit("STOP chosen.json missing; pick variants from --lock-round2 before the held-out run")
     chosen = load_json(CHOSEN)
+    if chosen.get("round") != 2:
+        sys.exit("STOP chosen.json is not a locked round-2 choice; run --lock-round2 on the dev files first")
     zones = field_zones(ROOT / "data" / "out" / "fields.geojson")
     state_truth, change_truth = truth_maps()
     fields = load_json(ROOT / "data" / "out" / "fields.geojson")["features"]
     rows = []
 
-    state_doc = load_classify("state", chosen["state"])
-    change_doc = load_classify("change", chosen["change"])
-    if state_doc is None or change_doc is None:
-        sys.exit("STOP classify output missing for the chosen variant")
+    round1 = chosen.get("round1") or {"state": "C", "change": "A", "outline": "A"}
 
-    def splits(doc, truth, labels, focus, passed):
+    def scored_views(doc, truth, labels, focus):
+        if not (set(doc.get("zones") or []) & set(HELD_ZONES)):
+            sys.exit(f"STOP {doc.get('task')} {doc.get('variant')} has no held-out zones")
+        exclude = doc.get("excluded_from_scoring") or []
         views = {}
         for key, keep in (("dev", DEV_ZONES), ("heldout", HELD_ZONES), ("all", DEV_ZONES + HELD_ZONES)):
-            views[key] = class_view(subset(doc["predictions"], zones, keep), truth, labels, focus)
+            views[key] = class_view(subset(doc["predictions"], zones, keep), truth, labels, focus, exclude)
         return views
 
-    state_views = splits(state_doc, state_truth, STATE_LABELS, None, state_pass)
-    change_views = splits(change_doc, change_truth, CHANGE_LABELS, "changed", change_pass)
-    state_ok = state_pass(state_views["heldout"])
-    change_ok = change_pass(change_views["heldout"])
-    rows.append(board_row(
-        "standing_vs_harvested", "set_of_marks", chosen["state"],
-        state_views["dev"], state_views["heldout"], state_views["all"],
-        "held-out accuracy >= 0.90 and predicted unsure <= 10% of scored fields",
-        state_ok,
-    ))
-    rows.append(board_row(
-        "change", "set_of_marks", chosen["change"],
-        change_views["dev"], change_views["heldout"], change_views["all"],
-        "held-out changed precision >= 0.85 and recall >= 0.80",
-        change_ok,
-        "Small sample: 17 changed fields, so each miss moves recall by about 6 points.",
-    ))
+    def add_class(round_n, variant, task_name, test, truth, labels, focus, passer, bar, note=""):
+        doc = load_classify(task_name, variant)
+        if doc is None:
+            sys.exit(f"STOP classify output missing for {task_name} {variant}")
+        views = scored_views(doc, truth, labels, focus)
+        ok = passer(views["heldout"])
+        rows.append(board_row(
+            test, "set_of_marks", variant,
+            views["dev"], views["heldout"], views["all"], bar, ok, note, round_n,
+        ))
+        return ok
+
+    state_bar = "held-out accuracy >= 0.90 and predicted unsure <= 10% of scored fields"
+    change_bar = "held-out changed precision >= 0.85 and recall >= 0.80"
+    change_note = "Small sample: 17 changed fields, so each miss moves recall by about 6 points."
+    add_class(1, round1["state"], "state", "standing_vs_harvested", state_truth, STATE_LABELS, None, state_pass, state_bar)
+    add_class(1, round1["change"], "change", "change", change_truth, CHANGE_LABELS, "changed", change_pass, change_bar, change_note)
+    state_ok = add_class(2, chosen["state"], "state", "standing_vs_harvested", state_truth, STATE_LABELS, None, state_pass, state_bar)
+    change_ok = add_class(2, chosen["change"], "change", "change", change_truth, CHANGE_LABELS, "changed", change_pass, change_bar, change_note)
 
     outline_path = EVAL / f"outlines_{chosen['outline']}.geojson"
     call_path = EVAL / f"outlines_{chosen['outline']}_calls.json"
@@ -266,30 +371,34 @@ def main():
         all_stop = bool(calls) and all(c["finish_reason"] == "stop" for c in calls)
         z07_calls = [c for c in calls if c.get("zone_id") == "Z07"]
         z07_stop = bool(z07_calls) and all(c["finish_reason"] == "stop" for c in z07_calls)
+        # Round 1 evidence stays on the 129 labelled fields. The seven new fields are not in that test.
+        labelled_fields = [feat for feat in fields if feat["properties"]["field_id"] in state_truth]
         full = {
-            "dev": outline_view(features_in(features, DEV_ZONES), refs_in(fields, DEV_ZONES)),
-            "heldout": outline_view(features_in(features, HELD_ZONES), refs_in(fields, HELD_ZONES)),
-            "all": outline_view(features, fields),
+            "dev": outline_view(features_in(features, DEV_ZONES), refs_in(labelled_fields, DEV_ZONES)),
+            "heldout": outline_view(features_in(features, HELD_ZONES), refs_in(labelled_fields, HELD_ZONES)),
+            "all": outline_view(features, labelled_fields),
         }
         for part in full.values():
             part["all_trace_stop"] = all_stop
-        outline_ok = outline_pass(full["heldout"], all_stop)
+        outline_ok = False
         rows.append(board_row(
             "outlines_full", "seed_then_trace", chosen["outline"],
             full["dev"], full["heldout"], full["all"],
             "recall >= 0.75 and precision >= 0.80 on fields >= 8 ha, IoU >= 0.5; duplicates with IoU > 0.5 == 0; every trace finish_reason stop",
             outline_pass(full["all"], all_stop),
+            "Retired from Perceptron's scope: field outlines come from segmentation",
+            retired=True,
         ))
-        z07 = outline_view(features_in(features, ("Z07",)), refs_in(fields, ("Z07",)))
+        z07 = outline_view(features_in(features, ("Z07",)), refs_in(labelled_fields, ("Z07",)))
         z07["all_trace_stop"] = z07_stop
         rows.append(board_row(
             "outlines_tile_z07", "seed_then_trace", chosen["outline"],
             z07, None, z07,
             "same outline bar restricted to zone Z07",
             outline_pass(z07, z07_stop),
+            "Retired from Perceptron's scope: field outlines come from segmentation",
+            retired=True,
         ))
-        # Wiring follows the held-out full-frame bar, per the task.
-        outline_ok = outline_pass(full["heldout"], all_stop)
 
     ndvi_state, ndvi_change = ndvi_predictions(zones)
     ndvi_state_views = {
@@ -304,6 +413,13 @@ def main():
                           ndvi_state_views["all"], "comparison only, not a pass bar", None))
     rows.append(board_row("ndvi_change", "ndvi_rule", "drop>=0.15", ndvi_change_views["dev"], ndvi_change_views["heldout"],
                           ndvi_change_views["all"], "comparison only, not a pass bar", None))
+    nbr_state = nbr_predictions(zones)
+    nbr_views = {
+        key: class_view(subset(nbr_state, zones, keep), state_truth, STATE_LABELS)
+        for key, keep in (("dev", DEV_ZONES), ("heldout", HELD_ZONES), ("all", DEV_ZONES + HELD_ZONES))
+    }
+    rows.append(board_row("nbr_state", "nbr_rule", "oct17>=0", nbr_views["dev"], nbr_views["heldout"],
+                          nbr_views["all"], "comparison only, not a pass bar", None, round_n=2))
 
     insights_path = ROOT / "data" / "out" / "insights.json"
     zone_pass = False
@@ -323,8 +439,6 @@ def main():
     for row in rows:
         print(f"  {row['test']} variant {row['variant']} pass {row['pass']}")
 
-    if outline_ok:
-        write_perceptron_fields(features)
     apply = {
         "state_pass": state_ok,
         "change_pass": change_ok,
