@@ -186,7 +186,7 @@ def farm_outlook(doc, farm_id):
         txt = rec.get(e["recommendation"], e["recommendation"])
         if e.get("reason"):
             txt += f": {e['reason'].rstrip('.')}"
-        if e.get("savings_usd") is not None and abs(e["savings_usd"]) >= 1:
+        if e.get("savings_usd") is not None and abs(e["savings_usd"]) >= 1 and "$" not in txt and "dollar" not in txt:
             txt += f" (about {abs(e['savings_usd']):,.0f} dollars difference)"
         lines.append(txt + ".")
     w = f.get("workability") or {}
@@ -208,7 +208,9 @@ def farm_outlook(doc, farm_id):
         lines.append("Active fire " + ("inside the field" if ev["fire_exposure"] == "inside" else "within 2 km") + " in the last 5 days.")
     c = f.get("coverage") or {}
     if c.get("staleness") == "stale":
-        lines.append(f"Satellite view is stale: {c.get('days_since_last_clear')} days since the last clear pass.")
+        days = c.get("days_since_last_clear")
+        lines.append("Satellite view is stale: no clear pass over this field yet this season." if days is None
+                     else f"Satellite view is stale: {days} days since the last clear pass.")
     return lines
 
 
